@@ -1,4 +1,4 @@
-name: Android APK smoke + release
+name: Android APK release
 
 on:
   push:
@@ -34,76 +34,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Create release keystore with keytool
-        run: |
-          keytool -genkeypair -v \
-            -storetype PKCS12 \
-            -keystore android/kanikuly.keystore \
-            -alias kanikuly \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass kanikuly2026 \
-            -keypass kanikuly2026 \
-            -dname "CN=Kanikuly, O=Sosnova, C=RU"
-
-      # --- SMOKE: empty web app + debug APK (как home-garden) ---
-      - name: Build minimal smoke web
-        run: |
-          rm -rf dist
-          mkdir -p dist
-          cat > dist/index.html <<'EOF'
-          <!doctype html>
-          <html lang="en">
-            <head>
-              <meta charset="utf-8" />
-              <meta name="viewport" content="width=device-width, initial-scale=1" />
-              <title>Smoke</title>
-            </head>
-            <body style="font-family: sans-serif; padding: 24px">
-              <h1>Smoke OK</h1>
-              <p>Minimal Capacitor shell.</p>
-            </body>
-          </html>
-          EOF
-
-      - name: Patch ids for smoke build
-        run: |
-          sed -i 's/applicationId "com.sosnova.vacation"/applicationId "com.sosnova.smoke"/' android/app/build.gradle
-          sed -i 's/<string name="app_name">Kanikuly<\/string>/<string name="app_name">SmokeTest<\/string>/' android/app/src/main/res/values/strings.xml
-          sed -i 's/<string name="title_activity_main">Kanikuly<\/string>/<string name="title_activity_main">SmokeTest<\/string>/' android/app/src/main/res/values/strings.xml
-          sed -i 's/com.sosnova.vacation/com.sosnova.smoke/g' android/app/src/main/res/values/strings.xml
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('capacitor.config.ts')
-          text = p.read_text(encoding='utf-8')
-          text = text.replace("appId: 'com.sosnova.vacation'", "appId: 'com.sosnova.smoke'")
-          text = text.replace("appName: 'Kanikuly'", "appName: 'SmokeTest'")
-          p.write_text(text, encoding='utf-8')
-          PY
-
-      - name: Cap sync + debug APK (smoke)
-        run: |
-          npx cap sync android
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
-
-      - name: Save smoke APK
-        run: |
-          mkdir -p release
-          cp android/app/build/outputs/apk/debug/app-debug.apk release/kanikuly-minimal.apk
-          "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify --verbose release/kanikuly-minimal.apk
-          ls -lh release/kanikuly-minimal.apk
-
-      - name: Restore project files after smoke
-        run: |
-          git checkout -- android/app/build.gradle android/app/src/main/res/values/strings.xml capacitor.config.ts
-
-      # --- FULL: real app + signed release ---
       - name: Write Firebase env for Vite build
         run: |
           printf '%s\n' \
@@ -115,29 +45,48 @@ jobs:
             'VITE_FIREBASE_APP_ID=1:320223710326:web:4698479b8dc6a466d3a357' \
             > .env
 
-      - name: Build full web app
+      - name: Build web app
         run: npm run build
 
-      - name: Cap sync + signed release APK (full)
+      - name: Cap sync Android
+        run: npx cap sync android
+
+      - name: Create release keystore with keytool
         run: |
-          npx cap sync android
+          if [ ! -f android/kanikuly.keystore ]; then
+            keytool -genkeypair -v \
+              -storetype PKCS12 \
+              -keystore android/kanikuly.keystore \
+              -alias kanikuly \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass kanikuly2026 \
+              -keypass kanikuly2026 \
+              -dname "CN=Kanikuly, O=Sosnova, C=RU"
+          fi
+
+      - name: Assemble signed release APK
+        run: |
           cd android
+          chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
         env:
           ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
           ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
 
-      - name: Save full APK
+      - name: Verify and save APK
         run: |
+          mkdir -p release
           cp android/app/build/outputs/apk/release/app-release.apk release/kanikuly.apk
           "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify --verbose --print-certs release/kanikuly.apk
           "$ANDROID_SDK_ROOT/build-tools/36.0.0/aapt" dump badging release/kanikuly.apk | head -n 15
-          ls -lh release/
+          ls -lh release/kanikuly.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: kanikuly-apks
-          path: release/*.apk
+          name: kanikuly-apk
+          path: release/kanikuly.apk
           if-no-files-found: error
 
       - name: Publish GitHub release
@@ -146,19 +95,7 @@ jobs:
         run: |
           gh release delete apk-latest --yes --cleanup-tag || true
           gh release create apk-latest \
-            release/kanikuly-minimal.apk \
             release/kanikuly.apk \
-            --title "Kanikuly — smoke + release" \
-            --notes "$(cat <<'EOF'
-          Два файла для проверки:
-
-          1. **kanikuly-minimal.apk** — пустая оболочка Capacitor (debug, как home-garden).  
-             Если ЭТОТ ставится, а полный нет — проблема в содержимом приложения.  
-             Если и этот НЕ ставится — проблема в Android-проекте/телефоне.
-
-          2. **kanikuly.apk** — полное приложение (signed release).
-
-          Сначала попробуй minimal.
-          EOF
-          )" \
+            --title "Kanikuly 2.1" \
+            --notes "Signed release APK (version 2.1)." \
             --latest
