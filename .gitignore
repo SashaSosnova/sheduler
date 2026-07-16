@@ -20,6 +20,7 @@ android/app/build
 android/build
 android/local.properties
 android/captures
+android/*.keystore
 *.apk
 *.aab
 tmp-apk/

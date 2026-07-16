@@ -51,33 +51,45 @@ jobs:
       - name: Sync Capacitor Android
         run: npx cap sync android
 
-      - name: Build debug APK
+      - name: Create release keystore with keytool
+        run: |
+          keytool -genkeypair -v \
+            -storetype PKCS12 \
+            -keystore android/kanikuly.keystore \
+            -alias kanikuly \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass kanikuly2026 \
+            -keypass kanikuly2026 \
+            -dname "CN=Kanikuly, O=Sosnova, C=RU"
+          keytool -list -v \
+            -keystore android/kanikuly.keystore \
+            -storepass kanikuly2026 \
+            -storetype PKCS12 | head -n 30
+
+      - name: Build signed release APK
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleRelease --no-daemon
         env:
           ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
           ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
 
-      - name: Verify APK + dump badging
+      - name: Verify signed APK
         run: |
-          APK=android/app/build/outputs/apk/debug/app-debug.apk
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          ls -lh "$APK"
           "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$APK"
-          "$ANDROID_SDK_ROOT/build-tools/36.0.0/aapt" dump badging "$APK" | head -n 40
-          unzip -l "$APK" | head -n 50
-          if unzip -l "$APK" | grep -E 'META-INF/.*\.(RSA|SF|MF)'; then
-            echo "v1 JAR signatures present"
-          else
-            echo "NOTE: no v1 META-INF signatures (v2/v3 only) — same as home-garden"
-          fi
+          "$ANDROID_SDK_ROOT/build-tools/36.0.0/aapt" dump badging "$APK" | head -n 20
+          unzip -l "$APK" | grep -E 'META-INF/.*\.(RSA|SF|MF)' || true
 
       - name: Prepare APK artifact
         run: |
           mkdir -p release
-          cp android/app/build/outputs/apk/debug/app-debug.apk release/kanikuly.apk
+          cp android/app/build/outputs/apk/release/app-release.apk release/kanikuly.apk
           ls -lh release/
-          # Sanity: must look like a zip/apk
           file release/kanikuly.apk
 
       - uses: actions/upload-artifact@v4
@@ -92,17 +104,13 @@ jobs:
         run: |
           gh release delete apk-latest --yes --cleanup-tag || true
           gh release create apk-latest release/kanikuly.apk \
-            --title "Kanikuly — APK" \
+            --title "Kanikuly — signed release APK" \
             --notes "$(cat <<'EOF'
-          APK v1.4 (app name ASCII: Kanikuly).
+          Signed **release** APK v1.5 (keystore via keytool, Capacitor sync + assembleRelease).
 
-          Перед установкой на Samsung Z Flip:
-          1. Настройки → Безопасность → Автоблокировка → выкл.
-          2. Play Store → профиль → Play Protect → настройки → выключи «Проверять приложения».
-          3. Удали все старые Kanikuly / Каникулы, если есть.
-          4. Скачай kanikuly.apk и установи через «Мои файлы».
-
-          Если снова «не установлено» — скачай файл на компьютер и перекинь на телефон через USB / Google Диск / Telegram (не открывай из браузера GitHub).
+          1. Автоблокировка → выкл.
+          2. Удали старые Kanikuly / Каникулы.
+          3. Скачай `kanikuly.apk` (~файл) и установи через «Мои файлы».
           EOF
           )" \
             --latest

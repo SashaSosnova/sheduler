@@ -4,7 +4,11 @@ android {
     namespace = "com.sosnova.scheduler"
     compileSdk = rootProject.ext.compileSdkVersion
     signingConfigs {
-        debug {
+        release {
+            storeFile file("../kanikuly.keystore")
+            storePassword "kanikuly2026"
+            keyAlias "kanikuly"
+            keyPassword "kanikuly2026"
             v1SigningEnabled true
             v2SigningEnabled true
         }
@@ -13,8 +17,8 @@ android {
         applicationId "com.sosnova.vacation"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 5
-        versionName "1.4"
+        versionCode 6
+        versionName "1.5"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
@@ -24,6 +28,7 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
     }
 }
