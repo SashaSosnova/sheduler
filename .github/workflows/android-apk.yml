@@ -1,0 +1,78 @@
+name: Android debug APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Write Firebase env for Vite build
+        run: |
+          printf '%s\n' \
+            'VITE_FIREBASE_API_KEY=AIzaSyAhQbHjLZXE9eLunAHpDQv7TP9Xv6s6ETE' \
+            'VITE_FIREBASE_AUTH_DOMAIN=kid-sheduler.firebaseapp.com' \
+            'VITE_FIREBASE_PROJECT_ID=kid-sheduler' \
+            'VITE_FIREBASE_STORAGE_BUCKET=kid-sheduler.firebasestorage.app' \
+            'VITE_FIREBASE_MESSAGING_SENDER_ID=320223710326' \
+            'VITE_FIREBASE_APP_ID=1:320223710326:web:4698479b8dc6a466d3a357' \
+            > .env
+
+      - name: Build web + sync Capacitor
+        run: npm run cap:sync
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Prepare APK artifact
+        run: |
+          mkdir -p release
+          cp android/app/build/outputs/apk/debug/app-debug.apk release/kanikuly-debug.apk
+          ls -lh release/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kanikuly-debug-apk
+          path: release/kanikuly-debug.apk
+          if-no-files-found: error
+
+      - name: Publish downloadable release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-latest
+          name: Каникулы — APK
+          body: |
+            Debug APK приложения **Каникулы**.
+
+            Скачай `kanikuly-debug.apk`, разреши установку из неизвестных источников и установи на телефон.
+
+            Сборка обновляется при каждом пуше в `main`.
+          files: release/kanikuly-debug.apk
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
