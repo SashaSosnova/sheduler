@@ -7,8 +7,6 @@ import {
   todayKey,
   uid,
 } from './data'
-import { FamilySyncCard } from './FamilySyncCard'
-import type { FamilyStatus } from './familySync'
 import { ScreenLimitCard } from './ScreenLimitCard'
 import type { AppData, MustDoId, ScreenKind, ScreenSlot } from './types'
 
@@ -17,11 +15,7 @@ type Props = {
   onChange: (next: AppData) => void
   onOpenExercises: () => void
   onOpenChew: () => void
-  family: FamilyStatus
-  firebaseReady: boolean
-  onCreateFamily: () => Promise<void>
-  onJoinFamily: (code: string) => Promise<void>
-  onLeaveFamily: () => void
+  onOpenSettings: () => void
 }
 
 export function TodayScreen({
@@ -29,11 +23,7 @@ export function TodayScreen({
   onChange,
   onOpenExercises,
   onOpenChew,
-  family,
-  firebaseReady,
-  onCreateFamily,
-  onJoinFamily,
-  onLeaveFamily,
+  onOpenSettings,
 }: Props) {
   const key = todayKey()
   const day = normalizeDayLog(key, data.days[key])
@@ -99,7 +89,17 @@ export function TodayScreen({
   return (
     <div className="screen">
       <header className="screen-head">
-        <p className="eyebrow">Сегодня</p>
+        <div className="screen-head-row">
+          <p className="eyebrow">Сегодня</p>
+          <button
+            type="button"
+            className="btn ghost settings-btn"
+            onClick={onOpenSettings}
+            aria-label="Настройки"
+          >
+            ⚙
+          </button>
+        </div>
         <h1>{formatRuDate(key)}</h1>
         <p className="sub">
           Сделано {doneCount} из {MUST_DO_ITEMS.length} · зарядка {exerciseDone}/
@@ -109,14 +109,6 @@ export function TodayScreen({
             : ''}
         </p>
       </header>
-
-      <FamilySyncCard
-        family={family}
-        firebaseReady={firebaseReady}
-        onCreate={onCreateFamily}
-        onJoin={onJoinFamily}
-        onLeave={onLeaveFamily}
-      />
 
       <section className="card">
         <div className="card-title-row">

@@ -89,17 +89,14 @@ jobs:
           gh release delete apk-latest --yes --cleanup-tag || true
           gh release create apk-latest \
             release/kanikuly.apk \
-            --title "Kanikuly 2.2" \
+            --title "Sheduler 2.3" \
             --notes "$(cat <<'EOF'
-          Подписанный release APK **v2.2** со стабильным keystore.
+          Подписанный release APK **Sheduler v2.3** (стабильный keystore).
 
           Установка с файла на Samsung:
           1. Автоблокировка → выкл.
           2. Мои файлы → установка неизвестных приложений → разрешить.
-          3. Удали старое Kanikuly один раз (смена подписи).
-          4. Скачай kanikuly.apk и установи из Downloads.
-
-          Дальше обновления с файла должны вставать без adb.
+          3. Скачай kanikuly.apk и установи из Downloads.
           EOF
           )" \
             --latest

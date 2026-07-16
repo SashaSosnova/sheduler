@@ -40,7 +40,23 @@ export function emptyScreenSlot(limitSec: number): ScreenSlot {
     endsAt: null,
     remainingSec: limitSec,
     finished: false,
+    usedSec: 0,
   }
+}
+
+/** Human-readable play time, e.g. "12 мин" or "1 ч 5 мин" */
+export function formatPlayTime(sec: number): string {
+  const safe = Math.max(0, Math.floor(sec))
+  const h = Math.floor(safe / 3600)
+  const m = Math.floor((safe % 3600) / 60)
+  const s = safe % 60
+  if (h > 0) {
+    return m > 0 ? `${h} ч ${m} мин` : `${h} ч`
+  }
+  if (m > 0) {
+    return s > 0 && m < 5 ? `${m} мин ${s} сек` : `${m} мин`
+  }
+  return `${s} сек`
 }
 
 const POSTURE = 'Гимнастика для осанки'
@@ -475,11 +491,28 @@ export function normalizeDayLog(date: string, raw?: Partial<DayLog> | null): Day
     createNote: raw.createNote ?? '',
     extraTasks: normalizeExtraTasks(raw.extraTasks),
     screens: {
-      roblox: {
-        ...base.screens.roblox,
-        ...(raw.screens?.roblox ?? {}),
-      },
+      roblox: normalizeScreenSlot(
+        SCREEN_LIMITS.roblox.seconds,
+        raw.screens?.roblox,
+      ),
     },
+  }
+}
+
+function normalizeScreenSlot(
+  limitSec: number,
+  raw?: Partial<ScreenSlot> | null,
+): ScreenSlot {
+  const base = emptyScreenSlot(limitSec)
+  if (!raw) return base
+  const usedSec =
+    typeof raw.usedSec === 'number' && Number.isFinite(raw.usedSec)
+      ? Math.max(0, Math.floor(raw.usedSec))
+      : 0
+  return {
+    ...base,
+    ...raw,
+    usedSec,
   }
 }
 

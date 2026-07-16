@@ -3,7 +3,7 @@ export type DayMode = 'home' | 'outing' | 'cooking'
 /** Per-device role — chosen once at first launch */
 export type UserRole = 'child' | 'parent'
 
-export type TabId = 'today' | 'calendar' | 'exercises' | 'chew'
+export type TabId = 'today' | 'progress' | 'exercises' | 'chew' | 'settings'
 
 export type Exercise = {
   id: string
@@ -32,6 +32,8 @@ export type ScreenSlot = {
   remainingSec: number
   /** Today's limit already used up */
   finished: boolean
+  /** Seconds actually played today (for parent view) */
+  usedSec: number
 }
 
 /** One chewing session: 5 bites left + 5 bites right */

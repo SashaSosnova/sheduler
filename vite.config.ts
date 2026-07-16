@@ -9,7 +9,7 @@ export default defineConfig({
   server: {
     host: true,
     watch: {
-      ignored: ['**/tmp-apk*/**', '**/android/**', '**/*.apk'],
+      ignored: ['**/tmp-apk*/**', '**/android/**', '**/.tools/**', '**/*.apk', '**/*.zip'],
     },
   },
   build: {

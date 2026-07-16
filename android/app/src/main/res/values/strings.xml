@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Kanikuly</string>
-    <string name="title_activity_main">Kanikuly</string>
+    <string name="app_name">Sheduler</string>
+    <string name="title_activity_main">Sheduler</string>
     <string name="package_name">com.sosnova.vacation</string>
     <string name="custom_url_scheme">com.sosnova.vacation</string>
 </resources>

@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BottomNav } from './BottomNav'
-import { CalendarScreen } from './CalendarScreen'
 import { ChewDiaryScreen } from './ChewDiaryScreen'
 import { ExercisesScreen } from './ExercisesScreen'
 import { ParentSummaryScreen } from './ParentSummaryScreen'
+import { ProgressScreen } from './ProgressScreen'
 import { RoleSetupScreen } from './RoleSetupScreen'
+import { SettingsScreen } from './SettingsScreen'
 import { TodayScreen } from './TodayScreen'
 import type { TabId } from './types'
 import { useAppData } from './useAppData'
@@ -25,6 +26,12 @@ function App() {
   const [tab, setTab] = useState<TabId>('today')
   const isParent = role === 'parent'
 
+  useEffect(() => {
+    if (isParent && tab === 'progress') {
+      setTab('today')
+    }
+  }, [isParent, tab])
+
   if (!role) {
     return (
       <div className="app-shell">
@@ -42,13 +49,9 @@ function App() {
           isParent ? (
             <ParentSummaryScreen
               data={data}
-              family={family}
-              firebaseReady={firebaseReady}
-              onCreateFamily={createFamilyCloud}
-              onJoinFamily={joinFamilyCloud}
-              onLeaveFamily={leaveFamilyCloud}
               onOpenExercises={() => setTab('exercises')}
               onOpenChew={() => setTab('chew')}
+              onOpenSettings={() => setTab('settings')}
             />
           ) : (
             <TodayScreen
@@ -56,20 +59,12 @@ function App() {
               onChange={setData}
               onOpenExercises={() => setTab('exercises')}
               onOpenChew={() => setTab('chew')}
-              family={family}
-              firebaseReady={firebaseReady}
-              onCreateFamily={createFamilyCloud}
-              onJoinFamily={joinFamilyCloud}
-              onLeaveFamily={leaveFamilyCloud}
+              onOpenSettings={() => setTab('settings')}
             />
           )
         ) : null}
-        {tab === 'calendar' ? (
-          <CalendarScreen
-            data={data}
-            onOpenToday={() => setTab('today')}
-            onOpenChew={() => setTab('chew')}
-          />
+        {tab === 'progress' && !isParent ? (
+          <ProgressScreen data={data} onOpenToday={() => setTab('today')} />
         ) : null}
         {tab === 'exercises' ? (
           <ExercisesScreen data={data} onChange={setData} readOnly={isParent} />
@@ -77,8 +72,19 @@ function App() {
         {tab === 'chew' ? (
           <ChewDiaryScreen data={data} onChange={setData} readOnly={isParent} />
         ) : null}
+        {tab === 'settings' ? (
+          <SettingsScreen
+            role={role}
+            family={family}
+            firebaseReady={firebaseReady}
+            onCreateFamily={createFamilyCloud}
+            onJoinFamily={joinFamilyCloud}
+            onLeaveFamily={leaveFamilyCloud}
+            onChangeRole={setRole}
+          />
+        ) : null}
       </main>
-      <BottomNav active={tab} onChange={setTab} />
+      <BottomNav active={tab} role={role} onChange={setTab} />
     </div>
   )
 }

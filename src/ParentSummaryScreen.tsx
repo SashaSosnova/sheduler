@@ -1,28 +1,25 @@
-import { MUST_DO_ITEMS, normalizeDayLog, todayKey } from './data'
-import { FamilySyncCard } from './FamilySyncCard'
-import type { FamilyStatus } from './familySync'
+import { useEffect, useState } from 'react'
+import {
+  MUST_DO_ITEMS,
+  SCREEN_LIMITS,
+  formatPlayTime,
+  normalizeDayLog,
+  todayKey,
+} from './data'
 import type { AppData } from './types'
 
 type Props = {
   data: AppData
-  family: FamilyStatus
-  firebaseReady: boolean
-  onCreateFamily: () => Promise<void>
-  onJoinFamily: (code: string) => Promise<void>
-  onLeaveFamily: () => void
   onOpenExercises: () => void
   onOpenChew: () => void
+  onOpenSettings: () => void
 }
 
 export function ParentSummaryScreen({
   data,
-  family,
-  firebaseReady,
-  onCreateFamily,
-  onJoinFamily,
-  onLeaveFamily,
   onOpenExercises,
   onOpenChew,
+  onOpenSettings,
 }: Props) {
   const key = todayKey()
   const day = normalizeDayLog(key, data.days[key])
@@ -34,10 +31,47 @@ export function ParentSummaryScreen({
     .filter((e) => e.date === key)
     .sort((a, b) => b.createdAt - a.createdAt)[0]
 
+  const roblox = day.screens.roblox
+  const limitSec = SCREEN_LIMITS.roblox.seconds
+  const running = Boolean(roblox.endsAt && !roblox.finished)
+  const [now, setNow] = useState(Date.now())
+
+  useEffect(() => {
+    if (!running) return
+    const id = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(id)
+  }, [running])
+
+  const livePlayed =
+    running && roblox.endsAt
+      ? Math.max(
+          0,
+          Math.floor((now - (roblox.endsAt - roblox.remainingSec * 1000)) / 1000),
+        )
+      : 0
+  const displayUsed = Math.min(limitSec, roblox.usedSec + livePlayed)
+  const statusLabel = roblox.finished
+    ? 'лимит'
+    : running
+      ? 'сейчас играет'
+      : roblox.usedSec > 0
+        ? 'пауза'
+        : 'ещё не играл'
+
   return (
     <div className="screen">
       <header className="screen-head">
-        <p className="eyebrow">Родитель · только просмотр</p>
+        <div className="screen-head-row">
+          <p className="eyebrow">Родитель · только просмотр</p>
+          <button
+            type="button"
+            className="btn ghost settings-btn"
+            onClick={onOpenSettings}
+            aria-label="Настройки"
+          >
+            ⚙
+          </button>
+        </div>
         <h1>{formatRuDate(key)}</h1>
         <p className="sub">
           Минимум {doneCount}/{MUST_DO_ITEMS.length} · зарядка {exerciseDone}/
@@ -48,14 +82,22 @@ export function ParentSummaryScreen({
         </p>
       </header>
 
-      <FamilySyncCard
-        family={family}
-        firebaseReady={firebaseReady}
-        onCreate={onCreateFamily}
-        onJoin={onJoinFamily}
-        onLeave={onLeaveFamily}
-        joinPreferred
-      />
+      <section className="card parent-screen-card">
+        <div className="card-title-row">
+          <h2>Компьютер / {SCREEN_LIMITS.roblox.label}</h2>
+          <span className={roblox.finished || running ? 'pill' : 'pill muted'}>
+            {statusLabel}
+          </span>
+        </div>
+        <p className="parent-play-time">{formatPlayTime(displayUsed)}</p>
+        <p className="hint">из {Math.round(limitSec / 60)} мин на сегодня</p>
+        <div className="play-bar" aria-hidden>
+          <div
+            className="play-bar-fill"
+            style={{ width: `${Math.min(100, (displayUsed / limitSec) * 100)}%` }}
+          />
+        </div>
+      </section>
 
       <section className="card">
         <div className="card-title-row">
