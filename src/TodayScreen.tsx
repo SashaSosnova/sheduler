@@ -279,7 +279,7 @@ export function TodayScreen({
       </section>
 
       <section className="card">
-        <h2>Экраны — лимит времени</h2>
+        <h2>Roblox — лимит времени</h2>
         <p className="hint">
           Это не «надо сделать», а ограничение. Нажми «Начать» — запустится таймер.
           Когда время вышло, на сегодня лимит использован.
@@ -289,11 +289,6 @@ export function TodayScreen({
             kind="roblox"
             slot={day.screens.roblox}
             onChange={(slot) => setScreen('roblox', slot)}
-          />
-          <ScreenLimitCard
-            kind="cartoons"
-            slot={day.screens.cartoons}
-            onChange={(slot) => setScreen('cartoons', slot)}
           />
         </div>
       </section>

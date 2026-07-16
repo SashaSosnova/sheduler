@@ -7,6 +7,8 @@ type Props = {
   onCreate: () => Promise<void>
   onJoin: (code: string) => Promise<void>
   onLeave: () => void
+  /** Parent phone: emphasize joining child's family code */
+  joinPreferred?: boolean
 }
 
 export function FamilySyncCard({
@@ -15,6 +17,7 @@ export function FamilySyncCard({
   onCreate,
   onJoin,
   onLeave,
+  joinPreferred = false,
 }: Props) {
   const [joinCode, setJoinCode] = useState('')
   const [busy, setBusy] = useState(false)
@@ -76,6 +79,32 @@ export function FamilySyncCard({
               onClick={onLeave}
             >
               Отключить это устройство
+            </button>
+          </div>
+        </>
+      ) : joinPreferred ? (
+        <>
+          <p className="hint">
+            Введи код семьи с телефона ребёнка — увидишь его прогресс на этом
+            устройстве.
+          </p>
+          <label className="field">
+            <span>Код семьи</span>
+            <input
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+              placeholder="Например AB12CD"
+              maxLength={8}
+            />
+          </label>
+          <div className="row-gap">
+            <button
+              type="button"
+              className="btn primary"
+              disabled={busy || !firebaseReady || joinCode.trim().length < 4}
+              onClick={handleJoin}
+            >
+              Подключиться
             </button>
           </div>
         </>

@@ -1,5 +1,8 @@
 export type DayMode = 'home' | 'outing' | 'cooking'
 
+/** Per-device role — chosen once at first launch */
+export type UserRole = 'child' | 'parent'
+
 export type TabId = 'today' | 'calendar' | 'exercises' | 'chew'
 
 export type Exercise = {
@@ -20,7 +23,7 @@ export type MustDoId =
   | 'wash-am'
   | 'wash-pm'
 
-export type ScreenKind = 'roblox' | 'cartoons'
+export type ScreenKind = 'roblox'
 
 export type ScreenSlot = {
   /** Unix ms when the running session should end */

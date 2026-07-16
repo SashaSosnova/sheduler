@@ -8,7 +8,10 @@
 
 .app-main {
   flex: 1;
-  padding: 20px 16px calc(var(--nav-h) + 20px);
+  padding:
+    calc(16px + env(safe-area-inset-top, 0px))
+    16px
+    calc(var(--nav-h) + 20px + env(safe-area-inset-bottom, 0px));
 }
 
 .screen {
@@ -237,6 +240,69 @@
 .chip:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+.role-setup {
+  justify-content: flex-start;
+  padding-bottom: 24px;
+}
+
+.role-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.role-card:hover,
+.role-card:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+  outline: none;
+}
+
+.role-card h2 {
+  margin-bottom: 8px;
+}
+
+.status-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.status-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid var(--line);
+  font-size: 1rem;
+}
+
+.status-list li.is-done {
+  color: var(--muted);
+}
+
+.status-mark {
+  flex-shrink: 0;
+  width: 1.25em;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.status-list li:not(.is-done) .status-mark {
+  color: var(--muted);
+}
+
+.exercise-card.read-only .check-row {
+  pointer-events: none;
 }
 
 .linkish {
@@ -702,7 +768,7 @@
 
 @media (min-width: 700px) {
   .app-main {
-    padding-top: 28px;
+    padding-top: calc(28px + env(safe-area-inset-top, 0px));
   }
 
   .screen-head h1 {

@@ -12,9 +12,10 @@ import type { AppData } from './types'
 type Props = {
   data: AppData
   onChange: (next: AppData) => void
+  readOnly?: boolean
 }
 
-export function ExercisesScreen({ data, onChange }: Props) {
+export function ExercisesScreen({ data, onChange, readOnly = false }: Props) {
   const key = todayKey()
   const day = normalizeDayLog(key, data.days[key])
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -63,6 +64,7 @@ export function ExercisesScreen({ data, onChange }: Props) {
   }
 
   function toggleDone(id: string) {
+    if (readOnly) return
     patchDayExercises({
       ...day.exercisesDone,
       [id]: !day.exercisesDone[id],
@@ -72,19 +74,28 @@ export function ExercisesScreen({ data, onChange }: Props) {
   return (
     <div className={`screen ${sheetOpen ? 'screen-sheet-open' : ''}`}>
       <header className="screen-head">
-        <p className="eyebrow">Зарядка · ДЗ №28</p>
+        <p className="eyebrow">
+          {readOnly ? 'Родитель · просмотр' : 'Зарядка · ДЗ №28'}
+        </p>
         <h1>Комплекс упражнений</h1>
         <p className="sub">
-          Сегодня {doneCount} из {data.exercises.length} · с таймером: {timedCount}
+          Сегодня {doneCount} из {data.exercises.length}
+          {readOnly ? '' : ` · с таймером: ${timedCount}`}
         </p>
       </header>
 
-      <section className="card soft">
-        <p className="hint">{ROUTINE_NOTE}</p>
-        <p className="hint" style={{ marginTop: 8 }}>
-          Капа (трейнер) нужна только там, где в названии написано «(трейнер)».
-        </p>
-      </section>
+      {readOnly ? (
+        <section className="card soft">
+          <p className="hint">Только просмотр — отметить упражнения можно на телефоне ребёнка.</p>
+        </section>
+      ) : (
+        <section className="card soft">
+          <p className="hint">{ROUTINE_NOTE}</p>
+          <p className="hint" style={{ marginTop: 8 }}>
+            Капа (трейнер) нужна только там, где в названии написано «(трейнер)».
+          </p>
+        </section>
+      )}
 
       {groups.map(({ group, items }) => {
         const groupDone = items.filter((ex) => day.exercisesDone[ex.id]).length
@@ -105,41 +116,46 @@ export function ExercisesScreen({ data, onChange }: Props) {
                 return (
                   <li
                     key={ex.id}
-                    className={`exercise-card ${checked ? 'done' : ''} ${isActive ? 'active' : ''}`}
+                    className={`exercise-card ${checked ? 'done' : ''} ${isActive ? 'active' : ''} ${readOnly ? 'read-only' : ''}`}
                   >
                     <label className="check-row">
                       <input
                         type="checkbox"
                         checked={checked}
+                        disabled={readOnly}
                         onChange={() => toggleDone(ex.id)}
                       />
                       <span className="ex-name">{ex.name}</span>
                     </label>
-                    <div className="ex-meta">
-                      {ex.durationSec > 0 ? (
-                        <span className="pill">
-                          {rounds > 1
-                            ? `Таймер ${formatDuration(ex.durationSec)} × ${rounds}`
-                            : `Таймер ${formatDuration(ex.durationSec)}`}
-                        </span>
-                      ) : null}
-                      {ex.reps ? <span className="pill muted">{ex.reps}</span> : null}
-                    </div>
-                    {note ? <p className="hint">{note}</p> : null}
-                    {ex.durationSec > 0 ? (
-                      <div className="ex-actions">
-                        <button
-                          type="button"
-                          className="btn primary"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            setActiveId(ex.id)
-                          }}
-                        >
-                          Таймер
-                        </button>
-                      </div>
+                    {!readOnly ? (
+                      <>
+                        <div className="ex-meta">
+                          {ex.durationSec > 0 ? (
+                            <span className="pill">
+                              {rounds > 1
+                                ? `Таймер ${formatDuration(ex.durationSec)} × ${rounds}`
+                                : `Таймер ${formatDuration(ex.durationSec)}`}
+                            </span>
+                          ) : null}
+                          {ex.reps ? <span className="pill muted">{ex.reps}</span> : null}
+                        </div>
+                        {note ? <p className="hint">{note}</p> : null}
+                        {ex.durationSec > 0 ? (
+                          <div className="ex-actions">
+                            <button
+                              type="button"
+                              className="btn primary"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                setActiveId(ex.id)
+                              }}
+                            >
+                              Таймер
+                            </button>
+                          </div>
+                        ) : null}
+                      </>
                     ) : null}
                   </li>
                 )
@@ -149,7 +165,7 @@ export function ExercisesScreen({ data, onChange }: Props) {
         )
       })}
 
-      {sheetOpen && active ? (
+      {!readOnly && sheetOpen && active ? (
         <div
           className="action-sheet"
           ref={sheetRef}

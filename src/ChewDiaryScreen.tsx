@@ -5,6 +5,7 @@ import type { AppData, ChewEntry } from './types'
 type Props = {
   data: AppData
   onChange: (next: AppData) => void
+  readOnly?: boolean
 }
 
 const EMPTY_SIDE = (): string[] => ['', '', '', '', '']
@@ -47,7 +48,7 @@ function toFields(entry: ChewEntry) {
   }
 }
 
-export function ChewDiaryScreen({ data, onChange }: Props) {
+export function ChewDiaryScreen({ data, onChange, readOnly = false }: Props) {
   const key = todayKey()
   const [editing, setEditing] = useState(false)
   const [food, setFood] = useState<string>(CHEW_FOODS[0])
@@ -73,7 +74,11 @@ export function ChewDiaryScreen({ data, onChange }: Props) {
     return [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : 1))
   }, [data.chewEntries])
 
-  const showForm = !todayEntry || editing
+  const showForm = !readOnly && (!todayEntry || editing)
+
+  useEffect(() => {
+    if (readOnly) setEditing(false)
+  }, [readOnly])
 
   useEffect(() => {
     if (todayEntry && editing) {
@@ -164,26 +169,36 @@ export function ChewDiaryScreen({ data, onChange }: Props) {
   return (
     <div className="screen">
       <header className="screen-head">
-        <p className="eyebrow">Дневник жевания</p>
-        <h1>Одна запись в день</h1>
+        <p className="eyebrow">{readOnly ? 'Родитель · просмотр' : 'Дневник жевания'}</p>
+        <h1>{readOnly ? 'Дневник жевания' : 'Одна запись в день'}</h1>
         <p className="sub">
-          5 укусов слева и 5 справа. В ячейку — сколько раз жевал за укус.
+          {readOnly
+            ? 'Сводка по дням. Заполнить можно только на телефоне ребёнка.'
+            : '5 укусов слева и 5 справа. В ячейку — сколько раз жевал за укус.'}
         </p>
       </header>
 
       {todayEntry && !editing ? (
         <section className="card accent">
-          <h2>Сегодня уже заполнено</h2>
+          <h2>{readOnly ? 'Сегодня' : 'Сегодня уже заполнено'}</h2>
           <p>
             <strong>{todayEntry.food}</strong>
           </p>
           <p className="hint">Левая: {sideText(todayEntry.left)}</p>
           <p className="hint">Правая: {sideText(todayEntry.right)}</p>
-          <div className="row-gap">
-            <button type="button" className="btn" onClick={() => setEditing(true)}>
-              Исправить
-            </button>
-          </div>
+          {!readOnly ? (
+            <div className="row-gap">
+              <button type="button" className="btn" onClick={() => setEditing(true)}>
+                Исправить
+              </button>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {readOnly && !todayEntry ? (
+        <section className="card soft">
+          <p className="hint">Сегодня запись ещё не сохранена.</p>
         </section>
       ) : null}
 

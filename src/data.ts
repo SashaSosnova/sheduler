@@ -33,7 +33,6 @@ export const EXTRA_TASK_IDEAS = [
 
 export const SCREEN_LIMITS = {
   roblox: { label: 'Roblox', seconds: 40 * 60 },
-  cartoons: { label: 'Мультики', seconds: 60 * 60 },
 } as const
 
 export function emptyScreenSlot(limitSec: number): ScreenSlot {
@@ -443,7 +442,6 @@ export function emptyDayLog(date: string): DayLog {
     createNote: '',
     screens: {
       roblox: emptyScreenSlot(SCREEN_LIMITS.roblox.seconds),
-      cartoons: emptyScreenSlot(SCREEN_LIMITS.cartoons.seconds),
     },
   }
 }
@@ -480,10 +478,6 @@ export function normalizeDayLog(date: string, raw?: Partial<DayLog> | null): Day
       roblox: {
         ...base.screens.roblox,
         ...(raw.screens?.roblox ?? {}),
-      },
-      cartoons: {
-        ...base.screens.cartoons,
-        ...(raw.screens?.cartoons ?? {}),
       },
     },
   }
