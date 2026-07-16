@@ -92,14 +92,14 @@ jobs:
         run: |
           gh release delete apk-latest --yes --cleanup-tag || true
           gh release create apk-latest release/kanikuly.apk \
-            --title "Каникулы — APK" \
+            --title "Kanikuly — APK" \
             --notes "$(cat <<'EOF'
-          APK v1.3 (упрощённая сборка как у home-garden).
+          APK v1.4 (app name ASCII: Kanikuly).
 
           Перед установкой на Samsung Z Flip:
           1. Настройки → Безопасность → Автоблокировка → выкл.
           2. Play Store → профиль → Play Protect → настройки → выключи «Проверять приложения».
-          3. Удали все старые «Каникулы», если есть.
+          3. Удали все старые Kanikuly / Каникулы, если есть.
           4. Скачай kanikuly.apk и установи через «Мои файлы».
 
           Если снова «не установлено» — скачай файл на компьютер и перекинь на телефон через USB / Google Диск / Telegram (не открывай из браузера GitHub).

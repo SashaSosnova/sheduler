@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
   appId: 'com.sosnova.vacation',
-  appName: 'Каникулы',
+  appName: 'Kanikuly',
   webDir: 'dist',
   bundledWebRuntime: false,
 }
