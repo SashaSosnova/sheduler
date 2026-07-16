@@ -1,4 +1,4 @@
-name: Android release APK
+name: Android APK
 
 on:
   push:
@@ -26,6 +26,11 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
+      - name: Install SDK packages
+        run: |
+          sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;36.0.0"
+          yes | sdkmanager --licenses || true
+
       - name: Install dependencies
         run: npm ci
 
@@ -43,16 +48,21 @@ jobs:
       - name: Build web + sync Capacitor
         run: npm run cap:sync
 
-      - name: Build release APK
+      - name: Build debug APK
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Verify APK signature
+        run: |
+          "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify --verbose \
+            android/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Prepare APK artifact
         run: |
           mkdir -p release
-          cp android/app/build/outputs/apk/release/app-release.apk release/kanikuly.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk release/kanikuly.apk
           ls -lh release/
 
       - uses: actions/upload-artifact@v4
@@ -61,19 +71,21 @@ jobs:
           path: release/kanikuly.apk
           if-no-files-found: error
 
-      - name: Publish downloadable release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: apk-latest
-          name: Каникулы — APK
-          body: |
-            Подписанный release APK приложения **Каникулы** (v1.1).
-
-            Скачай `kanikuly.apk`, разреши установку из неизвестных источников и установи на телефон.
-            Обновления устанавливаются поверх предыдущей версии с тем же ключом подписи.
-
-            Сборка обновляется при каждом пуше в `main`.
-          files: release/kanikuly.apk
-          make_latest: true
+      - name: Replace GitHub release (single APK only)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete apk-latest --yes --cleanup-tag || true
+          gh release create apk-latest release/kanikuly.apk \
+            --title "Каникулы — APK" \
+            --notes "$(cat <<'EOF'
+          Debug APK приложения **Каникулы** (v1.2), собран как у home-garden.
+
+          1. Если старое «Каникулы» установлено — удали его.
+          2. На Samsung: Настройки → Безопасность и конфиденциальность → **Автоблокировка** → выключи.
+          3. Скачай `kanikuly.apk` и установи.
+
+          Сборка обновляется при каждом пуше в `main`.
+          EOF
+          )" \
+            --latest

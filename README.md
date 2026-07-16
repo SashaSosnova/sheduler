@@ -41,7 +41,12 @@ APK появится примерно здесь:
 
 Готовый APK также собирается на GitHub и лежит тут:
 
-**https://github.com/SashaSosnova/sheduler/releases/latest/download/kanikuly-debug.apk**
+**https://github.com/SashaSosnova/sheduler/releases/latest/download/kanikuly.apk**
+
+Если Samsung пишет «приложение не установлено»:
+1. Удали старое «Каникулы» (если есть).
+2. Настройки → Безопасность и конфиденциальность → **Автоблокировка** → выключи.
+3. Скачай `kanikuly.apk` ещё раз и установи через «Мои файлы».
 
 ### Полезные команды
 

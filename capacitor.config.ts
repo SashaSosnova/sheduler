@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
-  appId: 'com.sosnova.scheduler',
+  appId: 'com.sosnova.kanikuly',
   appName: 'Каникулы',
   webDir: 'dist',
   server: {
