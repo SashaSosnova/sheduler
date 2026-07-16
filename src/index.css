@@ -16,7 +16,14 @@
   --danger: #a33b3b;
   --shadow: 0 1px 0 rgba(28, 43, 38, 0.04);
   --radius: 18px;
-  --nav-h: 72px;
+  /* Capacitor injects --safe-area-inset-*; env() is the web/iOS fallback */
+  --safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --nav-pad-y: 10px;
+  --nav-btn-h: 48px;
+  --nav-bar-h: calc(var(--nav-pad-y) + var(--nav-btn-h) + var(--nav-pad-y));
+  --nav-h: var(--nav-bar-h);
+  --nav-total-h: calc(var(--nav-bar-h) + var(--safe-bottom));
   font-family: Manrope, system-ui, sans-serif;
   line-height: 1.45;
   font-weight: 400;
@@ -43,6 +50,20 @@ body,
 
 body {
   min-width: 320px;
+}
+
+/* Phones often report 0 via env(); keep a floor above the gesture/nav bar */
+@media (pointer: coarse) {
+  :root {
+    --safe-bottom: max(
+      28px,
+      var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))
+    );
+    --safe-top: max(
+      12px,
+      var(--safe-area-inset-top, env(safe-area-inset-top, 0px))
+    );
+  }
 }
 
 button,
