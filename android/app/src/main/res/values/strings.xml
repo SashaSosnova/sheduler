@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">Sheduler</string>
     <string name="title_activity_main">Sheduler</string>
-    <string name="package_name">com.sosnova.vacation</string>
-    <string name="custom_url_scheme">com.sosnova.vacation</string>
+    <string name="package_name">com.sosnova.sheduler</string>
+    <string name="custom_url_scheme">com.sosnova.sheduler</string>
 </resources>

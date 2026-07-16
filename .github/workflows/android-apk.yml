@@ -71,15 +71,23 @@ jobs:
       - name: Verify and save APK
         run: |
           mkdir -p release
-          cp android/app/build/outputs/apk/release/app-release.apk release/kanikuly.apk
-          "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify --verbose --print-certs release/kanikuly.apk
-          "$ANDROID_SDK_ROOT/build-tools/36.0.0/aapt" dump badging release/kanikuly.apk | head -n 15
-          ls -lh release/kanikuly.apk
+          cp android/app/build/outputs/apk/release/app-release.apk release/sheduler.apk
+          cp release/sheduler.apk release/kanikuly.apk
+          "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify --verbose --print-certs release/sheduler.apk
+          BADGING=$("$ANDROID_SDK_ROOT/build-tools/36.0.0/aapt" dump badging release/sheduler.apk)
+          echo "$BADGING" | head -n 20
+          if echo "$BADGING" | grep -q "testOnly='true'"; then
+            echo "ERROR: APK is testOnly — cannot sideload from Files"
+            exit 1
+          fi
+          ls -lh release/
 
       - uses: actions/upload-artifact@v4
         with:
-          name: kanikuly-apk
-          path: release/kanikuly.apk
+          name: sheduler-apk
+          path: |
+            release/sheduler.apk
+            release/kanikuly.apk
           if-no-files-found: error
 
       - name: Publish GitHub release
@@ -88,15 +96,21 @@ jobs:
         run: |
           gh release delete apk-latest --yes --cleanup-tag || true
           gh release create apk-latest \
+            release/sheduler.apk \
             release/kanikuly.apk \
-            --title "Sheduler 2.3" \
+            --title "Sheduler 2.4" \
             --notes "$(cat <<'EOF'
-          Подписанный release APK **Sheduler v2.3** (стабильный keystore).
+          **Sheduler v2.4** — APK для установки с файла (без adb).
 
-          Установка с файла на Samsung:
-          1. Автоблокировка → выкл.
-          2. Мои файлы → установка неизвестных приложений → разрешить.
-          3. Скачай kanikuly.apk и установи из Downloads.
+          Новый package id: `com.sosnova.sheduler` (не конфликтует со старыми установками).
+
+          Как поставить на Samsung:
+          1. Удали старое приложение Kanikuly / Sheduler, если есть.
+          2. Автоблокировка → выкл.
+          3. Мои файлы → Установка неизвестных приложений → разрешить.
+          4. Скачай **sheduler.apk** и открой из Downloads.
+
+          Дальше обновления с той же ссылки должны ставиться поверх.
           EOF
           )" \
             --latest
