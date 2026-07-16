@@ -5,6 +5,8 @@ import {
   normalizeDayLog,
   todayKey,
 } from './data'
+import { FamilySyncCard } from './FamilySyncCard'
+import type { FamilyStatus } from './familySync'
 import { ScreenLimitCard } from './ScreenLimitCard'
 import type { AppData, MustDoId, ScreenKind, ScreenSlot } from './types'
 
@@ -13,6 +15,11 @@ type Props = {
   onChange: (next: AppData) => void
   onOpenExercises: () => void
   onOpenChew: () => void
+  family: FamilyStatus
+  firebaseReady: boolean
+  onCreateFamily: () => Promise<void>
+  onJoinFamily: (code: string) => Promise<void>
+  onLeaveFamily: () => void
 }
 
 const OUTING_OPTIONS = [
@@ -22,7 +29,17 @@ const OUTING_OPTIONS = [
   { value: 'parents', label: 'С родителями' },
 ]
 
-export function TodayScreen({ data, onChange, onOpenExercises, onOpenChew }: Props) {
+export function TodayScreen({
+  data,
+  onChange,
+  onOpenExercises,
+  onOpenChew,
+  family,
+  firebaseReady,
+  onCreateFamily,
+  onJoinFamily,
+  onLeaveFamily,
+}: Props) {
   const key = todayKey()
   const day = normalizeDayLog(key, data.days[key])
   const doneCount = MUST_DO_ITEMS.filter((i) => day.mustDo[i.id]).length
@@ -65,6 +82,14 @@ export function TodayScreen({ data, onChange, onOpenExercises, onOpenChew }: Pro
           {exerciseTotal || 0}
         </p>
       </header>
+
+      <FamilySyncCard
+        family={family}
+        firebaseReady={firebaseReady}
+        onCreate={onCreateFamily}
+        onJoin={onJoinFamily}
+        onLeave={onLeaveFamily}
+      />
 
       <section className="card">
         <h2>Планы на день</h2>

@@ -9,7 +9,15 @@ import { useAppData } from './useAppData'
 import './App.css'
 
 function App() {
-  const [data, setData] = useAppData()
+  const {
+    data,
+    setData,
+    family,
+    createFamilyCloud,
+    joinFamilyCloud,
+    leaveFamilyCloud,
+    firebaseReady,
+  } = useAppData()
   const [tab, setTab] = useState<TabId>('today')
 
   return (
@@ -21,6 +29,11 @@ function App() {
             onChange={setData}
             onOpenExercises={() => setTab('exercises')}
             onOpenChew={() => setTab('chew')}
+            family={family}
+            firebaseReady={firebaseReady}
+            onCreateFamily={createFamilyCloud}
+            onJoinFamily={joinFamilyCloud}
+            onLeaveFamily={leaveFamilyCloud}
           />
         ) : null}
         {tab === 'calendar' ? (

@@ -56,4 +56,27 @@ APK появится примерно здесь:
 - **Зарядка** — упражнения из ДЗ №28 с таймерами
 - **Жевание** — дневник жевания и сводка для миотерапевта
 
-Данные хранятся на устройстве (localStorage).
+Данные хранятся на устройстве (localStorage). Чтобы синхронизировать телефон и планшет, на экране **Сегодня** есть блок «Облако — все устройства»: создай семью на одном устройстве и введи тот же код на другом.
+
+## Firebase (синхронизация между устройствами)
+
+Ключи уже лежат в локальном `.env` (в git не попадает). В [Firebase Console](https://console.firebase.google.com/project/kid-sheduler) нужно один раз включить:
+
+1. **Authentication** → Sign-in method → **Anonymous** → Enable.
+2. **Firestore Database** → Create database (режим production).
+3. **Firestore** → Rules → вставь правила из файла `firestore.rules` в репозитории и Publish:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /families/{familyCode} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+```
+
+После этого: `npm run dev` → **Создать семью** → на втором устройстве **Войти по коду**.
+
+Синхронизируются: дни (чек-лист), дневник жевания. Зарядка берётся из кода приложения.
