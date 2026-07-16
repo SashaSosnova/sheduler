@@ -3,6 +3,12 @@ apply plugin: 'com.android.application'
 android {
     namespace = "com.sosnova.scheduler"
     compileSdk = rootProject.ext.compileSdkVersion
+    signingConfigs {
+        debug {
+            v1SigningEnabled true
+            v2SigningEnabled true
+        }
+    }
     defaultConfig {
         applicationId "com.sosnova.vacation"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -15,16 +21,9 @@ android {
         }
     }
     buildTypes {
-        debug {
-            // Some Samsung firmwares still check v1 during sideload.
-            v1SigningEnabled true
-            v2SigningEnabled true
-        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            v1SigningEnabled true
-            v2SigningEnabled true
         }
     }
 }
