@@ -1,4 +1,4 @@
-name: Android debug APK
+name: Android release APK
 
 on:
   push:
@@ -43,22 +43,22 @@ jobs:
       - name: Build web + sync Capacitor
         run: npm run cap:sync
 
-      - name: Build debug APK
+      - name: Build release APK
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleRelease --no-daemon
 
       - name: Prepare APK artifact
         run: |
           mkdir -p release
-          cp android/app/build/outputs/apk/debug/app-debug.apk release/kanikuly-debug.apk
+          cp android/app/build/outputs/apk/release/app-release.apk release/kanikuly.apk
           ls -lh release/
 
       - uses: actions/upload-artifact@v4
         with:
-          name: kanikuly-debug-apk
-          path: release/kanikuly-debug.apk
+          name: kanikuly-apk
+          path: release/kanikuly.apk
           if-no-files-found: error
 
       - name: Publish downloadable release
@@ -67,12 +67,13 @@ jobs:
           tag_name: apk-latest
           name: Каникулы — APK
           body: |
-            Debug APK приложения **Каникулы**.
+            Подписанный release APK приложения **Каникулы** (v1.1).
 
-            Скачай `kanikuly-debug.apk`, разреши установку из неизвестных источников и установи на телефон.
+            Скачай `kanikuly.apk`, разреши установку из неизвестных источников и установи на телефон.
+            Обновления устанавливаются поверх предыдущей версии с тем же ключом подписи.
 
             Сборка обновляется при каждом пуше в `main`.
-          files: release/kanikuly-debug.apk
+          files: release/kanikuly.apk
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
