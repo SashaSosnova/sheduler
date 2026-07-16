@@ -1,4 +1,4 @@
-name: Android APK
+name: Android release APK
 
 on:
   push:
@@ -53,20 +53,19 @@ jobs:
 
       - name: Create release keystore with keytool
         run: |
-          keytool -genkeypair -v \
-            -storetype PKCS12 \
-            -keystore android/kanikuly.keystore \
-            -alias kanikuly \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -storepass kanikuly2026 \
-            -keypass kanikuly2026 \
-            -dname "CN=Kanikuly, O=Sosnova, C=RU"
-          keytool -list -v \
-            -keystore android/kanikuly.keystore \
-            -storepass kanikuly2026 \
-            -storetype PKCS12 | head -n 30
+          if [ ! -f android/kanikuly.keystore ]; then
+            keytool -genkeypair -v \
+              -storetype PKCS12 \
+              -keystore android/kanikuly.keystore \
+              -alias kanikuly \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass kanikuly2026 \
+              -keypass kanikuly2026 \
+              -dname "CN=Kanikuly, O=Sosnova, C=RU"
+          fi
+          keytool -list -keystore android/kanikuly.keystore -storepass kanikuly2026 -storetype PKCS12
 
       - name: Build signed release APK
         working-directory: android
@@ -83,34 +82,37 @@ jobs:
           ls -lh "$APK"
           "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$APK"
           "$ANDROID_SDK_ROOT/build-tools/36.0.0/aapt" dump badging "$APK" | head -n 20
-          unzip -l "$APK" | grep -E 'META-INF/.*\.(RSA|SF|MF)' || true
 
-      - name: Prepare APK artifact
+      - name: Prepare artifacts
         run: |
           mkdir -p release
           cp android/app/build/outputs/apk/release/app-release.apk release/kanikuly.apk
+          cp android/kanikuly.keystore release/kanikuly.keystore
           ls -lh release/
-          file release/kanikuly.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: kanikuly-apk
-          path: release/kanikuly.apk
+          name: kanikuly-release
+          path: |
+            release/kanikuly.apk
+            release/kanikuly.keystore
           if-no-files-found: error
 
-      - name: Replace GitHub release (single APK only)
+      - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete apk-latest --yes --cleanup-tag || true
           gh release create apk-latest release/kanikuly.apk \
-            --title "Kanikuly — signed release APK" \
+            --title "Kanikuly — release APK" \
             --notes "$(cat <<'EOF'
-          Signed **release** APK v1.5 (keystore via keytool, Capacitor sync + assembleRelease).
+          Подписанный **release** APK (v2.0).
+
+          Сборка: Capacitor sync → keytool keystore → assembleRelease.
 
           1. Автоблокировка → выкл.
           2. Удали старые Kanikuly / Каникулы.
-          3. Скачай `kanikuly.apk` (~файл) и установи через «Мои файлы».
+          3. Скачай kanikuly.apk и установи через «Мои файлы».
           EOF
           )" \
             --latest
