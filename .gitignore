@@ -20,10 +20,13 @@ android/app/build
 android/build
 android/local.properties
 android/captures
+# Ignore generated keystores, but keep the shared release key for family sideload updates
 android/*.keystore
+!android/kanikuly.keystore
 *.apk
 *.aab
 tmp-apk/
+.tools/
 
 # Editor directories and files
 .vscode/*

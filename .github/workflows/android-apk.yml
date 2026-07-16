@@ -51,20 +51,13 @@ jobs:
       - name: Cap sync Android
         run: npx cap sync android
 
-      - name: Create release keystore with keytool
+      - name: Ensure release keystore exists
         run: |
           if [ ! -f android/kanikuly.keystore ]; then
-            keytool -genkeypair -v \
-              -storetype PKCS12 \
-              -keystore android/kanikuly.keystore \
-              -alias kanikuly \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -storepass kanikuly2026 \
-              -keypass kanikuly2026 \
-              -dname "CN=Kanikuly, O=Sosnova, C=RU"
+            echo "Committed keystore missing — refusing to invent a new one"
+            exit 1
           fi
+          keytool -list -keystore android/kanikuly.keystore -storepass kanikuly2026 -storetype PKCS12
 
       - name: Assemble signed release APK
         run: |
@@ -96,6 +89,17 @@ jobs:
           gh release delete apk-latest --yes --cleanup-tag || true
           gh release create apk-latest \
             release/kanikuly.apk \
-            --title "Kanikuly 2.1" \
-            --notes "Signed release APK (version 2.1)." \
+            --title "Kanikuly 2.2" \
+            --notes "$(cat <<'EOF'
+          Подписанный release APK **v2.2** со стабильным keystore.
+
+          Установка с файла на Samsung:
+          1. Автоблокировка → выкл.
+          2. Мои файлы → установка неизвестных приложений → разрешить.
+          3. Удали старое Kanikuly один раз (смена подписи).
+          4. Скачай kanikuly.apk и установи из Downloads.
+
+          Дальше обновления с файла должны вставать без adb.
+          EOF
+          )" \
             --latest
