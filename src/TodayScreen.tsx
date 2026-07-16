@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import {
   CREATE_IDEAS,
+  EXTRA_TASK_IDEAS,
   MUST_DO_ITEMS,
-  ROUTINE_NOTE,
   normalizeDayLog,
   todayKey,
+  uid,
 } from './data'
 import { FamilySyncCard } from './FamilySyncCard'
 import type { FamilyStatus } from './familySync'
@@ -22,13 +24,6 @@ type Props = {
   onLeaveFamily: () => void
 }
 
-const OUTING_OPTIONS = [
-  { value: 'none', label: 'Ничего особенного' },
-  { value: 'friend', label: 'Гулять с другом' },
-  { value: 'grandma', label: 'С бабушкой' },
-  { value: 'parents', label: 'С родителями' },
-]
-
 export function TodayScreen({
   data,
   onChange,
@@ -45,6 +40,8 @@ export function TodayScreen({
   const doneCount = MUST_DO_ITEMS.filter((i) => day.mustDo[i.id]).length
   const exerciseDone = data.exercises.filter((e) => day.exercisesDone[e.id]).length
   const exerciseTotal = data.exercises.length
+  const extraDone = day.extraTasks.filter((t) => t.done).length
+  const [extraDraft, setExtraDraft] = useState('')
 
   function patchDay(partial: Partial<typeof day>) {
     const next = normalizeDayLog(key, { ...day, ...partial })
@@ -72,6 +69,33 @@ export function TodayScreen({
     })
   }
 
+  function addExtraTask(text: string) {
+    const trimmed = text.trim()
+    if (!trimmed) return
+    const already = day.extraTasks.some(
+      (t) => t.text.toLowerCase() === trimmed.toLowerCase(),
+    )
+    if (already) return
+    patchDay({
+      extraTasks: [...day.extraTasks, { id: uid(), text: trimmed, done: false }],
+    })
+    setExtraDraft('')
+  }
+
+  function toggleExtraTask(id: string) {
+    patchDay({
+      extraTasks: day.extraTasks.map((t) =>
+        t.id === id ? { ...t, done: !t.done } : t,
+      ),
+    })
+  }
+
+  function removeExtraTask(id: string) {
+    patchDay({
+      extraTasks: day.extraTasks.filter((t) => t.id !== id),
+    })
+  }
+
   return (
     <div className="screen">
       <header className="screen-head">
@@ -80,6 +104,9 @@ export function TodayScreen({
         <p className="sub">
           Сделано {doneCount} из {MUST_DO_ITEMS.length} · зарядка {exerciseDone}/
           {exerciseTotal || 0}
+          {day.extraTasks.length
+            ? ` · ещё ${extraDone}/${day.extraTasks.length}`
+            : ''}
         </p>
       </header>
 
@@ -90,35 +117,6 @@ export function TodayScreen({
         onJoin={onJoinFamily}
         onLeave={onLeaveFamily}
       />
-
-      <section className="card">
-        <h2>Планы на день</h2>
-        <label className="field">
-          <span>Буду вне дома?</span>
-          <select
-            value={
-              OUTING_OPTIONS.some((o) => o.value === day.outing)
-                ? day.outing
-                : 'none'
-            }
-            onChange={(e) => patchDay({ outing: e.target.value })}
-          >
-            {OUTING_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span>Заметка</span>
-          <input
-            value={day.note}
-            onChange={(e) => patchDay({ note: e.target.value })}
-            placeholder="Например: гуляю после обеда"
-          />
-        </label>
-      </section>
 
       <section className="card">
         <div className="card-title-row">
@@ -194,6 +192,93 @@ export function TodayScreen({
       </section>
 
       <section className="card">
+        <div className="card-title-row">
+          <h2>Планы на день</h2>
+          {day.extraTasks.length ? (
+            <span className="pill">
+              {extraDone}/{day.extraTasks.length}
+            </span>
+          ) : null}
+        </div>
+        <p className="hint">
+          Разовые важные дела на сегодня — сверх обязательного минимума. На следующий
+          день список будет пустым.
+        </p>
+
+        {day.extraTasks.length ? (
+          <ul className="check-list">
+            {day.extraTasks.map((task) => (
+              <li key={task.id}>
+                <div className="check-row with-action">
+                  <label className="check-row-main">
+                    <input
+                      type="checkbox"
+                      checked={task.done}
+                      onChange={() => toggleExtraTask(task.id)}
+                    />
+                    <span className={task.done ? 'is-done' : undefined}>{task.text}</span>
+                  </label>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-label="Удалить"
+                    onClick={() => removeExtraTask(task.id)}
+                  >
+                    ×
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        <p className="hint" style={{ marginTop: 12 }}>
+          Быстро добавить:
+        </p>
+        <div className="chip-row">
+          {EXTRA_TASK_IDEAS.map((idea) => {
+            const exists = day.extraTasks.some((t) => t.text === idea)
+            return (
+              <button
+                key={idea}
+                type="button"
+                className={exists ? 'chip active' : 'chip'}
+                disabled={exists}
+                onClick={() => addExtraTask(idea)}
+              >
+                {idea}
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="add-row">
+          <label className="field grow">
+            <span>Своё дело</span>
+            <input
+              value={extraDraft}
+              onChange={(e) => setExtraDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  addExtraTask(extraDraft)
+                }
+              }}
+              placeholder="Например: разобрать стол"
+            />
+          </label>
+          <button
+            type="button"
+            className="btn primary"
+            disabled={!extraDraft.trim()}
+            onClick={() => addExtraTask(extraDraft)}
+          >
+            Добавить
+          </button>
+        </div>
+      </section>
+
+      <section className="card">
         <h2>Экраны — лимит времени</h2>
         <p className="hint">
           Это не «надо сделать», а ограничение. Нажми «Начать» — запустится таймер.
@@ -211,17 +296,6 @@ export function TodayScreen({
             onChange={(slot) => setScreen('cartoons', slot)}
           />
         </div>
-      </section>
-
-      <section className="card soft">
-        <h2>Если день пошёл иначе</h2>
-        <p className="hint">
-          Гуляние с другом, бабушка или поездка уже считаются свободным временем. Вечером
-          добери 1–2 пункта из минимума — и день хороший.
-        </p>
-        <p className="hint" style={{ marginTop: 8 }}>
-          {ROUTINE_NOTE}
-        </p>
       </section>
     </div>
   )

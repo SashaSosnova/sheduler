@@ -1,4 +1,4 @@
-import type { AppData, DayLog, Exercise, MustDoId, ScreenSlot } from './types'
+import type { AppData, DayExtraTask, DayLog, Exercise, MustDoId, ScreenSlot } from './types'
 
 export const ROUTINE_ID = 'daniil-hw-28-v5'
 
@@ -21,6 +21,14 @@ export const CREATE_IDEAS = [
   'Комикс',
   'Музыка',
   'Что-то смастерить',
+]
+
+/** Quick-add chips for one-off household / day tasks */
+export const EXTRA_TASK_IDEAS = [
+  'Убрать в комнате',
+  'Пропылесосить',
+  'Выбросить мусор',
+  'Помочь с ужином',
 ]
 
 export const SCREEN_LIMITS = {
@@ -431,12 +439,30 @@ export function emptyDayLog(date: string): DayLog {
     exercisesDone: {},
     note: '',
     outing: 'none',
+    extraTasks: [],
     createNote: '',
     screens: {
       roblox: emptyScreenSlot(SCREEN_LIMITS.roblox.seconds),
       cartoons: emptyScreenSlot(SCREEN_LIMITS.cartoons.seconds),
     },
   }
+}
+
+function normalizeExtraTasks(raw: unknown): DayExtraTask[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((item): DayExtraTask | null => {
+      if (!item || typeof item !== 'object') return null
+      const row = item as Partial<DayExtraTask>
+      const text = typeof row.text === 'string' ? row.text.trim() : ''
+      if (!text) return null
+      return {
+        id: typeof row.id === 'string' && row.id ? row.id : uid(),
+        text,
+        done: Boolean(row.done),
+      }
+    })
+    .filter((t): t is DayExtraTask => t !== null)
 }
 
 export function normalizeDayLog(date: string, raw?: Partial<DayLog> | null): DayLog {
@@ -449,6 +475,7 @@ export function normalizeDayLog(date: string, raw?: Partial<DayLog> | null): Day
     mustDo: raw.mustDo ?? {},
     exercisesDone: raw.exercisesDone ?? {},
     createNote: raw.createNote ?? '',
+    extraTasks: normalizeExtraTasks(raw.extraTasks),
     screens: {
       roblox: {
         ...base.screens.roblox,

@@ -45,25 +45,37 @@ jobs:
             'VITE_FIREBASE_APP_ID=1:320223710326:web:4698479b8dc6a466d3a357' \
             > .env
 
-      - name: Build web + sync Capacitor
-        run: npm run cap:sync
+      - name: Build web app
+        run: npm run build
+
+      - name: Sync Capacitor Android
+        run: npx cap sync android
 
       - name: Build debug APK
         working-directory: android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
 
-      - name: Verify APK signature
+      - name: Verify APK + dump badging
         run: |
-          "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify --verbose \
-            android/app/build/outputs/apk/debug/app-debug.apk
+          APK=android/app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$APK"
+          "$ANDROID_SDK_ROOT/build-tools/36.0.0/aapt" dump badging "$APK" | head -n 40
+          unzip -l "$APK" | head -n 50
+          # Ensure v1 JAR signature exists (Samsung sideload friendliness)
+          unzip -l "$APK" | grep -E 'META-INF/.*\.(RSA|SF|MF)' || (echo "MISSING v1 META-INF signatures" && exit 1)
 
       - name: Prepare APK artifact
         run: |
           mkdir -p release
           cp android/app/build/outputs/apk/debug/app-debug.apk release/kanikuly.apk
           ls -lh release/
+          # Sanity: must look like a zip/apk
+          file release/kanikuly.apk
 
       - uses: actions/upload-artifact@v4
         with:
@@ -79,13 +91,15 @@ jobs:
           gh release create apk-latest release/kanikuly.apk \
             --title "Каникулы — APK" \
             --notes "$(cat <<'EOF'
-          Debug APK приложения **Каникулы** (v1.2), собран как у home-garden.
+          APK v1.3 (упрощённая сборка как у home-garden).
 
-          1. Если старое «Каникулы» установлено — удали его.
-          2. На Samsung: Настройки → Безопасность и конфиденциальность → **Автоблокировка** → выключи.
-          3. Скачай `kanikuly.apk` и установи.
+          Перед установкой на Samsung Z Flip:
+          1. Настройки → Безопасность → Автоблокировка → выкл.
+          2. Play Store → профиль → Play Protect → настройки → выключи «Проверять приложения».
+          3. Удали все старые «Каникулы», если есть.
+          4. Скачай kanikuly.apk и установи через «Мои файлы».
 
-          Сборка обновляется при каждом пуше в `main`.
+          Если снова «не установлено» — скачай файл на компьютер и перекинь на телефон через USB / Google Диск / Telegram (не открывай из браузера GitHub).
           EOF
           )" \
             --latest

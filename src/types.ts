@@ -43,6 +43,13 @@ export type ChewEntry = {
   createdAt: number
 }
 
+/** One-off important task for a single day (not part of the fixed minimum) */
+export type DayExtraTask = {
+  id: string
+  text: string
+  done: boolean
+}
+
 export type DayLog = {
   date: string
   mode: DayMode
@@ -50,6 +57,8 @@ export type DayLog = {
   exercisesDone: Record<string, boolean>
   note: string
   outing: string
+  /** One-time must-dos for this day only */
+  extraTasks: DayExtraTask[]
   /** What creative thing they did */
   createNote: string
   screens: Record<ScreenKind, ScreenSlot>

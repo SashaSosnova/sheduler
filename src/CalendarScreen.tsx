@@ -101,6 +101,24 @@ export function CalendarScreen({ data, onOpenToday, onOpenChew }: Props) {
         {day.createNote ? (
           <p className="hint">Творчество: {day.createNote}</p>
         ) : null}
+        {day.extraTasks.length ? (
+          <div className="extra-summary">
+            <p className="sub">
+              Разовые дела {day.extraTasks.filter((t) => t.done).length}/
+              {day.extraTasks.length}
+            </p>
+            <ul className="check-list compact">
+              {day.extraTasks.map((task) => (
+                <li key={task.id}>
+                  <span className={task.done ? 'is-done' : undefined}>
+                    {task.done ? '✓ ' : '○ '}
+                    {task.text}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         <div className="row-gap">
           {selected === today ? (
             <button type="button" className="btn primary" onClick={onOpenToday}>
