@@ -499,13 +499,19 @@ export function hasQualityWorkout(
 
 const SHORTCUT_WORKOUT_MAX_SEC = 20 * 60
 
-/** Full routine done, but timers skipped and/or finished under 20 minutes. */
+/**
+ * Full routine done, but timers skipped and/or finished under 20 minutes.
+ * Requires workout timestamps so pre-tracking days (exercisesDone only) do not count.
+ */
 export function isShortcutWorkoutDay(
   day: DayLog,
   exercises: Exercise[],
 ): boolean {
   if (exercises.length === 0) return false
   if (!exercises.every((ex) => day.exercisesDone[ex.id])) return false
+  // Old logs often have all exercises checked with empty timersHonored and no clock —
+  // those are not "skips", just missing tracking.
+  if (day.workoutStartedAt == null || day.workoutFinishedAt == null) return false
   const timed = exercises.filter((ex) => ex.durationSec > 0)
   const skippedTimer = timed.some(
     (ex) => day.exercisesDone[ex.id] && !day.timersHonored?.[ex.id],
@@ -567,13 +573,38 @@ export function countOwnTasksDone(days: Record<string, DayLog>): number {
 /** Perfect day with no Roblox session started or played. */
 export function isNoRobloxPerfectDay(day: DayLog): boolean {
   if (!isPerfectDay(day)) return false
+  // Need a modern tracked workout day — old perfect checkmarks alone are not enough.
+  if (day.workoutFinishedAt == null) return false
   const slot = day.screens?.roblox
-  if (!slot) return true
-  return slot.usedSec === 0 && slot.endsAt == null
+  if (!slot) return false
+  return slot.usedSec === 0 && slot.endsAt == null && !slot.finished
 }
 
+/** Earliest day where Roblox play was actually recorded in the app. */
+export function firstTrackedRobloxPlayDate(
+  days: Record<string, DayLog>,
+): string | null {
+  const dates = Object.values(days)
+    .filter((day) => {
+      const slot = day.screens?.roblox
+      return Boolean(slot && (slot.usedSec > 0 || slot.finished))
+    })
+    .map((day) => day.date)
+    .sort()
+  return dates[0] ?? null
+}
+
+/**
+ * Perfect day without Roblox, but only after we have at least one day with
+ * real tracked play — otherwise usedSec=0 on old perfect days is meaningless.
+ * Days before the first tracked play never count.
+ */
 export function hasNoRobloxPerfectDay(days: Record<string, DayLog>): boolean {
-  return Object.values(days).some((day) => isNoRobloxPerfectDay(day))
+  const from = firstTrackedRobloxPlayDate(days)
+  if (!from) return false
+  return Object.values(days).some(
+    (day) => day.date >= from && isNoRobloxPerfectDay(day),
+  )
 }
 
 export function countParentTasksDone(days: Record<string, DayLog>): number {

@@ -80,7 +80,23 @@ export function StickerUnlockOverlay({ data, enabled = true }: Props) {
         saveCelebrated(unlocked)
         return
       }
-      celebratedRef.current = new Set(stored)
+      // Drop celebrations for stickers that are no longer unlocked (e.g. after
+      // tightening secret conditions) so a real unlock can show the wow again.
+      const stillUnlocked = new Set(unlocked)
+      const kept = stored.filter((id) => stillUnlocked.has(id))
+      celebratedRef.current = new Set(kept)
+      if (kept.length !== stored.length) saveCelebrated(kept)
+    } else {
+      // Keep celebrated in sync if unlocks are revoked later in the session
+      const stillUnlocked = new Set(unlocked)
+      let changed = false
+      for (const id of [...celebratedRef.current]) {
+        if (!stillUnlocked.has(id)) {
+          celebratedRef.current.delete(id)
+          changed = true
+        }
+      }
+      if (changed) saveCelebrated([...celebratedRef.current])
     }
 
     const pending = unlocked.filter((id) => !celebratedRef.current.has(id))
