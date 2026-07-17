@@ -14,6 +14,10 @@
     calc(var(--nav-total-h) + 20px);
 }
 
+.app-main.no-nav {
+  padding-bottom: calc(20px + var(--safe-bottom));
+}
+
 .screen {
   display: flex;
   flex-direction: column;
@@ -433,10 +437,10 @@
   height: var(--nav-total-h);
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   align-content: start;
-  gap: 2px;
-  padding: var(--nav-pad-y) 4px calc(var(--nav-pad-y) + var(--safe-bottom));
+  gap: 4px;
+  padding: var(--nav-pad-y) 6px calc(var(--nav-pad-y) + var(--safe-bottom));
   background: rgba(251, 252, 251, 0.92);
   border-top: 1px solid var(--line);
   backdrop-filter: blur(10px);
@@ -449,10 +453,10 @@
   border-radius: 14px;
   font-weight: 700;
   color: var(--muted);
-  font-size: 0.62rem;
+  font-size: 0.78rem;
   min-height: var(--nav-btn-h);
-  padding: 8px 1px;
-  line-height: 1.15;
+  padding: 10px 4px;
+  line-height: 1.2;
 }
 
 .nav-btn.active {

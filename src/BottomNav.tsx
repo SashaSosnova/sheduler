@@ -6,7 +6,6 @@ const ALL_TABS: { id: TabId; label: string }[] = [
   { id: 'calendar', label: 'Дни' },
   { id: 'exercises', label: 'Зарядка' },
   { id: 'chew', label: 'Жевание' },
-  { id: 'settings', label: 'Ещё' },
 ]
 
 type Props = {

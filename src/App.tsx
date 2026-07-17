@@ -12,6 +12,7 @@ import { TodayScreen } from './TodayScreen'
 import type { TabId } from './types'
 import { useAppData } from './useAppData'
 import { useNotifications } from './useNotifications'
+import { useParentAlerts } from './useParentAlerts'
 import { useUserRole } from './useUserRole'
 import './App.css'
 
@@ -27,13 +28,15 @@ function App() {
   } = useAppData()
   const { role, setRole } = useUserRole()
   const notifications = useNotifications(role)
+  const parentAlerts = useParentAlerts(role, data)
   const [tab, setTab] = useState<TabId>('today')
   const isParent = role === 'parent'
+  const showNav = tab !== 'settings'
 
   if (!role) {
     return (
       <div className="app-shell">
-        <main className="app-main">
+        <main className="app-main no-nav">
           <RoleSetupScreen onChoose={setRole} />
         </main>
       </div>
@@ -42,11 +45,12 @@ function App() {
 
   return (
     <div className="app-shell">
-      <main className="app-main">
+      <main className={showNav ? 'app-main' : 'app-main no-nav'}>
         {tab === 'today' ? (
           isParent ? (
             <ParentSummaryScreen
               data={data}
+              onChange={setData}
               onOpenExercises={() => setTab('exercises')}
               onOpenChew={() => setTab('chew')}
               onOpenSettings={() => setTab('settings')}
@@ -62,7 +66,13 @@ function App() {
           )
         ) : null}
         {tab === 'progress' ? <ProgressScreen data={data} /> : null}
-        {tab === 'calendar' ? <CalendarScreen data={data} /> : null}
+        {tab === 'calendar' ? (
+          <CalendarScreen
+            data={data}
+            canEditMustDo={isParent}
+            onChange={setData}
+          />
+        ) : null}
         {tab === 'exercises' ? (
           <ExercisesScreen data={data} onChange={setData} readOnly={isParent} />
         ) : null}
@@ -81,14 +91,26 @@ function App() {
             onToggleNotifications={(v) => {
               void notifications.setEnabled(v)
             }}
+            parentAlertsEnabled={parentAlerts.enabled}
+            parentAlertsBusy={parentAlerts.busy}
+            parentAlertsDenied={parentAlerts.denied}
+            parentAlertsSupported={parentAlerts.supported}
+            childName={parentAlerts.childName}
+            onToggleParentAlerts={(v) => {
+              void parentAlerts.setEnabled(v)
+            }}
+            onChangeChildName={parentAlerts.setChildName}
             onCreateFamily={createFamilyCloud}
             onJoinFamily={joinFamilyCloud}
             onLeaveFamily={leaveFamilyCloud}
             onChangeRole={setRole}
+            onGoHome={() => setTab('today')}
           />
         ) : null}
       </main>
-      <BottomNav active={tab} role={role} onChange={setTab} />
+      {showNav ? (
+        <BottomNav active={tab} role={role} onChange={setTab} />
+      ) : null}
       <StickerUnlockOverlay data={data} enabled={!isParent} />
     </div>
   )

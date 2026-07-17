@@ -19,8 +19,8 @@
   /* Capacitor injects --safe-area-inset-*; env() is the web/iOS fallback */
   --safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
   --safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
-  --nav-pad-y: 10px;
-  --nav-btn-h: 48px;
+  --nav-pad-y: 12px;
+  --nav-btn-h: 52px;
   --nav-bar-h: calc(var(--nav-pad-y) + var(--nav-btn-h) + var(--nav-pad-y));
   --nav-h: var(--nav-bar-h);
   --nav-total-h: calc(var(--nav-bar-h) + var(--safe-bottom));

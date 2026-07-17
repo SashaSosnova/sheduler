@@ -80,19 +80,21 @@ export function TodayScreen({
     })
   }
 
-  // Keep mustDo in sync: exercise/chew only from real app completion
+  // Auto-mark exercise/chew when done in-app; never clear a parent override
   useEffect(() => {
+    const nextExercise = exerciseComplete || Boolean(day.mustDo.exercise)
+    const nextChew = chewComplete || Boolean(day.mustDo.chew)
     if (
-      day.mustDo.exercise === exerciseComplete &&
-      day.mustDo.chew === chewComplete
+      day.mustDo.exercise === nextExercise &&
+      day.mustDo.chew === nextChew
     ) {
       return
     }
     patchDay({
       mustDo: {
         ...day.mustDo,
-        exercise: exerciseComplete,
-        chew: chewComplete,
+        exercise: nextExercise,
+        chew: nextChew,
       },
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -341,8 +343,8 @@ export function TodayScreen({
           ) : null}
         </div>
         <p className="hint">
-          Разовые важные дела на сегодня — сверх обязательного минимума. На следующий
-          день список будет пустым.
+          Разовые дела на сегодня — сверх минимума. Родитель тоже может добавить
+          через облако. На следующий день список будет пустым.
         </p>
 
         {day.extraTasks.length ? (

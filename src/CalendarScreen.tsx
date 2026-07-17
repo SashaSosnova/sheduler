@@ -9,10 +9,13 @@ import {
   workoutDurationSec,
 } from './data'
 import { dayStars, isPerfectDay, shiftDayKey } from './progress'
-import type { AppData } from './types'
+import type { AppData, MustDoId } from './types'
 
 type Props = {
   data: AppData
+  /** Parent can mark must-dos for past/today if the child forgot */
+  canEditMustDo?: boolean
+  onChange?: (next: AppData) => void
 }
 
 type CalCell = {
@@ -98,13 +101,32 @@ function formatFullDate(key: string): string {
   })
 }
 
-export function CalendarScreen({ data }: Props) {
+export function CalendarScreen({
+  data,
+  canEditMustDo = false,
+  onChange,
+}: Props) {
   const today = todayKey()
   const [cursor, setCursor] = useState(() => {
     const [y, m] = today.split('-').map(Number)
     return { year: y, month: m - 1 }
   })
   const [selected, setSelected] = useState<string>(today)
+
+  function toggleMust(id: MustDoId) {
+    if (!canEditMustDo || !onChange || selected > today) return
+    const day = normalizeDayLog(selected, data.days[selected])
+    onChange({
+      ...data,
+      days: {
+        ...data.days,
+        [selected]: {
+          ...day,
+          mustDo: { ...day.mustDo, [id]: !day.mustDo[id] },
+        },
+      },
+    })
+  }
 
   const cells = useMemo(() => {
     const raw = buildMonthCells(cursor.year, cursor.month, today)
@@ -240,22 +262,46 @@ export function CalendarScreen({ data }: Props) {
           </span>
         </div>
 
-        <ul className="calendar-must-list">
-          {MUST_DO_ITEMS.map((item) => {
-            const done = Boolean(detail.day.mustDo[item.id])
-            return (
-              <li
-                key={item.id}
-                className={`calendar-must-item ${done ? 'done' : ''}`}
-              >
-                <span className="calendar-must-mark" aria-hidden>
-                  {done ? '★' : '☆'}
-                </span>
-                <span>{item.label}</span>
+        {canEditMustDo ? (
+          <p className="hint" style={{ marginTop: 8 }}>
+            Можно отметить за ребёнка, если сделал, но забыл.
+          </p>
+        ) : null}
+
+        {canEditMustDo ? (
+          <ul className="check-list" style={{ marginTop: 10 }}>
+            {MUST_DO_ITEMS.map((item) => (
+              <li key={item.id}>
+                <label className="check-row">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(detail.day.mustDo[item.id])}
+                    disabled={selected > today}
+                    onChange={() => toggleMust(item.id)}
+                  />
+                  <span>{item.label}</span>
+                </label>
               </li>
-            )
-          })}
-        </ul>
+            ))}
+          </ul>
+        ) : (
+          <ul className="calendar-must-list">
+            {MUST_DO_ITEMS.map((item) => {
+              const done = Boolean(detail.day.mustDo[item.id])
+              return (
+                <li
+                  key={item.id}
+                  className={`calendar-must-item ${done ? 'done' : ''}`}
+                >
+                  <span className="calendar-must-mark" aria-hidden>
+                    {done ? '★' : '☆'}
+                  </span>
+                  <span>{item.label}</span>
+                </li>
+              )
+            })}
+          </ul>
+        )}
 
         <div className="calendar-detail-block">
           <h3>Зарядка</h3>

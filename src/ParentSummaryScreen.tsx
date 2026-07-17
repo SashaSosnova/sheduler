@@ -1,18 +1,21 @@
 import { useEffect, useState } from 'react'
 import {
+  EXTRA_TASK_IDEAS,
   MUST_DO_ITEMS,
   SCREEN_LIMITS,
   chewDurationSec,
   formatPlayTime,
   normalizeDayLog,
   todayKey,
+  uid,
   workoutDurationSec,
 } from './data'
 import { robloxLimitSeconds } from './progress'
-import type { AppData } from './types'
+import type { AppData, MustDoId } from './types'
 
 type Props = {
   data: AppData
+  onChange: (next: AppData) => void
   onOpenExercises: () => void
   onOpenChew: () => void
   onOpenSettings: () => void
@@ -20,6 +23,7 @@ type Props = {
 
 export function ParentSummaryScreen({
   data,
+  onChange,
   onOpenExercises,
   onOpenChew,
   onOpenSettings,
@@ -40,6 +44,7 @@ export function ParentSummaryScreen({
   const limitSec = robloxLimitSeconds(data.days, key)
   const running = Boolean(roblox.endsAt && !roblox.finished)
   const [now, setNow] = useState(Date.now())
+  const [extraDraft, setExtraDraft] = useState('')
 
   useEffect(() => {
     if (!running) return
@@ -63,11 +68,55 @@ export function ParentSummaryScreen({
         ? 'пауза'
         : 'ещё не играл'
 
+  function patchDay(partial: Partial<typeof day>) {
+    const next = normalizeDayLog(key, { ...day, ...partial })
+    onChange({
+      ...data,
+      days: {
+        ...data.days,
+        [key]: next,
+      },
+    })
+  }
+
+  function toggleMust(id: MustDoId) {
+    patchDay({
+      mustDo: { ...day.mustDo, [id]: !day.mustDo[id] },
+    })
+  }
+
+  function addExtraTask(text: string) {
+    const trimmed = text.trim()
+    if (!trimmed) return
+    const already = day.extraTasks.some(
+      (t) => t.text.toLowerCase() === trimmed.toLowerCase(),
+    )
+    if (already) return
+    patchDay({
+      extraTasks: [...day.extraTasks, { id: uid(), text: trimmed, done: false }],
+    })
+    setExtraDraft('')
+  }
+
+  function toggleExtraTask(id: string) {
+    patchDay({
+      extraTasks: day.extraTasks.map((t) =>
+        t.id === id ? { ...t, done: !t.done } : t,
+      ),
+    })
+  }
+
+  function removeExtraTask(id: string) {
+    patchDay({
+      extraTasks: day.extraTasks.filter((t) => t.id !== id),
+    })
+  }
+
   return (
     <div className="screen">
       <header className="screen-head">
         <div className="screen-head-row">
-          <p className="eyebrow">Родитель · только просмотр</p>
+          <p className="eyebrow">Родитель</p>
           <button
             type="button"
             className="btn ghost settings-btn"
@@ -111,46 +160,122 @@ export function ParentSummaryScreen({
             {doneCount}/{MUST_DO_ITEMS.length}
           </span>
         </div>
-        <ul className="status-list">
-          {MUST_DO_ITEMS.map((item) => {
-            const done = Boolean(day.mustDo[item.id])
-            return (
-              <li key={item.id} className={done ? 'is-done' : ''}>
-                <span className="status-mark" aria-hidden>
-                  {done ? '✓' : '○'}
-                </span>
+        <p className="hint">
+          Можно отметить за ребёнка, если сделал, но забыл поставить галочку.
+        </p>
+        <ul className="check-list">
+          {MUST_DO_ITEMS.map((item) => (
+            <li key={item.id}>
+              <label className="check-row">
+                <input
+                  type="checkbox"
+                  checked={Boolean(day.mustDo[item.id])}
+                  onChange={() => toggleMust(item.id)}
+                />
                 <span>
                   {item.label}
                   {item.id === 'create' && day.createNote ? (
                     <span className="hint"> — {day.createNote}</span>
                   ) : null}
                 </span>
-              </li>
-            )
-          })}
+              </label>
+            </li>
+          ))}
         </ul>
       </section>
 
-      {day.extraTasks.length ? (
-        <section className="card">
-          <div className="card-title-row">
-            <h2>Планы на день</h2>
+      <section className="card">
+        <div className="card-title-row">
+          <h2>Планы на день</h2>
+          {day.extraTasks.length ? (
             <span className="pill">
               {extraDone}/{day.extraTasks.length}
             </span>
-          </div>
-          <ul className="status-list">
+          ) : null}
+        </div>
+        <p className="hint">
+          Задания для ребёнка сверх минимума. Появятся у него на сегодня через
+          облако.
+        </p>
+
+        {day.extraTasks.length ? (
+          <ul className="check-list">
             {day.extraTasks.map((task) => (
-              <li key={task.id} className={task.done ? 'is-done' : ''}>
-                <span className="status-mark" aria-hidden>
-                  {task.done ? '✓' : '○'}
-                </span>
-                <span>{task.text}</span>
+              <li key={task.id}>
+                <div className="check-row with-action">
+                  <label className="check-row-main">
+                    <input
+                      type="checkbox"
+                      checked={task.done}
+                      onChange={() => toggleExtraTask(task.id)}
+                    />
+                    <span className={task.done ? 'is-done' : undefined}>
+                      {task.text}
+                    </span>
+                  </label>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-label="Удалить"
+                    onClick={() => removeExtraTask(task.id)}
+                  >
+                    ×
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
-        </section>
-      ) : null}
+        ) : null}
+
+        {EXTRA_TASK_IDEAS.length > 0 ? (
+          <>
+            <p className="hint" style={{ marginTop: 12 }}>
+              Быстро добавить:
+            </p>
+            <div className="chip-row">
+              {EXTRA_TASK_IDEAS.map((idea) => {
+                const exists = day.extraTasks.some((t) => t.text === idea)
+                return (
+                  <button
+                    key={idea}
+                    type="button"
+                    className={exists ? 'chip active' : 'chip'}
+                    disabled={exists}
+                    onClick={() => addExtraTask(idea)}
+                  >
+                    {idea}
+                  </button>
+                )
+              })}
+            </div>
+          </>
+        ) : null}
+
+        <div className="add-row">
+          <label className="field grow">
+            <span>Своё дело</span>
+            <input
+              value={extraDraft}
+              onChange={(e) => setExtraDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  addExtraTask(extraDraft)
+                }
+              }}
+              placeholder="Например: пропылесосить"
+            />
+          </label>
+          <button
+            type="button"
+            className="btn primary"
+            disabled={!extraDraft.trim()}
+            onClick={() => addExtraTask(extraDraft)}
+          >
+            Добавить
+          </button>
+        </div>
+      </section>
 
       <section className="card">
         <div className="card-title-row">
@@ -161,7 +286,7 @@ export function ParentSummaryScreen({
         </div>
         <p className="hint">
           {exerciseDone === 0
-            ? 'Пока ничего не отмечено.'
+            ? 'Пока ничего не отмечено в упражнениях.'
             : exerciseDone === exerciseTotal
               ? 'Весь комплекс отмечен.'
               : `Сделано ${exerciseDone} из ${exerciseTotal}.`}

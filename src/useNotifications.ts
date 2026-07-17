@@ -23,10 +23,10 @@ export function useNotifications(role: UserRole | null) {
       setBusy(true)
       setDenied(false)
       try {
+        // Daily reminders only run on the child device
         if (role !== 'child') {
           saveNotificationsEnabled(next)
           setEnabledState(next)
-          await syncRemindersForRole(role)
           return
         }
         const ok = await setNotificationsEnabled(next)

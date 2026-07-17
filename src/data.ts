@@ -22,8 +22,15 @@ export const CREATE_IDEAS = [
   'Что-то смастерить',
 ]
 
-/** Quick-add chips — empty so chores are typed in, not suggested by default */
-export const EXTRA_TASK_IDEAS: string[] = []
+/** Quick-add chips for one-off chores (parent or child) */
+export const EXTRA_TASK_IDEAS: string[] = [
+  'Убрать в комнате',
+  'Пропылесосить',
+  'Помыть посуду',
+  'Вынести мусор',
+  'Помочь на кухне',
+  'Разобрать стол',
+]
 
 export const SCREEN_LIMITS = {
   roblox: { label: 'Roblox', seconds: 40 * 60 },
