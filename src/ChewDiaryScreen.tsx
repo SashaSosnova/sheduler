@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { shareChewReportImage } from './chewReportImage'
 import {
   CHEW_FOODS,
   chewDurationSec,
@@ -30,21 +31,6 @@ function sideText(values: number[]): string {
   return values.join(', ')
 }
 
-function buildReport(entries: ChewEntry[]): string {
-  const lines = [
-    'Дневник жевания',
-    '',
-    'Дата | Что жевал | Левая сторона (5 укусов) | Правая сторона (5 укусов)',
-    '---',
-  ]
-  for (const entry of entries) {
-    lines.push(
-      `${formatDateRu(entry.date)} | ${entry.food} | ${sideText(entry.left)} | ${sideText(entry.right)}`,
-    )
-  }
-  return lines.join('\n')
-}
-
 function toFields(entry: ChewEntry) {
   const known = (CHEW_FOODS as readonly string[]).includes(entry.food)
   return {
@@ -62,7 +48,9 @@ export function ChewDiaryScreen({ data, onChange, readOnly = false }: Props) {
   const [customFood, setCustomFood] = useState('')
   const [left, setLeft] = useState(EMPTY_SIDE)
   const [right, setRight] = useState(EMPTY_SIDE)
-  const [copyStatus, setCopyStatus] = useState('')
+  const [shareStatus, setShareStatus] = useState('')
+  const [reportOpen, setReportOpen] = useState(false)
+  const [shareBusy, setShareBusy] = useState(false)
   /** Wall-clock start of the current fill session (first cell typed) */
   const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null)
 
@@ -91,24 +79,24 @@ export function ChewDiaryScreen({ data, onChange, readOnly = false }: Props) {
     if (readOnly) setEditing(false)
   }, [readOnly])
 
+  // New calendar day — clear the draft. Do not reset when switching food.
   useEffect(() => {
-    if (todayEntry && editing) {
-      const fields = toFields(todayEntry)
-      setFood(fields.food)
-      setCustomFood(fields.customFood)
-      setLeft(fields.left)
-      setRight(fields.right)
-      setSessionStartedAt(todayEntry.startedAt ?? null)
+    setEditing(false)
+    setFood(CHEW_FOODS[0])
+    setCustomFood('')
+    setLeft(EMPTY_SIDE())
+    setRight(EMPTY_SIDE())
+    setSessionStartedAt(null)
+  }, [key])
+
+  useEffect(() => {
+    if (!reportOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
     }
-    if (!todayEntry) {
-      setEditing(false)
-      setFood(CHEW_FOODS[0])
-      setCustomFood('')
-      setLeft(EMPTY_SIDE())
-      setRight(EMPTY_SIDE())
-      setSessionStartedAt(null)
-    }
-  }, [todayEntry, editing])
+  }, [reportOpen])
 
   const selectedFood = food === '__other' ? customFood.trim() : food
   const leftNums = left.map((v) => Number(v))
@@ -116,6 +104,26 @@ export function ChewDiaryScreen({ data, onChange, readOnly = false }: Props) {
   const leftOk = left.every((v) => v !== '' && Number(v) > 0)
   const rightOk = right.every((v) => v !== '' && Number(v) > 0)
   const canSave = Boolean(selectedFood) && leftOk && rightOk
+
+  function selectFood(next: string) {
+    // Only change the label — keep filled cells and session timer
+    setFood(next)
+  }
+
+  function startEditing() {
+    if (!todayEntry) return
+    const fields = toFields(todayEntry)
+    setFood(fields.food)
+    setCustomFood(fields.customFood)
+    setLeft(fields.left)
+    setRight(fields.right)
+    setSessionStartedAt(todayEntry.startedAt ?? null)
+    setEditing(true)
+  }
+
+  function cancelEditing() {
+    setEditing(false)
+  }
 
   function setCell(side: 'left' | 'right', index: number, value: string) {
     const clean = value.replace(/[^\d]/g, '').slice(0, 3)
@@ -160,31 +168,23 @@ export function ChewDiaryScreen({ data, onChange, readOnly = false }: Props) {
     setSessionStartedAt(null)
   }
 
-  async function copyReport() {
-    const text = buildReport(allEntries)
+  async function shareReportImage() {
+    if (shareBusy || allEntries.length === 0) return
+    setShareBusy(true)
+    setShareStatus('')
     try {
-      await navigator.clipboard.writeText(text)
-      setCopyStatus('Скопировано — можно вставить в сообщение')
-    } catch {
-      setCopyStatus('Не удалось скопировать. Выдели текст таблицы вручную.')
-    }
-    window.setTimeout(() => setCopyStatus(''), 2500)
-  }
-
-  async function shareReport() {
-    const text = buildReport(allEntries)
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'Дневник жевания',
-          text,
-        })
-        return
-      } catch {
-        /* cancelled */
+      const result = await shareChewReportImage(allEntries)
+      if (result === 'shared') {
+        setShareStatus('Отправлено')
+      } else if (result === 'downloaded') {
+        setShareStatus('Картинка сохранена — приложи её в сообщении')
       }
+    } catch {
+      setShareStatus('Не удалось создать картинку. Сделай скриншот таблицы.')
+    } finally {
+      setShareBusy(false)
+      window.setTimeout(() => setShareStatus(''), 3000)
     }
-    await copyReport()
   }
 
   return (
@@ -215,7 +215,7 @@ export function ChewDiaryScreen({ data, onChange, readOnly = false }: Props) {
           ) : null}
           {!readOnly ? (
             <div className="row-gap">
-              <button type="button" className="btn" onClick={() => setEditing(true)}>
+              <button type="button" className="btn" onClick={startEditing}>
                 Исправить
               </button>
             </div>
@@ -239,7 +239,7 @@ export function ChewDiaryScreen({ data, onChange, readOnly = false }: Props) {
                   key={item}
                   type="button"
                   className={food === item ? 'chip active' : 'chip'}
-                  onClick={() => setFood(item)}
+                  onClick={() => selectFood(item)}
                 >
                   {item}
                 </button>
@@ -247,7 +247,7 @@ export function ChewDiaryScreen({ data, onChange, readOnly = false }: Props) {
               <button
                 type="button"
                 className={food === '__other' ? 'chip active' : 'chip'}
-                onClick={() => setFood('__other')}
+                onClick={() => selectFood('__other')}
               >
                 Другое
               </button>
@@ -317,7 +317,7 @@ export function ChewDiaryScreen({ data, onChange, readOnly = false }: Props) {
               <button
                 type="button"
                 className="btn ghost"
-                onClick={() => setEditing(false)}
+                onClick={cancelEditing}
               >
                 Отмена
               </button>
@@ -333,7 +333,8 @@ export function ChewDiaryScreen({ data, onChange, readOnly = false }: Props) {
             <span className="pill">{allEntries.length}</span>
           </div>
           <p className="hint">
-            Одна строка — один день. Можно скопировать или отправить сообщением.
+            Одна строка — один день. Открой таблицу на весь экран для скрина
+            или отправь картинкой в мессенджер.
           </p>
 
           {allEntries.length === 0 ? (
@@ -365,17 +366,83 @@ export function ChewDiaryScreen({ data, onChange, readOnly = false }: Props) {
                 </table>
               </div>
               <div className="row-gap">
-                <button type="button" className="btn primary" onClick={shareReport}>
-                  Отправить
+                <button
+                  type="button"
+                  className="btn primary"
+                  onClick={() => setReportOpen(true)}
+                >
+                  На весь экран
                 </button>
-                <button type="button" className="btn" onClick={copyReport}>
-                  Скопировать текст
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={shareBusy}
+                  onClick={() => void shareReportImage()}
+                >
+                  {shareBusy ? 'Готовим…' : 'Поделиться картинкой'}
                 </button>
               </div>
-              {copyStatus ? <p className="hint">{copyStatus}</p> : null}
+              {shareStatus ? <p className="hint">{shareStatus}</p> : null}
             </>
           )}
         </section>
+      ) : null}
+
+      {reportOpen && readOnly ? (
+        <div className="chew-report-overlay" role="dialog" aria-modal="true">
+          <div className="chew-report-toolbar">
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={() => setReportOpen(false)}
+            >
+              Закрыть
+            </button>
+            <button
+              type="button"
+              className="btn primary"
+              disabled={shareBusy}
+              onClick={() => void shareReportImage()}
+            >
+              {shareBusy ? 'Готовим…' : 'Поделиться'}
+            </button>
+          </div>
+          <p className="chew-report-hint">
+            Можно просто сделать скриншот — или нажать «Поделиться»
+          </p>
+          <div className="chew-report-sheet">
+            <h2>Дневник жевания</h2>
+            <p className="hint">
+              {allEntries.length}{' '}
+              {allEntries.length === 1 ? 'день' : 'дней'} · для миотерапевта
+            </p>
+            <div className="chew-table-wrap chew-report-table">
+              <table className="chew-table">
+                <thead>
+                  <tr>
+                    <th>День</th>
+                    <th>Что жевал</th>
+                    <th>Левая</th>
+                    <th>Правая</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allEntries.map((entry) => (
+                    <tr key={entry.id}>
+                      <td>{formatDateRu(entry.date)}</td>
+                      <td>{entry.food}</td>
+                      <td>{sideText(entry.left)}</td>
+                      <td>{sideText(entry.right)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {shareStatus ? (
+            <p className="chew-report-status">{shareStatus}</p>
+          ) : null}
+        </div>
       ) : null}
     </div>
   )

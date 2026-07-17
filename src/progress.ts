@@ -3,24 +3,35 @@ import {
   SCREEN_LIMITS,
   chewDurationSec,
   normalizeDayLog,
+  parseTimerRounds,
   todayKey,
   workoutDurationSec,
 } from './data'
-import type { AppData, DayLog } from './types'
+import type {
+  AppData,
+  ChewEntry,
+  DayLog,
+  Exercise,
+  FinishedBook,
+  ReadingBook,
+} from './types'
 
 /** 2 ideal days at 5 must-dos each → next level (e.g. Танджиро at 10★) */
 const STARS_PER_LEVEL = 10
 
+/** Temporary: show every sticker as unlocked (preview). Set false before release. */
+export const DEBUG_UNLOCK_ALL_STICKERS = false
+
 /**
  * One-time Roblox day bonuses for first time hitting a streak milestone.
  * Rebuilding the same streak after a break does not pay again.
+ * Streak 30 is a single gift (Roblox donate) on the sticker — not minutes.
  */
 export const ROBLOX_STREAK_REWARDS: { streak: number; minutes: number }[] = [
   { streak: 3, minutes: 20 },
   { streak: 5, minutes: 25 },
   { streak: 7, minutes: 30 },
   { streak: 14, minutes: 40 },
-  { streak: 30, minutes: 60 },
 ]
 
 export function dayStars(log: DayLog | undefined): number {
@@ -88,14 +99,51 @@ export type Sticker = {
   detail: string
   needPerfect?: number
   needStreak?: number
+  /** At least one honest full-timer workout day */
+  needQualityWorkout?: boolean
+  /** All chew bites above this count (left + right) */
+  needChewMax?: number
+  /** Completed parent-assigned extra tasks */
+  needParentTasks?: number
+  /** Finished books in the reading log */
+  needBooksFinished?: number
+  /** Specifically finished Tom Sawyer (reader app or parent mark) */
+  needTomSawyerBook?: boolean
+  /** Completed extra tasks created by the child (not from parent) */
+  needOwnTasks?: number
+  /** Consecutive calendar days with a chew diary entry */
+  needChewStreak?: number
+  /** Secret: shortcut / too-fast workout (do not explain while locked) */
+  needSecretShortcut?: boolean
+  /** Secret: perfect day with zero Roblox play (do not explain while locked) */
+  needSecretNoRoblox?: boolean
   robloxExtraMin?: number
   /** Parent gift hint when this sticker unlocks */
   giftHint?: string
 }
 
+export const TOM_SAWYER_BOOK_TITLE = 'Приключения Тома Сойера'
+
+/** Snapshot of counters used to evaluate sticker unlocks */
+export type StickerProgress = {
+  perfectTotal: number
+  streak: number
+  bestStreak: number
+  qualityWorkout: boolean
+  chewMax: boolean
+  parentTasks: number
+  booksFinished: number
+  tomSawyerFinished: boolean
+  ownTasks: number
+  chewStreak: number
+  secretShortcut: boolean
+  secretNoRoblox: boolean
+}
+
 /**
  * Display order ≈ unlock journey; franchises mixed where possible.
- * Roblox day bonuses (one-time): серия 3 / 5 / 7 / 14 / 30 подряд.
+ * Roblox day bonuses (one-time): серия 3 / 5 / 7 / 14 подряд.
+ * Серия 30 — единая награда (донат), см. стикер Гарроу.
  */
 export const STICKERS: Sticker[] = [
   {
@@ -106,6 +154,15 @@ export const STICKERS: Sticker[] = [
     label: 'Сайтама',
     quote: 'Я герой ради хобби',
     detail: 'One Punch Man',
+  },
+  {
+    id: 'feat-parent-1',
+    kind: 'art',
+    needParentTasks: 1,
+    image: './stickers/leonardo.png',
+    label: 'Леонардо',
+    quote: 'Черепашки, за мной!',
+    detail: 'Черепашки-ниндзя',
   },
   {
     id: 'hero-tanjiro',
@@ -136,6 +193,33 @@ export const STICKERS: Sticker[] = [
     robloxExtraMin: 20,
   },
   {
+    id: 'feat-secret-shortcut',
+    kind: 'art',
+    needSecretShortcut: true,
+    image: './stickers/mumen-rider.png',
+    label: 'Бесправный Ездок',
+    quote: 'Правосудие не сдаётся!',
+    detail: 'One Punch Man',
+  },
+  {
+    id: 'feat-chew-50',
+    kind: 'art',
+    needChewMax: 50,
+    image: './stickers/nezuko.png',
+    label: 'Незуко',
+    quote: 'Ммпф!',
+    detail: 'Клинок, рассекающий демонов',
+  },
+  {
+    id: 'feat-chew-streak-5',
+    kind: 'art',
+    needChewStreak: 5,
+    image: './stickers/shinobu.png',
+    label: 'Шинобу',
+    quote: 'Улыбнись!',
+    detail: 'Клинок, рассекающий демонов',
+  },
+  {
     id: 'hero-zenitsu',
     kind: 'art',
     needPerfect: 4,
@@ -143,6 +227,33 @@ export const STICKERS: Sticker[] = [
     label: 'Зеницу',
     quote: 'Дыхание грома',
     detail: 'Клинок, рассекающий демонов',
+  },
+  {
+    id: 'feat-own-tasks-5',
+    kind: 'art',
+    needOwnTasks: 5,
+    image: './stickers/inosuke.png',
+    label: 'Иноске',
+    quote: 'Свинья-кабан!',
+    detail: 'Клинок, рассекающий демонов',
+  },
+  {
+    id: 'feat-quality-workout',
+    kind: 'art',
+    needQualityWorkout: true,
+    image: './stickers/splinter.png',
+    label: 'Сплинтер',
+    quote: 'Терпение, мой ученик',
+    detail: 'Черепашки-ниндзя',
+  },
+  {
+    id: 'feat-secret-no-roblox',
+    kind: 'art',
+    needSecretNoRoblox: true,
+    image: './stickers/king.png',
+    label: 'Кинг',
+    quote: 'Сильнейший на Земле',
+    detail: 'One Punch Man',
   },
   {
     id: 'hero-vegeta',
@@ -162,6 +273,15 @@ export const STICKERS: Sticker[] = [
     quote: 'Техника десяти теней',
     detail: 'Магическая битва',
     robloxExtraMin: 25,
+  },
+  {
+    id: 'feat-parent-5',
+    kind: 'art',
+    needParentTasks: 5,
+    image: './stickers/michelangelo.png',
+    label: 'Микеланджело',
+    quote: 'Ковабунга!',
+    detail: 'Черепашки-ниндзя',
   },
   {
     id: 'hero-roblox-ninja',
@@ -193,6 +313,24 @@ export const STICKERS: Sticker[] = [
     robloxExtraMin: 30,
   },
   {
+    id: 'feat-book-1',
+    kind: 'art',
+    needTomSawyerBook: true,
+    image: './stickers/tom-sawyer.png',
+    label: 'Том Сойер',
+    quote: 'Приключения ждут!',
+    detail: 'Приключения Тома Сойера',
+  },
+  {
+    id: 'feat-books-3',
+    kind: 'art',
+    needBooksFinished: 3,
+    image: './stickers/child-emperor.png',
+    label: 'Ребёнок-император',
+    quote: 'Доверься гению!',
+    detail: 'One Punch Man',
+  },
+  {
     id: 'hero-yuji',
     kind: 'art',
     needPerfect: 10,
@@ -200,6 +338,15 @@ export const STICKERS: Sticker[] = [
     label: 'Юдзи',
     quote: 'Я спасу людей по-своему',
     detail: 'Магическая битва',
+  },
+  {
+    id: 'feat-parent-10',
+    kind: 'art',
+    needParentTasks: 10,
+    image: './stickers/raphael.png',
+    label: 'Рафаэль',
+    quote: 'Кто хочет кулаков?',
+    detail: 'Черепашки-ниндзя',
   },
   {
     id: 'hero-goku',
@@ -231,15 +378,23 @@ export const STICKERS: Sticker[] = [
     robloxExtraMin: 40,
   },
   {
+    id: 'feat-parent-15',
+    kind: 'art',
+    needParentTasks: 15,
+    image: './stickers/donatello.png',
+    label: 'Донателло',
+    quote: 'Это же элементарно!',
+    detail: 'Черепашки-ниндзя',
+  },
+  {
     id: 'hero-garou',
-    kind: 'roblox',
+    kind: 'gift',
     needStreak: 30,
     image: './stickers/garou.png',
     label: 'Гарроу',
     quote: 'Я стану абсолютным злом',
     detail: 'One Punch Man',
-    robloxExtraMin: 60,
-    giftHint: 'Большой подарок-сюрприз от родителя за месяц идеальных дней!',
+    giftHint: 'Награда: донат на 500 ₽ в Roblox',
   },
 ]
 
@@ -282,8 +437,199 @@ function ruDays(n: number): string {
   return 'дней'
 }
 
+function ruTasks(n: number): string {
+  const n10 = n % 10
+  const n100 = n % 100
+  if (n10 === 1 && n100 !== 11) return 'задание'
+  if (n10 >= 2 && n10 <= 4 && (n100 < 10 || n100 >= 20)) return 'задания'
+  return 'заданий'
+}
+
+function ruBooks(n: number): string {
+  const n10 = n % 10
+  const n100 = n % 100
+  if (n10 === 1 && n100 !== 11) return 'книга'
+  if (n10 >= 2 && n10 <= 4 && (n100 < 10 || n100 >= 20)) return 'книги'
+  return 'книг'
+}
+
+/** Assumed length for exercises without a timer (middle of 20–30 sec). */
+export const UNTIMED_EXERCISE_SEC = 25
+
+/** Pause between exercises in the expected workout length. */
+export const BETWEEN_EXERCISES_PAUSE_SEC = 10
+
+/**
+ * Expected honest workout length:
+ * timed = duration × rounds; untimed ≈ UNTIMED_EXERCISE_SEC;
+ * plus BETWEEN_EXERCISES_PAUSE_SEC between each pair of exercises.
+ */
+export function expectedWorkoutTimerSec(exercises: Exercise[]): number {
+  if (exercises.length === 0) return 0
+  const workSec = exercises.reduce((sum, ex) => {
+    if (ex.durationSec > 0) {
+      return sum + ex.durationSec * parseTimerRounds(ex.reps)
+    }
+    return sum + UNTIMED_EXERCISE_SEC
+  }, 0)
+  const pauses = Math.max(0, exercises.length - 1) * BETWEEN_EXERCISES_PAUSE_SEC
+  return workSec + pauses
+}
+
+export function isQualityWorkoutDay(
+  day: DayLog,
+  exercises: Exercise[],
+): boolean {
+  if (exercises.length === 0) return false
+  if (!exercises.every((ex) => day.exercisesDone[ex.id])) return false
+  const timed = exercises.filter((ex) => ex.durationSec > 0)
+  if (timed.length === 0) return false
+  if (!timed.every((ex) => day.timersHonored?.[ex.id])) return false
+  const dur = workoutDurationSec(day)
+  if (dur == null) return false
+  return dur >= expectedWorkoutTimerSec(exercises)
+}
+
+export function hasQualityWorkout(
+  days: Record<string, DayLog>,
+  exercises: Exercise[],
+): boolean {
+  return Object.values(days).some((day) => isQualityWorkoutDay(day, exercises))
+}
+
+const SHORTCUT_WORKOUT_MAX_SEC = 20 * 60
+
+/** Full routine done, but timers skipped and/or finished under 20 minutes. */
+export function isShortcutWorkoutDay(
+  day: DayLog,
+  exercises: Exercise[],
+): boolean {
+  if (exercises.length === 0) return false
+  if (!exercises.every((ex) => day.exercisesDone[ex.id])) return false
+  const timed = exercises.filter((ex) => ex.durationSec > 0)
+  const skippedTimer = timed.some(
+    (ex) => day.exercisesDone[ex.id] && !day.timersHonored?.[ex.id],
+  )
+  const dur = workoutDurationSec(day)
+  const tooFast = dur != null && dur < SHORTCUT_WORKOUT_MAX_SEC
+  return skippedTimer || tooFast
+}
+
+export function hasShortcutWorkout(
+  days: Record<string, DayLog>,
+  exercises: Exercise[],
+): boolean {
+  return Object.values(days).some((day) => isShortcutWorkoutDay(day, exercises))
+}
+
+export function hasChewMaxEntry(
+  entries: ChewEntry[],
+  threshold = 50,
+): boolean {
+  return entries.some(
+    (entry) =>
+      entry.left.length > 0 &&
+      entry.right.length > 0 &&
+      entry.left.every((n) => n > threshold) &&
+      entry.right.every((n) => n > threshold),
+  )
+}
+
+/** Best run of consecutive calendar days that each have at least one chew entry. */
+export function bestChewDiaryStreak(entries: ChewEntry[]): number {
+  const dates = [...new Set(entries.map((e) => e.date))].sort()
+  if (dates.length === 0) return 0
+  let best = 1
+  let run = 1
+  for (let i = 1; i < dates.length; i++) {
+    const prev = dates[i - 1]
+    const cur = dates[i]
+    if (cur === shiftDayKey(prev, 1)) {
+      run++
+      best = Math.max(best, run)
+    } else {
+      run = 1
+    }
+  }
+  return best
+}
+
+export function countOwnTasksDone(days: Record<string, DayLog>): number {
+  let n = 0
+  for (const day of Object.values(days)) {
+    for (const task of day.extraTasks ?? []) {
+      if (!task.fromParent && task.done) n++
+    }
+  }
+  return n
+}
+
+/** Perfect day with no Roblox session started or played. */
+export function isNoRobloxPerfectDay(day: DayLog): boolean {
+  if (!isPerfectDay(day)) return false
+  const slot = day.screens?.roblox
+  if (!slot) return true
+  return slot.usedSec === 0 && slot.endsAt == null
+}
+
+export function hasNoRobloxPerfectDay(days: Record<string, DayLog>): boolean {
+  return Object.values(days).some((day) => isNoRobloxPerfectDay(day))
+}
+
+export function countParentTasksDone(days: Record<string, DayLog>): number {
+  let n = 0
+  for (const day of Object.values(days)) {
+    for (const task of day.extraTasks ?? []) {
+      if (task.fromParent && task.done) n++
+    }
+  }
+  return n
+}
+
+export function isTomSawyerInFinishedBooks(books: FinishedBook[]): boolean {
+  const target = TOM_SAWYER_BOOK_TITLE.toLowerCase()
+  return books.some((b) => b.title.trim().toLowerCase() === target)
+}
+
+export function stickerProgressFromData(data: AppData): StickerProgress {
+  const streak = currentStreak(data.days)
+  const parentNow = countParentTasksDone(data.days)
+  const finishedBooks = data.finishedBooks ?? []
+  return {
+    perfectTotal: countPerfectDays(data.days),
+    streak,
+    bestStreak: Math.max(data.bestStreak ?? 0, streak),
+    qualityWorkout: hasQualityWorkout(data.days, data.exercises),
+    chewMax: hasChewMaxEntry(data.chewEntries ?? [], 50),
+    parentTasks: Math.max(data.bestParentTasks ?? 0, parentNow),
+    booksFinished: finishedBooks.length,
+    tomSawyerFinished: isTomSawyerInFinishedBooks(finishedBooks),
+    ownTasks: countOwnTasksDone(data.days),
+    chewStreak: bestChewDiaryStreak(data.chewEntries ?? []),
+    secretShortcut: hasShortcutWorkout(data.days, data.exercises),
+    secretNoRoblox: hasNoRobloxPerfectDay(data.days),
+  }
+}
+
 /** Full unlock condition shown on the card */
 export function stickerNeedText(sticker: Sticker): string {
+  if (sticker.needSecretShortcut || sticker.needSecretNoRoblox) return '???'
+  if (sticker.needQualityWorkout) return 'Мастер зарядки'
+  if (sticker.needOwnTasks != null) return 'Сам себе хозяин'
+  if (sticker.needChewMax != null) return 'Жевать — не переживать'
+  if (sticker.needChewStreak != null) {
+    const n = sticker.needChewStreak
+    return `${n} ${ruDays(n)} дневника`
+  }
+  if (sticker.needParentTasks != null) {
+    const n = sticker.needParentTasks
+    return `${n} ${ruTasks(n)} от родителя`
+  }
+  if (sticker.needTomSawyerBook) return 'Приключения'
+  if (sticker.needBooksFinished != null) {
+    const n = sticker.needBooksFinished
+    return `${n} ${ruBooks(n)} дочитано`
+  }
   if (sticker.needStreak != null) {
     const n = sticker.needStreak
     return `${n} идеальных ${ruDays(n)} подряд`
@@ -298,6 +644,34 @@ export function stickerNeedText(sticker: Sticker): string {
 
 /** Condition line for locked stickers in the detail panel */
 export function stickerUnlockHint(sticker: Sticker): string {
+  if (sticker.needSecretShortcut || sticker.needSecretNoRoblox) {
+    return 'Секретный способ получения'
+  }
+  if (sticker.needQualityWorkout) {
+    return 'Чтобы открыть: пройти всю зарядку, не скидывая таймеры'
+  }
+  if (sticker.needOwnTasks != null) {
+    const n = sticker.needOwnTasks
+    return `Чтобы открыть: выполнить ${n} ${ruTasks(n)} от себя (не от родителя)`
+  }
+  if (sticker.needChewMax != null) {
+    return `Чтобы открыть: в дневнике все укусы больше ${sticker.needChewMax}`
+  }
+  if (sticker.needChewStreak != null) {
+    const n = sticker.needChewStreak
+    return `Чтобы открыть: ${n} ${ruDays(n)} подряд с записью в дневнике жевания`
+  }
+  if (sticker.needParentTasks != null) {
+    const n = sticker.needParentTasks
+    return `Чтобы открыть: выполнить ${n} ${ruTasks(n)} от родителя`
+  }
+  if (sticker.needTomSawyerBook) {
+    return 'Чтобы открыть: прочитать «Приключения Тома Сойера» до конца'
+  }
+  if (sticker.needBooksFinished != null) {
+    const n = sticker.needBooksFinished
+    return `Чтобы открыть: дочитать ${n} ${ruBooks(n)}`
+  }
   if (sticker.needStreak != null) {
     return `Чтобы открыть: ${sticker.needStreak} идеальных ${ruDays(sticker.needStreak)} подряд`
   }
@@ -312,6 +686,35 @@ export function stickerUnlockHint(sticker: Sticker): string {
 
 /** Condition line for already unlocked stickers */
 export function stickerOpenedHint(sticker: Sticker): string {
+  if (sticker.needSecretShortcut) {
+    return 'Открыто: скип таймеров или зарядка быстрее 20 минут'
+  }
+  if (sticker.needSecretNoRoblox) {
+    return 'Открыто: идеальный день без Roblox'
+  }
+  if (sticker.needQualityWorkout) return 'Открыто: супер-зарядка без скипов'
+  if (sticker.needOwnTasks != null) {
+    const n = sticker.needOwnTasks
+    return `Открыто: ${n} ${ruTasks(n)} от себя`
+  }
+  if (sticker.needChewMax != null) {
+    return `Открыто: все укусы > ${sticker.needChewMax}`
+  }
+  if (sticker.needChewStreak != null) {
+    const n = sticker.needChewStreak
+    return `Открыто: ${n} ${ruDays(n)} подряд с дневником жевания`
+  }
+  if (sticker.needParentTasks != null) {
+    const n = sticker.needParentTasks
+    return `Открыто: ${n} ${ruTasks(n)} от родителя`
+  }
+  if (sticker.needTomSawyerBook) {
+    return 'Открыто: приключения Тома Сойера пройдены до конца'
+  }
+  if (sticker.needBooksFinished != null) {
+    const n = sticker.needBooksFinished
+    return `Открыто: ${n} ${ruBooks(n)} дочитано`
+  }
   if (sticker.needStreak != null) {
     const n = sticker.needStreak
     return `Открыто: ${n} идеальных ${ruDays(n)} подряд`
@@ -346,26 +749,128 @@ export function stickerUnlockTitle(sticker: Sticker): string {
 
 export function isStickerUnlocked(
   sticker: Sticker,
-  perfectTotal: number,
-  streak: number,
-  bestStreak = streak,
+  progress: StickerProgress,
 ): boolean {
+  if (DEBUG_UNLOCK_ALL_STICKERS) return true
   const perfectOk =
-    sticker.needPerfect == null || perfectTotal >= sticker.needPerfect
-  const streakReach = Math.max(streak, bestStreak)
+    sticker.needPerfect == null || progress.perfectTotal >= sticker.needPerfect
+  const streakReach = Math.max(progress.streak, progress.bestStreak)
   const streakOk =
     sticker.needStreak == null || streakReach >= sticker.needStreak
-  return perfectOk && streakOk
+  const qualityOk =
+    !sticker.needQualityWorkout || progress.qualityWorkout
+  const chewOk =
+    sticker.needChewMax == null || progress.chewMax
+  const chewStreakOk =
+    sticker.needChewStreak == null ||
+    progress.chewStreak >= sticker.needChewStreak
+  const ownTasksOk =
+    sticker.needOwnTasks == null || progress.ownTasks >= sticker.needOwnTasks
+  const parentOk =
+    sticker.needParentTasks == null ||
+    progress.parentTasks >= sticker.needParentTasks
+  const booksOk =
+    sticker.needBooksFinished == null ||
+    progress.booksFinished >= sticker.needBooksFinished
+  const tomSawyerOk =
+    !sticker.needTomSawyerBook || progress.tomSawyerFinished
+  const secretShortcutOk =
+    !sticker.needSecretShortcut || progress.secretShortcut
+  const secretNoRobloxOk =
+    !sticker.needSecretNoRoblox || progress.secretNoRoblox
+  return (
+    perfectOk &&
+    streakOk &&
+    qualityOk &&
+    chewOk &&
+    chewStreakOk &&
+    ownTasksOk &&
+    parentOk &&
+    booksOk &&
+    tomSawyerOk &&
+    secretShortcutOk &&
+    secretNoRobloxOk
+  )
 }
 
-export function unlockedStickers(
-  perfectTotal: number,
-  streak: number,
-  bestStreak = streak,
-): Sticker[] {
-  return STICKERS.filter((s) =>
-    isStickerUnlocked(s, perfectTotal, streak, bestStreak),
-  )
+export function unlockedStickers(progress: StickerProgress): Sticker[] {
+  return STICKERS.filter((s) => isStickerUnlocked(s, progress))
+}
+
+export function normalizeReadingBooks(raw: unknown): ReadingBook[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((item): ReadingBook | null => {
+      if (!item || typeof item !== 'object') return null
+      const row = item as Partial<ReadingBook>
+      const title = typeof row.title === 'string' ? row.title.trim() : ''
+      if (!title) return null
+      const id =
+        typeof row.id === 'string' && row.id
+          ? row.id
+          : `reading-${title.slice(0, 12)}`
+      return { id, title }
+    })
+    .filter((b): b is ReadingBook => b !== null)
+}
+
+/** Prefer readingBooks; fall back to legacy currentBook string. */
+export function resolveReadingBooks(
+  readingBooks: unknown,
+  legacyCurrentBook?: unknown,
+): ReadingBook[] {
+  const list = normalizeReadingBooks(readingBooks)
+  if (list.length > 0) return list
+  const title =
+    typeof legacyCurrentBook === 'string' ? legacyCurrentBook.trim() : ''
+  if (!title) return []
+  return [{ id: 'legacy-current-book', title }]
+}
+
+export function normalizeFinishedBooks(raw: unknown): FinishedBook[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((item): FinishedBook | null => {
+      if (!item || typeof item !== 'object') return null
+      const row = item as Partial<FinishedBook>
+      const title = typeof row.title === 'string' ? row.title.trim() : ''
+      if (!title) return null
+      const finishedAt =
+        typeof row.finishedAt === 'number' && Number.isFinite(row.finishedAt)
+          ? row.finishedAt
+          : Date.now()
+      const id =
+        typeof row.id === 'string' && row.id
+          ? row.id
+          : `book-${finishedAt}-${title.slice(0, 12)}`
+      return { id, title, finishedAt }
+    })
+    .filter((b): b is FinishedBook => b !== null)
+}
+
+export function removeReadingBookByTitle(
+  books: ReadingBook[],
+  title: string,
+): ReadingBook[] {
+  const key = title.trim().toLowerCase()
+  return books.filter((b) => b.title.trim().toLowerCase() !== key)
+}
+
+/** Merge Tom Sawyer into finished books once (idempotent by title). */
+export function ensureTomSawyerFinishedBook(
+  books: FinishedBook[],
+  bookComplete: boolean,
+): FinishedBook[] {
+  if (!bookComplete) return books
+  if (isTomSawyerInFinishedBooks(books)) return books
+  return [
+    ...books,
+    {
+      id: 'book-tom-sawyer',
+      title: TOM_SAWYER_BOOK_TITLE,
+      finishedAt: Date.now(),
+    },
+  ]
 }
 
 /** Extra Roblox minutes granted for a single day (one-time streak payout). */

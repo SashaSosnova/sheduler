@@ -10,7 +10,13 @@ import {
   setDoc,
   type Unsubscribe,
 } from 'firebase/firestore'
-import type { AppData, ChewEntry, DayLog } from './types'
+import type {
+  AppData,
+  ChewEntry,
+  DayLog,
+  FinishedBook,
+  ReadingBook,
+} from './types'
 import { getFirebaseAuth, getFirebaseDb, isFirebaseConfigured } from './firebase'
 
 const FAMILY_KEY = 'vacation-family-code'
@@ -22,6 +28,11 @@ export type CloudPayload = {
   cookingLeft: number
   claimedRobloxStreaks?: number[]
   bestStreak?: number
+  bestParentTasks?: number
+  /** @deprecated use readingBooks */
+  currentBook?: string
+  readingBooks?: ReadingBook[]
+  finishedBooks?: FinishedBook[]
   updatedAt: number
 }
 
@@ -94,6 +105,9 @@ export function toCloudPayload(data: AppData, updatedAt = Date.now()): CloudPayl
     cookingLeft: data.cookingLeft,
     claimedRobloxStreaks: data.claimedRobloxStreaks ?? [],
     bestStreak: data.bestStreak ?? 0,
+    bestParentTasks: data.bestParentTasks ?? 0,
+    readingBooks: data.readingBooks ?? [],
+    finishedBooks: data.finishedBooks ?? [],
     updatedAt,
   }
 }
@@ -140,6 +154,10 @@ export async function joinFamily(rawCode: string): Promise<CloudPayload> {
     cookingLeft: remote.cookingLeft ?? 5,
     claimedRobloxStreaks: remote.claimedRobloxStreaks ?? [],
     bestStreak: remote.bestStreak ?? 0,
+    bestParentTasks: remote.bestParentTasks ?? 0,
+    readingBooks: remote.readingBooks,
+    currentBook: remote.currentBook,
+    finishedBooks: remote.finishedBooks ?? [],
     updatedAt: remote.updatedAt ?? Date.now(),
   }
 }
@@ -177,6 +195,10 @@ export function subscribeFamily(
         cookingLeft: remote.cookingLeft ?? 5,
         claimedRobloxStreaks: remote.claimedRobloxStreaks ?? [],
         bestStreak: remote.bestStreak ?? 0,
+        bestParentTasks: remote.bestParentTasks ?? 0,
+        readingBooks: remote.readingBooks,
+        currentBook: remote.currentBook,
+        finishedBooks: remote.finishedBooks ?? [],
         updatedAt: remote.updatedAt ?? Date.now(),
       })
     },

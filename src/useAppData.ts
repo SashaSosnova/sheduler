@@ -15,9 +15,18 @@ import { isFirebaseConfigured } from './firebase'
 import {
   ROBLOX_STREAK_REWARDS,
   applyPendingRobloxStreakRewards,
+  countParentTasksDone,
   currentStreak,
+  normalizeFinishedBooks,
+  resolveReadingBooks,
 } from './progress'
-import type { AppData, ChewEntry, DayLog } from './types'
+import type {
+  AppData,
+  ChewEntry,
+  DayLog,
+  FinishedBook,
+  ReadingBook,
+} from './types'
 
 const STORAGE_KEY = 'vacation-planner-v2'
 
@@ -28,6 +37,11 @@ type StoredData = {
   routineId?: string
   claimedRobloxStreaks?: number[]
   bestStreak?: number
+  bestParentTasks?: number
+  /** @deprecated use readingBooks */
+  currentBook?: string
+  readingBooks?: ReadingBook[]
+  finishedBooks?: FinishedBook[]
   exercises?: unknown
 }
 
@@ -39,13 +53,24 @@ function normalizeStreakInts(raw: unknown): number[] {
     .filter((n) => n > 0)
 }
 
-function hydrateAppData(partial: Partial<AppData>): AppData {
+function hydrateAppData(
+  partial: Partial<AppData> & { currentBook?: string },
+): AppData {
   const base = defaultAppData()
+  const days = partial.days ?? {}
+  const parentNow = countParentTasksDone(days)
+  const bestParentTasks = Math.max(
+    typeof partial.bestParentTasks === 'number' &&
+      Number.isFinite(partial.bestParentTasks)
+      ? Math.max(0, Math.floor(partial.bestParentTasks))
+      : 0,
+    parentNow,
+  )
   return applyPendingRobloxStreakRewards({
     ...base,
     ...partial,
     exercises: DEFAULT_EXERCISES,
-    days: partial.days ?? {},
+    days,
     chewEntries: partial.chewEntries ?? [],
     cookingLeft: partial.cookingLeft ?? 5,
     routineId: ROUTINE_ID,
@@ -54,6 +79,9 @@ function hydrateAppData(partial: Partial<AppData>): AppData {
       typeof partial.bestStreak === 'number' && Number.isFinite(partial.bestStreak)
         ? Math.max(0, Math.floor(partial.bestStreak))
         : 0,
+    bestParentTasks,
+    readingBooks: resolveReadingBooks(partial.readingBooks, partial.currentBook),
+    finishedBooks: normalizeFinishedBooks(partial.finishedBooks),
   })
 }
 
@@ -78,12 +106,24 @@ function load(): AppData {
       typeof parsed.bestStreak === 'number' && Number.isFinite(parsed.bestStreak)
         ? Math.max(0, Math.floor(parsed.bestStreak), streak)
         : streak
+    const parentNow = countParentTasksDone(days)
+    const bestParentTasks =
+      typeof parsed.bestParentTasks === 'number' &&
+      Number.isFinite(parsed.bestParentTasks)
+        ? Math.max(0, Math.floor(parsed.bestParentTasks), parentNow)
+        : parentNow
     return hydrateAppData({
       days,
       chewEntries: parsed.chewEntries ?? [],
       cookingLeft: parsed.cookingLeft ?? 5,
       claimedRobloxStreaks,
       bestStreak,
+      bestParentTasks,
+      readingBooks: resolveReadingBooks(
+        parsed.readingBooks,
+        parsed.currentBook,
+      ),
+      finishedBooks: parsed.finishedBooks ?? [],
     })
   } catch {
     return defaultAppData()
@@ -102,6 +142,21 @@ function applyCloud(prev: AppData, payload: CloudPayload): AppData {
     prev.bestStreak ?? 0,
     streak,
   )
+  const parentNow = countParentTasksDone(days)
+  const bestParentTasks = Math.max(
+    payload.bestParentTasks ?? 0,
+    prev.bestParentTasks ?? 0,
+    parentNow,
+  )
+  const finishedBooks = mergeFinishedBooks(
+    prev.finishedBooks ?? [],
+    normalizeFinishedBooks(payload.finishedBooks ?? prev.finishedBooks),
+  )
+  const readingBooks = mergeReadingBooks(
+    resolveReadingBooks(prev.readingBooks, undefined),
+    resolveReadingBooks(payload.readingBooks, payload.currentBook),
+    finishedBooks,
+  )
   return hydrateAppData({
     ...prev,
     days,
@@ -109,19 +164,61 @@ function applyCloud(prev: AppData, payload: CloudPayload): AppData {
     cookingLeft: payload.cookingLeft ?? prev.cookingLeft,
     claimedRobloxStreaks,
     bestStreak,
+    bestParentTasks,
+    readingBooks,
+    finishedBooks,
   })
+}
+
+function mergeFinishedBooks(
+  local: FinishedBook[],
+  remote: FinishedBook[],
+): FinishedBook[] {
+  const byKey = new Map<string, FinishedBook>()
+  for (const book of [...local, ...remote]) {
+    const key = book.title.trim().toLowerCase()
+    const prev = byKey.get(key)
+    if (!prev || book.finishedAt < prev.finishedAt) {
+      byKey.set(key, book)
+    }
+  }
+  return [...byKey.values()].sort((a, b) => a.finishedAt - b.finishedAt)
+}
+
+function mergeReadingBooks(
+  local: ReadingBook[],
+  remote: ReadingBook[],
+  finished: FinishedBook[],
+): ReadingBook[] {
+  const finishedKeys = new Set(
+    finished.map((b) => b.title.trim().toLowerCase()),
+  )
+  const byKey = new Map<string, ReadingBook>()
+  for (const book of [...local, ...remote]) {
+    const key = book.title.trim().toLowerCase()
+    if (finishedKeys.has(key)) continue
+    if (!byKey.has(key)) byKey.set(key, book)
+  }
+  return [...byKey.values()]
 }
 
 /** Replace local state with cloud on family join (no merge with previous family). */
 function replaceFromCloud(payload: CloudPayload): AppData {
   const days = payload.days ?? {}
   const streak = currentStreak(days)
+  const parentNow = countParentTasksDone(days)
   return hydrateAppData({
     days,
     chewEntries: payload.chewEntries ?? [],
     cookingLeft: payload.cookingLeft ?? 5,
     claimedRobloxStreaks: payload.claimedRobloxStreaks ?? [],
     bestStreak: Math.max(payload.bestStreak ?? 0, streak),
+    bestParentTasks: Math.max(payload.bestParentTasks ?? 0, parentNow),
+    readingBooks: resolveReadingBooks(
+      payload.readingBooks,
+      payload.currentBook,
+    ),
+    finishedBooks: payload.finishedBooks ?? [],
   })
 }
 
@@ -152,6 +249,9 @@ export function useAppData() {
       routineId: ROUTINE_ID,
       claimedRobloxStreaks: data.claimedRobloxStreaks ?? [],
       bestStreak: data.bestStreak ?? 0,
+      bestParentTasks: data.bestParentTasks ?? 0,
+      readingBooks: data.readingBooks ?? [],
+      finishedBooks: data.finishedBooks ?? [],
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore))
   }, [data])

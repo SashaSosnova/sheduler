@@ -47,7 +47,10 @@ export function ExercisesScreen({ data, onChange, readOnly = false }: Props) {
     sheetRef.current?.focus()
   }, [sheetOpen, activeId])
 
-  function patchDayExercises(exercisesDone: Record<string, boolean>) {
+  function patchDayExercises(
+    exercisesDone: Record<string, boolean>,
+    timersHonored: Record<string, boolean>,
+  ) {
     const now = Date.now()
     const allDone =
       data.exercises.length > 0 &&
@@ -78,6 +81,7 @@ export function ExercisesScreen({ data, onChange, readOnly = false }: Props) {
         [key]: {
           ...day,
           exercisesDone,
+          timersHonored,
           workoutStartedAt,
           workoutFinishedAt,
           mustDo: {
@@ -91,10 +95,21 @@ export function ExercisesScreen({ data, onChange, readOnly = false }: Props) {
 
   function toggleDone(id: string) {
     if (readOnly) return
-    patchDayExercises({
-      ...day.exercisesDone,
-      [id]: !day.exercisesDone[id],
-    })
+    const nextDone = !day.exercisesDone[id]
+    const exercisesDone = { ...day.exercisesDone, [id]: nextDone }
+    const timersHonored = { ...day.timersHonored }
+    if (!nextDone) {
+      delete timersHonored[id]
+    }
+    patchDayExercises(exercisesDone, timersHonored)
+  }
+
+  function completeWithTimer(id: string) {
+    if (readOnly) return
+    patchDayExercises(
+      { ...day.exercisesDone, [id]: true },
+      { ...day.timersHonored, [id]: true },
+    )
   }
 
   return (
@@ -228,7 +243,7 @@ export function ExercisesScreen({ data, onChange, readOnly = false }: Props) {
               disabled={!canComplete}
               onClick={() => {
                 if (!canComplete) return
-                toggleDone(active.id)
+                completeWithTimer(active.id)
                 setActiveId(null)
               }}
             >

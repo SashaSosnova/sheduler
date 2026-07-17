@@ -6,18 +6,16 @@ import {
   useState,
   type Ref,
 } from 'react'
-import { todayKey } from './data'
 import {
   STICKERS,
-  countPerfectDays,
   countStars,
-  currentStreak,
   isStickerUnlocked,
   levelFromStars,
   levelRank,
   perfectDaysInMonth,
   stickerNeedText,
   stickerOpenedHint,
+  stickerProgressFromData,
   stickerRewardText,
   stickerUnlockHint,
   unlockedStickers,
@@ -32,11 +30,9 @@ type Props = {
 const STICKER_COLS_MQ = '(min-width: 700px)'
 
 export function ProgressScreen({ data }: Props) {
-  const today = todayKey()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [cols, setCols] = useState(3)
   const detailRef = useRef<HTMLDivElement>(null)
-  const bestStreak = data.bestStreak ?? 0
 
   useEffect(() => {
     const mq = window.matchMedia(STICKER_COLS_MQ)
@@ -46,34 +42,29 @@ export function ProgressScreen({ data }: Props) {
     return () => mq.removeEventListener('change', sync)
   }, [])
 
+  const progress = useMemo(() => stickerProgressFromData(data), [data])
+
   const stats = useMemo(() => {
     const stars = countStars(data.days)
     const { level, intoLevel, need } = levelFromStars(stars)
-    const streak = currentStreak(data.days, today)
     const perfectMonth = perfectDaysInMonth(data.days)
-    const perfectTotal = countPerfectDays(data.days)
-    const stickers = unlockedStickers(perfectTotal, streak, bestStreak)
+    const stickers = unlockedStickers(progress)
     return {
       stars,
       level,
       intoLevel,
       need,
-      streak,
+      streak: progress.streak,
       perfectMonth,
-      perfectTotal,
+      perfectTotal: progress.perfectTotal,
       stickers,
     }
-  }, [data.days, bestStreak, today])
+  }, [data.days, progress])
 
   const selectedSticker =
     STICKERS.find((s) => s.id === selectedId) ?? null
   const selectedOpen = selectedSticker
-    ? isStickerUnlocked(
-        selectedSticker,
-        stats.perfectTotal,
-        stats.streak,
-        bestStreak,
-      )
+    ? isStickerUnlocked(selectedSticker, progress)
     : false
   const selectedReward = selectedSticker
     ? stickerRewardText(selectedSticker)
@@ -164,12 +155,7 @@ export function ProgressScreen({ data }: Props) {
         </div>
         <div className="sticker-row">
           {STICKERS.map((s, i) => {
-            const open = isStickerUnlocked(
-              s,
-              stats.perfectTotal,
-              stats.streak,
-              bestStreak,
-            )
+            const open = isStickerUnlocked(s, progress)
             const selected = selectedId === s.id
             return (
               <Fragment key={s.id}>

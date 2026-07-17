@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Confetti } from './Confetti'
-import { todayKey } from './data'
 import {
+  DEBUG_UNLOCK_ALL_STICKERS,
   STICKERS,
-  countPerfectDays,
-  currentStreak,
   isStickerUnlocked,
+  stickerOpenedHint,
+  stickerProgressFromData,
   stickerRewardText,
   stickerUnlockTitle,
   type Sticker,
@@ -29,7 +29,7 @@ function loadCelebrated(): string[] | null {
     if (!Array.isArray(parsed)) return []
     return parsed.filter((id): id is string => typeof id === 'string')
   } catch {
-    return []
+    return null
   }
 }
 
@@ -44,17 +44,12 @@ function saveCelebrated(ids: string[]) {
   }
 }
 
-function unlockedIds(data: AppData, today: string): string[] {
-  const perfectTotal = countPerfectDays(data.days)
-  const streak = currentStreak(data.days, today)
-  const bestStreak = Math.max(data.bestStreak ?? 0, streak)
-  return STICKERS.filter((s) =>
-    isStickerUnlocked(s, perfectTotal, streak, bestStreak),
-  ).map((s) => s.id)
+function unlockedIds(data: AppData): string[] {
+  const progress = stickerProgressFromData(data)
+  return STICKERS.filter((s) => isStickerUnlocked(s, progress)).map((s) => s.id)
 }
 
 export function StickerUnlockOverlay({ data, enabled = true }: Props) {
-  const today = todayKey()
   const [queue, setQueue] = useState<string[]>([])
   const [active, setActive] = useState<Sticker | null>(null)
   const [burst, setBurst] = useState(false)
@@ -62,12 +57,19 @@ export function StickerUnlockOverlay({ data, enabled = true }: Props) {
   const celebratedRef = useRef<Set<string>>(new Set())
 
   const unlocked = useMemo(
-    () => unlockedIds(data, today),
-    [data.days, data.bestStreak, today],
+    () => unlockedIds(data),
+    [
+      data.days,
+      data.bestStreak,
+      data.bestParentTasks,
+      data.chewEntries,
+      data.finishedBooks,
+      data.exercises,
+    ],
   )
 
   useEffect(() => {
-    if (!enabled) return
+    if (!enabled || DEBUG_UNLOCK_ALL_STICKERS) return
 
     if (!seededRef.current) {
       seededRef.current = true
@@ -117,6 +119,7 @@ export function StickerUnlockOverlay({ data, enabled = true }: Props) {
   if (!enabled || !active) return null
 
   const reward = stickerRewardText(active)
+  const why = stickerOpenedHint(active)
 
   return (
     <div className="sticker-wow" role="dialog" aria-modal="true">
@@ -138,7 +141,7 @@ export function StickerUnlockOverlay({ data, enabled = true }: Props) {
           />
         </div>
         <h2 className="sticker-wow-title">{active.label}</h2>
-        <p className="sticker-wow-quote">«{active.quote}»</p>
+        <p className="sticker-wow-why">{why}</p>
         {reward ? (
           <p className="sticker-wow-reward">
             {reward.split('\n').map((line) => (
@@ -148,9 +151,7 @@ export function StickerUnlockOverlay({ data, enabled = true }: Props) {
               </span>
             ))}
           </p>
-        ) : (
-          <p className="sticker-wow-detail">{active.detail}</p>
-        )}
+        ) : null}
         <button type="button" className="btn primary sticker-wow-btn" onClick={dismiss}>
           Круто!
         </button>

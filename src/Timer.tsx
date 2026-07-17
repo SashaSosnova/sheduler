@@ -2,16 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { formatDuration } from './data'
 import { playDing } from './sound'
 
+export { parseTimerRounds } from './data'
+
 type Props = {
   seconds: number
   rounds: number
   onCanCompleteChange?: (canComplete: boolean) => void
-}
-
-export function parseTimerRounds(reps: string): number {
-  const match = reps.match(/(\d+)\s*подход/i)
-  if (match) return Math.max(1, Number(match[1]))
-  return 1
 }
 
 export function Timer({ seconds, rounds, onCanCompleteChange }: Props) {

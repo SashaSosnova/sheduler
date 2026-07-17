@@ -20,6 +20,7 @@ import {
 } from './progress'
 import { ScreenLimitCard } from './ScreenLimitCard'
 import { playDing } from './sound'
+import { useTomSawyerReadToday } from './tomSawyerSync'
 import type { AppData, MustDoId, ScreenKind, ScreenSlot } from './types'
 
 type Props = {
@@ -50,6 +51,7 @@ export function TodayScreen({
   const exerciseComplete =
     exerciseTotal > 0 && exerciseDone === exerciseTotal
   const chewComplete = Boolean(chewToday)
+  const readComplete = useTomSawyerReadToday()
   const extraDone = day.extraTasks.filter((t) => t.done).length
   const [extraDraft, setExtraDraft] = useState('')
   const [extraOpen, setExtraOpen] = useState(false)
@@ -81,13 +83,15 @@ export function TodayScreen({
     })
   }
 
-  // Auto-mark exercise/chew when done in-app; never clear a parent override
+  // Auto-mark exercise/chew/read when done in-app; never clear a parent override
   useEffect(() => {
     const nextExercise = exerciseComplete || Boolean(day.mustDo.exercise)
     const nextChew = chewComplete || Boolean(day.mustDo.chew)
+    const nextRead = readComplete || Boolean(day.mustDo.read)
     if (
       day.mustDo.exercise === nextExercise &&
-      day.mustDo.chew === nextChew
+      day.mustDo.chew === nextChew &&
+      day.mustDo.read === nextRead
     ) {
       return
     }
@@ -96,10 +100,18 @@ export function TodayScreen({
         ...day.mustDo,
         exercise: nextExercise,
         chew: nextChew,
+        read: nextRead,
       },
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [exerciseComplete, chewComplete, day.mustDo.exercise, day.mustDo.chew])
+  }, [
+    exerciseComplete,
+    chewComplete,
+    readComplete,
+    day.mustDo.exercise,
+    day.mustDo.chew,
+    day.mustDo.read,
+  ])
 
   // Sync unused Roblox slot to today's limit (base + achievement bonuses)
   const robloxSlot = day.screens.roblox
@@ -135,6 +147,7 @@ export function TodayScreen({
   function isMustChecked(id: MustDoId): boolean {
     if (id === 'exercise') return exerciseComplete
     if (id === 'chew') return chewComplete
+    if (id === 'read') return readComplete || Boolean(day.mustDo.read)
     return Boolean(day.mustDo[id])
   }
 
@@ -209,7 +222,8 @@ export function TodayScreen({
           </span>
         </div>
         <p className="hint">
-          Зарядку и жевание отмечает приложение. Остальное можно отметить самому.
+          Зарядку, жевание и книгу отмечает приложение. Остальное можно отметить
+          самому.
         </p>
         <ul className="check-list">
           {MUST_DO_ITEMS.map((item) => {
@@ -260,6 +274,18 @@ export function TodayScreen({
                   <button type="button" className="linkish" onClick={onOpenChew}>
                     Открыть дневник жевания →
                   </button>
+                </>
+              ) : null}
+              {item.id === 'read' ? (
+                <>
+                  {(data.readingBooks ?? []).length > 0 ? (
+                    <p className="hint">
+                      Сейчас читаешь:{' '}
+                      <strong>
+                        {(data.readingBooks ?? []).map((b) => b.title).join(', ')}
+                      </strong>
+                    </p>
+                  ) : null}
                 </>
               ) : null}
               {item.id === 'create' ? (

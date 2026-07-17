@@ -70,6 +70,8 @@ export type DayLog = {
   mode: DayMode
   mustDo: Partial<Record<MustDoId, boolean>>
   exercisesDone: Record<string, boolean>
+  /** Timed exercises where the full timer (all rounds) was waited out */
+  timersHonored: Record<string, boolean>
   /** Unix ms of the first exercise check today */
   workoutStartedAt: number | null
   /** Unix ms when the full routine was completed */
@@ -85,6 +87,17 @@ export type DayLog = {
   robloxBonusMin: number
 }
 
+export type ReadingBook = {
+  id: string
+  title: string
+}
+
+export type FinishedBook = {
+  id: string
+  title: string
+  finishedAt: number
+}
+
 export type AppData = {
   exercises: Exercise[]
   days: Record<string, DayLog>
@@ -96,4 +109,10 @@ export type AppData = {
   claimedRobloxStreaks: number[]
   /** Best consecutive perfect-day streak ever (stickers stay unlocked) */
   bestStreak: number
+  /** Best count of completed parent-assigned extra tasks */
+  bestParentTasks: number
+  /** Books currently being read (parent-managed) */
+  readingBooks: ReadingBook[]
+  /** Books marked finished (parent or Tom Sawyer sync) */
+  finishedBooks: FinishedBook[]
 }

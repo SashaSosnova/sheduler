@@ -40,7 +40,7 @@ export const SCREEN_LIMITS = {
 export const MAIN_MUST_DO: MustDoId[] = ['exercise', 'chew']
 
 /** Checked only when completed inside the app — not by tapping the checkbox */
-export const APP_LOCKED_MUST_DO: MustDoId[] = ['exercise', 'chew']
+export const APP_LOCKED_MUST_DO: MustDoId[] = ['exercise', 'chew', 'read']
 
 export function emptyScreenSlot(limitSec: number): ScreenSlot {
   return {
@@ -459,6 +459,7 @@ export function emptyDayLog(date: string): DayLog {
     mode: isCookingWeekday(date) ? 'cooking' : 'home',
     mustDo: {},
     exercisesDone: {},
+    timersHonored: {},
     workoutStartedAt: null,
     workoutFinishedAt: null,
     note: '',
@@ -499,6 +500,7 @@ export function normalizeDayLog(date: string, raw?: Partial<DayLog> | null): Day
     date,
     mustDo: raw.mustDo ?? {},
     exercisesDone: raw.exercisesDone ?? {},
+    timersHonored: normalizeBoolMap(raw.timersHonored),
     workoutStartedAt: normalizeTimestamp(raw.workoutStartedAt),
     workoutFinishedAt: normalizeTimestamp(raw.workoutFinishedAt),
     createNote: raw.createNote ?? '',
@@ -511,6 +513,15 @@ export function normalizeDayLog(date: string, raw?: Partial<DayLog> | null): Day
       ),
     },
   }
+}
+
+function normalizeBoolMap(raw: unknown): Record<string, boolean> {
+  if (!raw || typeof raw !== 'object') return {}
+  const out: Record<string, boolean> = {}
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (value) out[key] = true
+  }
+  return out
 }
 
 function normalizeNonNegInt(raw: unknown): number {
@@ -578,6 +589,9 @@ export function defaultAppData(): AppData {
     routineId: ROUTINE_ID,
     claimedRobloxStreaks: [],
     bestStreak: 0,
+    bestParentTasks: 0,
+    readingBooks: [],
+    finishedBooks: [],
   }
 }
 
@@ -587,6 +601,13 @@ export function formatDuration(sec: number): string {
   if (m <= 0) return `${s} сек`
   if (s === 0) return `${m} мин`
   return `${m}:${String(s).padStart(2, '0')}`
+}
+
+/** How many timed rounds an exercise needs (from reps text like «2 подхода»). */
+export function parseTimerRounds(reps: string): number {
+  const match = reps.match(/(\d+)\s*подход/i)
+  if (match) return Math.max(1, Number(match[1]))
+  return 1
 }
 
 export function uid(): string {

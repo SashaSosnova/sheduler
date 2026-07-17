@@ -5,10 +5,17 @@ import { ChewDiaryScreen } from './ChewDiaryScreen'
 import { ExercisesScreen } from './ExercisesScreen'
 import { ParentSummaryScreen } from './ParentSummaryScreen'
 import { ProgressScreen } from './ProgressScreen'
+import {
+  TOM_SAWYER_BOOK_TITLE,
+  ensureTomSawyerFinishedBook,
+  isTomSawyerInFinishedBooks,
+  removeReadingBookByTitle,
+} from './progress'
 import { RoleSetupScreen } from './RoleSetupScreen'
 import { SettingsScreen } from './SettingsScreen'
 import { StickerUnlockOverlay } from './StickerUnlockOverlay'
 import { TodayScreen } from './TodayScreen'
+import { useTomSawyerLive } from './tomSawyerSync'
 import type { TabId } from './types'
 import { useAppData } from './useAppData'
 import { useNotifications } from './useNotifications'
@@ -29,6 +36,7 @@ function App() {
   const { role, setRole } = useUserRole()
   const notifications = useNotifications(role)
   const parentAlerts = useParentAlerts(role, data)
+  const tomSawyer = useTomSawyerLive()
   const [tab, setTab] = useState<TabId>('today')
   const isParent = role === 'parent'
   const showNav = tab !== 'settings'
@@ -38,6 +46,20 @@ function App() {
     document.documentElement.scrollTop = 0
     document.body.scrollTop = 0
   }, [tab])
+
+  // Auto-add Tom Sawyer to finished books when the reader marks the book complete
+  useEffect(() => {
+    if (!tomSawyer.bookComplete) return
+    if (isTomSawyerInFinishedBooks(data.finishedBooks ?? [])) return
+    setData((prev) => ({
+      ...prev,
+      finishedBooks: ensureTomSawyerFinishedBook(prev.finishedBooks ?? [], true),
+      readingBooks: removeReadingBookByTitle(
+        prev.readingBooks ?? [],
+        TOM_SAWYER_BOOK_TITLE,
+      ),
+    }))
+  }, [tomSawyer.bookComplete, data.finishedBooks, setData])
 
   if (!role) {
     return (

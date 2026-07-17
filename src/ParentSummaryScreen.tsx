@@ -46,6 +46,8 @@ export function ParentSummaryScreen({
   const [now, setNow] = useState(Date.now())
   const [extraDraft, setExtraDraft] = useState('')
   const [extraOpen, setExtraOpen] = useState(false)
+  const [bookDraft, setBookDraft] = useState('')
+  const [addingBook, setAddingBook] = useState(false)
 
   useEffect(() => {
     if (!running) return
@@ -113,6 +115,50 @@ export function ParentSummaryScreen({
   function removeExtraTask(id: string) {
     patchDay({
       extraTasks: day.extraTasks.filter((t) => t.id !== id),
+    })
+  }
+
+  const readingBooks = data.readingBooks ?? []
+  const finishedBooks = data.finishedBooks ?? []
+
+  function addReadingBook() {
+    const title = bookDraft.trim()
+    if (!title) return
+    const key = title.toLowerCase()
+    const alreadyReading = readingBooks.some(
+      (b) => b.title.toLowerCase() === key,
+    )
+    const alreadyFinished = finishedBooks.some(
+      (b) => b.title.toLowerCase() === key,
+    )
+    if (alreadyReading || alreadyFinished) {
+      setBookDraft('')
+      setAddingBook(false)
+      return
+    }
+    onChange({
+      ...data,
+      readingBooks: [...readingBooks, { id: uid(), title }],
+    })
+    setBookDraft('')
+    setAddingBook(false)
+  }
+
+  function finishReadingBook(id: string) {
+    const book = readingBooks.find((b) => b.id === id)
+    if (!book) return
+    const exists = finishedBooks.some(
+      (b) => b.title.toLowerCase() === book.title.toLowerCase(),
+    )
+    onChange({
+      ...data,
+      readingBooks: readingBooks.filter((b) => b.id !== id),
+      finishedBooks: exists
+        ? finishedBooks
+        : [
+            ...finishedBooks,
+            { id: book.id, title: book.title, finishedAt: Date.now() },
+          ],
     })
   }
 
@@ -186,6 +232,101 @@ export function ParentSummaryScreen({
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="card">
+        <div className="card-title-row">
+          <h2>Книги</h2>
+          {finishedBooks.length || readingBooks.length ? (
+            <span className="pill">
+              {finishedBooks.length}/{finishedBooks.length + readingBooks.length}
+            </span>
+          ) : null}
+        </div>
+        <p className="hint">
+          Добавь книгу, которую сейчас читает ребёнок. Когда дочитаете — нажми
+          «Дочитали».
+        </p>
+
+        {readingBooks.length || finishedBooks.length ? (
+          <ul className="check-list book-list">
+            {readingBooks.map((book) => (
+              <li key={book.id}>
+                <div className="check-row with-action book-reading-row">
+                  <span className="book-title">{book.title}</span>
+                  <button
+                    type="button"
+                    className="btn primary book-finish-btn"
+                    onClick={() => finishReadingBook(book.id)}
+                  >
+                    Дочитали
+                  </button>
+                </div>
+              </li>
+            ))}
+            {finishedBooks.map((book) => (
+              <li key={book.id}>
+                <label className="check-row book-finished-row">
+                  <input type="checkbox" checked readOnly tabIndex={-1} />
+                  <span className="is-done">{book.title}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="hint" style={{ marginTop: 10 }}>
+            Пока нет книг в списке.
+          </p>
+        )}
+
+        {addingBook ? (
+          <div className="book-add-box">
+            <label className="field">
+              <span>Название книги</span>
+              <input
+                value={bookDraft}
+                onChange={(e) => setBookDraft(e.target.value)}
+                placeholder="Что читает?"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    addReadingBook()
+                  }
+                }}
+              />
+            </label>
+            <div className="row-gap">
+              <button
+                type="button"
+                className="btn primary"
+                disabled={!bookDraft.trim()}
+                onClick={addReadingBook}
+              >
+                Сохранить название
+              </button>
+              <button
+                type="button"
+                className="btn ghost"
+                onClick={() => {
+                  setAddingBook(false)
+                  setBookDraft('')
+                }}
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="linkish"
+            style={{ marginTop: 12 }}
+            onClick={() => setAddingBook(true)}
+          >
+            Добавить новую книгу →
+          </button>
+        )}
       </section>
 
       <section className="card">

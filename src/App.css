@@ -1131,6 +1131,14 @@
   color: var(--muted);
 }
 
+.sticker-wow-why {
+  margin: 12px 0 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.35;
+}
+
 .sticker-wow-reward {
   margin: 16px 0 0;
   padding: 12px 14px;
@@ -1499,6 +1507,102 @@
 
 .chew-table tr:last-child td {
   border-bottom: 0;
+}
+
+.book-list {
+  margin-top: 12px;
+}
+
+.book-reading-row {
+  align-items: center;
+  gap: 10px;
+}
+
+.book-title {
+  flex: 1;
+  font-weight: 600;
+  min-width: 0;
+}
+
+.book-finish-btn {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+}
+
+.book-finished-row {
+  pointer-events: none;
+}
+
+.book-add-box {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chew-report-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  background: #f4f4f4;
+  padding:
+    calc(12px + var(--safe-top))
+    12px
+    calc(12px + var(--safe-bottom));
+  overflow: auto;
+}
+
+.chew-report-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-shrink: 0;
+  margin-bottom: 8px;
+}
+
+.chew-report-toolbar .btn {
+  min-width: 120px;
+}
+
+.chew-report-hint {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.chew-report-sheet {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px 16px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+  flex: 1;
+}
+
+.chew-report-sheet h2 {
+  margin: 0 0 4px;
+  font-size: 1.35rem;
+  color: #1a1a1a;
+}
+
+.chew-report-table {
+  margin-top: 14px;
+  border-radius: 8px;
+}
+
+.chew-report-table .chew-table {
+  min-width: 0;
+  font-size: 0.92rem;
+}
+
+.chew-report-status {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--muted);
 }
 
 .family-code {
