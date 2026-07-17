@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Ref,
+} from 'react'
 import { todayKey } from './data'
 import {
   STICKERS,
@@ -14,6 +21,7 @@ import {
   stickerRewardText,
   stickerUnlockHint,
   unlockedStickers,
+  type Sticker,
 } from './progress'
 import type { AppData } from './types'
 
@@ -21,11 +29,22 @@ type Props = {
   data: AppData
 }
 
+const STICKER_COLS_MQ = '(min-width: 700px)'
+
 export function ProgressScreen({ data }: Props) {
   const today = todayKey()
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [cols, setCols] = useState(3)
   const detailRef = useRef<HTMLDivElement>(null)
   const bestStreak = data.bestStreak ?? 0
+
+  useEffect(() => {
+    const mq = window.matchMedia(STICKER_COLS_MQ)
+    const sync = () => setCols(mq.matches ? 4 : 3)
+    sync()
+    mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
+  }, [])
 
   const stats = useMemo(() => {
     const stars = countStars(data.days)
@@ -60,9 +79,20 @@ export function ProgressScreen({ data }: Props) {
     ? stickerRewardText(selectedSticker)
     : null
 
+  const selectedIndex = selectedId
+    ? STICKERS.findIndex((s) => s.id === selectedId)
+    : -1
+  const detailAfterIndex =
+    selectedIndex >= 0
+      ? Math.min(
+          STICKERS.length - 1,
+          Math.floor(selectedIndex / cols) * cols + cols - 1,
+        )
+      : -1
+
   useEffect(() => {
     if (!selectedId || !detailRef.current) return
-    detailRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    detailRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [selectedId])
 
   const levelPct = Math.min(100, (stats.intoLevel / stats.need) * 100)
@@ -132,44 +162,8 @@ export function ProgressScreen({ data }: Props) {
             {stats.stickers.length}/{STICKERS.length}
           </span>
         </div>
-        {selectedSticker ? (
-          <div
-            ref={detailRef}
-            className={`sticker-detail ${selectedOpen ? 'is-open' : 'is-locked'}`}
-          >
-            <div className="sticker-detail-head">
-              <img
-                className={`sticker-art detail ${selectedOpen ? '' : 'is-locked'}`}
-                src={selectedSticker.image}
-                alt=""
-                draggable={false}
-              />
-              <div>
-                <p className="sticker-detail-franchise">
-                  {selectedSticker.detail}
-                </p>
-                <p className="sticker-detail-title">
-                  {selectedOpen ? selectedSticker.label : 'Ещё закрыто'}
-                </p>
-                {selectedOpen ? (
-                  <p className="sticker-detail-quote">
-                    «{selectedSticker.quote}»
-                  </p>
-                ) : null}
-              </div>
-            </div>
-            <p className="hint">
-              {selectedOpen
-                ? stickerOpenedHint(selectedSticker)
-                : stickerUnlockHint(selectedSticker)}
-            </p>
-            {selectedReward ? (
-              <p className="hint sticker-detail-reward">{selectedReward}</p>
-            ) : null}
-          </div>
-        ) : null}
         <div className="sticker-row">
-          {STICKERS.map((s) => {
+          {STICKERS.map((s, i) => {
             const open = isStickerUnlocked(
               s,
               stats.perfectTotal,
@@ -178,39 +172,92 @@ export function ProgressScreen({ data }: Props) {
             )
             const selected = selectedId === s.id
             return (
-              <button
-                key={s.id}
-                type="button"
-                className={`sticker kind-${s.kind} ${open ? 'open' : 'locked'} ${selected ? 'selected' : ''}`}
-                aria-pressed={selected}
-                aria-label={
-                  open
-                    ? `${s.label}. ${s.quote}. ${s.detail}`
-                    : `${stickerNeedText(s)}. ${stickerUnlockHint(s)}`
-                }
-                onClick={() =>
-                  setSelectedId((prev) => (prev === s.id ? null : s.id))
-                }
-              >
-                <img
-                  className="sticker-art"
-                  src={s.image}
-                  alt=""
-                  draggable={false}
-                />
-                <span className="sticker-caption">
-                  <span className="sticker-label">
-                    {open ? s.label : stickerNeedText(s)}
+              <Fragment key={s.id}>
+                <button
+                  type="button"
+                  className={`sticker kind-${s.kind} ${open ? 'open' : 'locked'} ${selected ? 'selected' : ''}`}
+                  aria-pressed={selected}
+                  aria-label={
+                    open
+                      ? `${s.label}. ${s.quote}. ${s.detail}`
+                      : `${stickerNeedText(s)}. ${stickerUnlockHint(s)}`
+                  }
+                  onClick={() =>
+                    setSelectedId((prev) => (prev === s.id ? null : s.id))
+                  }
+                >
+                  <img
+                    className="sticker-art"
+                    src={s.image}
+                    alt=""
+                    draggable={false}
+                  />
+                  <span className="sticker-caption">
+                    <span className="sticker-label">
+                      {open ? s.label : stickerNeedText(s)}
+                    </span>
+                    {open ? (
+                      <span className="sticker-quote">«{s.quote}»</span>
+                    ) : null}
                   </span>
-                  {open ? (
-                    <span className="sticker-quote">«{s.quote}»</span>
-                  ) : null}
-                </span>
-              </button>
+                </button>
+                {i === detailAfterIndex && selectedSticker ? (
+                  <StickerDetailCard
+                    ref={detailRef}
+                    sticker={selectedSticker}
+                    open={selectedOpen}
+                    reward={selectedReward}
+                  />
+                ) : null}
+              </Fragment>
             )
           })}
         </div>
       </section>
+    </div>
+  )
+}
+
+type DetailProps = {
+  sticker: Sticker
+  open: boolean
+  reward: string | null
+}
+
+function StickerDetailCard({
+  ref,
+  sticker,
+  open,
+  reward,
+}: DetailProps & { ref?: Ref<HTMLDivElement> }) {
+  return (
+    <div
+      ref={ref}
+      className={`sticker-detail sticker-detail--inline ${open ? 'is-open' : 'is-locked'}`}
+    >
+      <div className="sticker-detail-head">
+        <img
+          className={`sticker-art detail ${open ? '' : 'is-locked'}`}
+          src={sticker.image}
+          alt=""
+          draggable={false}
+        />
+        <div>
+          <p className="sticker-detail-franchise">{sticker.detail}</p>
+          <p className="sticker-detail-title">
+            {open ? sticker.label : 'Ещё закрыто'}
+          </p>
+          {open ? (
+            <p className="sticker-detail-quote">«{sticker.quote}»</p>
+          ) : null}
+        </div>
+      </div>
+      <p className="hint">
+        {open ? stickerOpenedHint(sticker) : stickerUnlockHint(sticker)}
+      </p>
+      {reward ? (
+        <p className="hint sticker-detail-reward">{reward}</p>
+      ) : null}
     </div>
   )
 }
