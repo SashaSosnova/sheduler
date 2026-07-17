@@ -275,15 +275,35 @@
   align-items: flex-end;
   gap: 8px;
   margin-top: 4px;
+  min-width: 0;
 }
 
 .add-row .field.grow {
   flex: 1;
+  min-width: 0;
   margin-top: 0;
+}
+
+.add-row .field.grow input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .add-row .btn {
   flex-shrink: 0;
+  white-space: nowrap;
+}
+
+@media (max-width: 380px) {
+  .add-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .add-row .btn {
+    width: 100%;
+  }
 }
 
 .extra-summary {
@@ -844,7 +864,7 @@
 
 .sticker-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 12px 8px;
   margin-top: 12px;
 }
@@ -936,12 +956,9 @@
   font-weight: 600;
   font-style: italic;
   color: var(--muted);
-  line-height: 1.2;
+  line-height: 1.25;
   max-width: 100%;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  overflow-wrap: anywhere;
 }
 
 .sticker.locked .sticker-label {
@@ -1492,5 +1509,9 @@
 
   .screen-head h1 {
     font-size: 2rem;
+  }
+
+  .sticker-row {
+    grid-template-columns: repeat(4, 1fr);
   }
 }

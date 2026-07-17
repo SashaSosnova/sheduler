@@ -112,6 +112,19 @@ function applyCloud(prev: AppData, payload: CloudPayload): AppData {
   })
 }
 
+/** Replace local state with cloud on family join (no merge with previous family). */
+function replaceFromCloud(payload: CloudPayload): AppData {
+  const days = payload.days ?? {}
+  const streak = currentStreak(days)
+  return hydrateAppData({
+    days,
+    chewEntries: payload.chewEntries ?? [],
+    cookingLeft: payload.cookingLeft ?? 5,
+    claimedRobloxStreaks: payload.claimedRobloxStreaks ?? [],
+    bestStreak: Math.max(payload.bestStreak ?? 0, streak),
+  })
+}
+
 export function useAppData() {
   const [data, setData] = useState<AppData>(() => load())
   const [family, setFamily] = useState<FamilyStatus>(() => ({
@@ -273,10 +286,10 @@ export function useAppData() {
     }
     setFamily((f) => ({ ...f, syncing: true, error: null }))
     try {
-      const payload = await joinFamily(code, dataRef.current)
+      const payload = await joinFamily(code)
       lastRemoteAt.current = payload.updatedAt
       skipPushUntil.current = Date.now() + 1200
-      setData((prev) => applyCloud(prev, payload))
+      setData(replaceFromCloud(payload))
       setFamily({
         code: code.trim().toUpperCase(),
         connected: true,

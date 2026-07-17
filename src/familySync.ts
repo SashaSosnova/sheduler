@@ -120,7 +120,7 @@ export async function createFamily(data: AppData): Promise<string> {
   throw new Error('Не удалось создать код семьи, попробуй ещё раз')
 }
 
-export async function joinFamily(rawCode: string, localData: AppData): Promise<CloudPayload> {
+export async function joinFamily(rawCode: string): Promise<CloudPayload> {
   if (!isFirebaseConfigured()) throw new Error('Firebase не настроен')
   const code = rawCode.trim().toUpperCase()
   if (code.length < 4) throw new Error('Введи код семьи')
@@ -132,21 +132,14 @@ export async function joinFamily(rawCode: string, localData: AppData): Promise<C
   const remote = snap.data() as CloudPayload & { code?: string }
   saveFamilyCode(code)
 
-  // If cloud empty-ish and local has data, push local once
-  const remoteEmpty =
-    (!remote.chewEntries || remote.chewEntries.length === 0) &&
-    (!remote.days || Object.keys(remote.days).length === 0)
-
-  if (remoteEmpty && (localData.chewEntries.length > 0 || Object.keys(localData.days).length > 0)) {
-    const payload = toCloudPayload(localData)
-    await setDoc(familyRef(code), { code, createdAt: Date.now(), ...payload }, { merge: true })
-    return payload
-  }
-
+  // Cloud is the source of truth on join — never seed an empty family from
+  // leftover local data (that would copy the previous family into this one).
   return {
     days: remote.days ?? {},
     chewEntries: remote.chewEntries ?? [],
     cookingLeft: remote.cookingLeft ?? 5,
+    claimedRobloxStreaks: remote.claimedRobloxStreaks ?? [],
+    bestStreak: remote.bestStreak ?? 0,
     updatedAt: remote.updatedAt ?? Date.now(),
   }
 }
@@ -182,6 +175,8 @@ export function subscribeFamily(
         days: remote.days ?? {},
         chewEntries: remote.chewEntries ?? [],
         cookingLeft: remote.cookingLeft ?? 5,
+        claimedRobloxStreaks: remote.claimedRobloxStreaks ?? [],
+        bestStreak: remote.bestStreak ?? 0,
         updatedAt: remote.updatedAt ?? Date.now(),
       })
     },

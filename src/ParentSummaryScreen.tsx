@@ -232,7 +232,7 @@ export function ParentSummaryScreen({
             <p className="hint" style={{ marginTop: 12 }}>
               Быстро добавить:
             </p>
-            <div className="chip-row">
+            <div className="create-chip-grid">
               {EXTRA_TASK_IDEAS.map((idea) => {
                 const exists = day.extraTasks.some((t) => t.text === idea)
                 return (
