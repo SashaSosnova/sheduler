@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { formatDuration } from './data'
+import { playDing } from './sound'
 
 type Props = {
   seconds: number
@@ -45,6 +46,7 @@ export function Timer({ seconds, rounds, onCanCompleteChange }: Props) {
         setRunning(false)
         endAt.current = null
         setCompletedRounds((n) => Math.min(totalRounds, n + 1))
+        playDing()
         try {
           navigator.vibrate?.([200, 80, 200])
         } catch {

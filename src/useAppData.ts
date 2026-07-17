@@ -12,6 +12,11 @@ import {
   type FamilyStatus,
 } from './familySync'
 import { isFirebaseConfigured } from './firebase'
+import {
+  ROBLOX_STREAK_REWARDS,
+  applyPendingRobloxStreakRewards,
+  currentStreak,
+} from './progress'
 import type { AppData, ChewEntry, DayLog } from './types'
 
 const STORAGE_KEY = 'vacation-planner-v2'
@@ -21,7 +26,35 @@ type StoredData = {
   chewEntries?: ChewEntry[]
   cookingLeft?: number
   routineId?: string
+  claimedRobloxStreaks?: number[]
+  bestStreak?: number
   exercises?: unknown
+}
+
+function normalizeStreakInts(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((n): n is number => typeof n === 'number' && Number.isFinite(n))
+    .map((n) => Math.floor(n))
+    .filter((n) => n > 0)
+}
+
+function hydrateAppData(partial: Partial<AppData>): AppData {
+  const base = defaultAppData()
+  return applyPendingRobloxStreakRewards({
+    ...base,
+    ...partial,
+    exercises: DEFAULT_EXERCISES,
+    days: partial.days ?? {},
+    chewEntries: partial.chewEntries ?? [],
+    cookingLeft: partial.cookingLeft ?? 5,
+    routineId: ROUTINE_ID,
+    claimedRobloxStreaks: normalizeStreakInts(partial.claimedRobloxStreaks),
+    bestStreak:
+      typeof partial.bestStreak === 'number' && Number.isFinite(partial.bestStreak)
+        ? Math.max(0, Math.floor(partial.bestStreak))
+        : 0,
+  })
 }
 
 function load(): AppData {
@@ -32,27 +65,51 @@ function load(): AppData {
     if (!source) return defaultAppData()
 
     const parsed = JSON.parse(source) as StoredData
-    return {
-      exercises: DEFAULT_EXERCISES,
-      days: parsed.days ?? {},
+    const days = parsed.days ?? {}
+    const streak = currentStreak(days)
+    // Legacy saves had no claim list — mark already-reached tiers as claimed
+    // so upgrade doesn't dump a huge catch-up Roblox bonus in one day.
+    const claimedRobloxStreaks = Array.isArray(parsed.claimedRobloxStreaks)
+      ? parsed.claimedRobloxStreaks
+      : ROBLOX_STREAK_REWARDS.filter((r) => streak >= r.streak).map(
+          (r) => r.streak,
+        )
+    const bestStreak =
+      typeof parsed.bestStreak === 'number' && Number.isFinite(parsed.bestStreak)
+        ? Math.max(0, Math.floor(parsed.bestStreak), streak)
+        : streak
+    return hydrateAppData({
+      days,
       chewEntries: parsed.chewEntries ?? [],
       cookingLeft: parsed.cookingLeft ?? 5,
-      routineId: ROUTINE_ID,
-    }
+      claimedRobloxStreaks,
+      bestStreak,
+    })
   } catch {
     return defaultAppData()
   }
 }
 
 function applyCloud(prev: AppData, payload: CloudPayload): AppData {
-  return {
+  const days = payload.days ?? {}
+  const streak = currentStreak(days)
+  const claimedRobloxStreaks =
+    payload.claimedRobloxStreaks ??
+    prev.claimedRobloxStreaks ??
+    ROBLOX_STREAK_REWARDS.filter((r) => streak >= r.streak).map((r) => r.streak)
+  const bestStreak = Math.max(
+    payload.bestStreak ?? 0,
+    prev.bestStreak ?? 0,
+    streak,
+  )
+  return hydrateAppData({
     ...prev,
-    exercises: DEFAULT_EXERCISES,
-    days: payload.days ?? {},
+    days,
     chewEntries: payload.chewEntries ?? [],
     cookingLeft: payload.cookingLeft ?? prev.cookingLeft,
-    routineId: ROUTINE_ID,
-  }
+    claimedRobloxStreaks,
+    bestStreak,
+  })
 }
 
 export function useAppData() {
@@ -80,18 +137,11 @@ export function useAppData() {
       chewEntries: data.chewEntries,
       cookingLeft: data.cookingLeft,
       routineId: ROUTINE_ID,
+      claimedRobloxStreaks: data.claimedRobloxStreaks ?? [],
+      bestStreak: data.bestStreak ?? 0,
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore))
   }, [data])
-
-  useEffect(() => {
-    setData((prev) => ({
-      ...prev,
-      exercises: DEFAULT_EXERCISES,
-      chewEntries: prev.chewEntries ?? [],
-      routineId: ROUTINE_ID,
-    }))
-  }, [])
 
   const schedulePush = useCallback((next: AppData) => {
     const code = loadFamilyCode()
@@ -123,11 +173,7 @@ export function useAppData() {
     (action: AppData | ((prev: AppData) => AppData)) => {
       setData((prev) => {
         const next = typeof action === 'function' ? action(prev) : action
-        const normalized = {
-          ...next,
-          exercises: DEFAULT_EXERCISES,
-          routineId: ROUTINE_ID,
-        }
+        const normalized = hydrateAppData(next)
         schedulePush(normalized)
         return normalized
       })

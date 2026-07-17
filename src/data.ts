@@ -3,12 +3,11 @@ import type { AppData, DayExtraTask, DayLog, Exercise, MustDoId, ScreenSlot } fr
 export const ROUTINE_ID = 'daniil-hw-28-v5'
 
 export const MUST_DO_ITEMS: { id: MustDoId; label: string }[] = [
-  { id: 'wash-am', label: 'Умыться утром' },
-  { id: 'exercise', label: 'Зарядка (ДЗ №28)' },
-  { id: 'chew', label: 'Дневник жевания' },
-  { id: 'read', label: '1 глава книги' },
-  { id: 'create', label: 'Творчество / саморазвитие' },
-  { id: 'wash-pm', label: 'Помыться вечером' },
+  { id: 'wash-am', label: 'Почистить зубы' },
+  { id: 'exercise', label: 'Сделать зарядку' },
+  { id: 'chew', label: 'Заполнить дневник жевания' },
+  { id: 'read', label: 'Почитать книгу' },
+  { id: 'create', label: 'Заняться творчеством' },
 ]
 
 export const CHEW_FOODS = ['Морковь', 'Яблоко'] as const
@@ -23,17 +22,18 @@ export const CREATE_IDEAS = [
   'Что-то смастерить',
 ]
 
-/** Quick-add chips for one-off household / day tasks */
-export const EXTRA_TASK_IDEAS = [
-  'Убрать в комнате',
-  'Пропылесосить',
-  'Выбросить мусор',
-  'Помочь с ужином',
-]
+/** Quick-add chips — empty so chores are typed in, not suggested by default */
+export const EXTRA_TASK_IDEAS: string[] = []
 
 export const SCREEN_LIMITS = {
   roblox: { label: 'Roblox', seconds: 40 * 60 },
 } as const
+
+/** Must-do items that should look “main” in the checklist */
+export const MAIN_MUST_DO: MustDoId[] = ['exercise', 'chew']
+
+/** Checked only when completed inside the app — not by tapping the checkbox */
+export const APP_LOCKED_MUST_DO: MustDoId[] = ['exercise', 'chew']
 
 export function emptyScreenSlot(limitSec: number): ScreenSlot {
   return {
@@ -452,10 +452,13 @@ export function emptyDayLog(date: string): DayLog {
     mode: isCookingWeekday(date) ? 'cooking' : 'home',
     mustDo: {},
     exercisesDone: {},
+    workoutStartedAt: null,
+    workoutFinishedAt: null,
     note: '',
     outing: 'none',
     extraTasks: [],
     createNote: '',
+    robloxBonusMin: 0,
     screens: {
       roblox: emptyScreenSlot(SCREEN_LIMITS.roblox.seconds),
     },
@@ -488,8 +491,11 @@ export function normalizeDayLog(date: string, raw?: Partial<DayLog> | null): Day
     date,
     mustDo: raw.mustDo ?? {},
     exercisesDone: raw.exercisesDone ?? {},
+    workoutStartedAt: normalizeTimestamp(raw.workoutStartedAt),
+    workoutFinishedAt: normalizeTimestamp(raw.workoutFinishedAt),
     createNote: raw.createNote ?? '',
     extraTasks: normalizeExtraTasks(raw.extraTasks),
+    robloxBonusMin: normalizeNonNegInt(raw.robloxBonusMin),
     screens: {
       roblox: normalizeScreenSlot(
         SCREEN_LIMITS.roblox.seconds,
@@ -497,6 +503,32 @@ export function normalizeDayLog(date: string, raw?: Partial<DayLog> | null): Day
       ),
     },
   }
+}
+
+function normalizeNonNegInt(raw: unknown): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return 0
+  return Math.max(0, Math.floor(raw))
+}
+
+function normalizeTimestamp(raw: unknown): number | null {
+  return typeof raw === 'number' && Number.isFinite(raw) ? raw : null
+}
+
+/** Elapsed workout seconds from first check to full completion, if finished. */
+export function workoutDurationSec(day: DayLog): number | null {
+  if (day.workoutStartedAt == null || day.workoutFinishedAt == null) return null
+  return Math.max(0, Math.floor((day.workoutFinishedAt - day.workoutStartedAt) / 1000))
+}
+
+/** Elapsed chew seconds from first filled cell to save, if tracked. */
+export function chewDurationSec(entry: {
+  startedAt?: number
+  createdAt: number
+}): number | null {
+  if (typeof entry.startedAt !== 'number' || !Number.isFinite(entry.startedAt)) {
+    return null
+  }
+  return Math.max(0, Math.floor((entry.createdAt - entry.startedAt) / 1000))
 }
 
 function normalizeScreenSlot(
@@ -536,6 +568,8 @@ export function defaultAppData(): AppData {
     chewEntries: [],
     cookingLeft: 5,
     routineId: ROUTINE_ID,
+    claimedRobloxStreaks: [],
+    bestStreak: 0,
   }
 }
 

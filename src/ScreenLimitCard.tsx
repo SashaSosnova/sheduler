@@ -5,11 +5,21 @@ import type { ScreenKind, ScreenSlot } from './types'
 type Props = {
   kind: ScreenKind
   slot: ScreenSlot
+  /** Override today's limit (e.g. streak bonus) */
+  limitSeconds?: number
+  bonusNote?: string
   onChange: (slot: ScreenSlot) => void
 }
 
-export function ScreenLimitCard({ kind, slot, onChange }: Props) {
-  const limit = SCREEN_LIMITS[kind]
+export function ScreenLimitCard({
+  kind,
+  slot,
+  limitSeconds,
+  bonusNote,
+  onChange,
+}: Props) {
+  const meta = SCREEN_LIMITS[kind]
+  const limitSec = limitSeconds ?? meta.seconds
   const [now, setNow] = useState(Date.now())
   const finishedRef = useRef(false)
   /** Remaining seconds when the current session was started/resumed */
@@ -34,7 +44,7 @@ export function ScreenLimitCard({ kind, slot, onChange }: Props) {
   useEffect(() => {
     if (!running || remaining > 0 || finishedRef.current) return
     finishedRef.current = true
-    const started = sessionStartRemaining.current ?? limit.seconds
+    const started = sessionStartRemaining.current ?? limitSec
     sessionStartRemaining.current = null
     onChange({
       endsAt: null,
@@ -47,11 +57,11 @@ export function ScreenLimitCard({ kind, slot, onChange }: Props) {
     } catch {
       /* ignore */
     }
-  }, [running, remaining, onChange, slot.usedSec, limit.seconds])
+  }, [running, remaining, onChange, slot.usedSec, limitSec])
 
   function start() {
     if (slot.finished) return
-    const sec = slot.remainingSec > 0 ? slot.remainingSec : limit.seconds
+    const sec = slot.remainingSec > 0 ? slot.remainingSec : limitSec
     sessionStartRemaining.current = sec
     onChange({
       endsAt: Date.now() + sec * 1000,
@@ -92,11 +102,11 @@ export function ScreenLimitCard({ kind, slot, onChange }: Props) {
   }
 
   function resetToday() {
-    if (!confirm(`Сбросить лимит «${limit.label}» на сегодня?`)) return
+    if (!confirm(`Сбросить лимит «${meta.label}» на сегодня?`)) return
     sessionStartRemaining.current = null
     onChange({
       endsAt: null,
-      remainingSec: limit.seconds,
+      remainingSec: limitSec,
       finished: false,
       usedSec: 0,
     })
@@ -106,17 +116,18 @@ export function ScreenLimitCard({ kind, slot, onChange }: Props) {
     ? 'Лимит на сегодня использован'
     : running
       ? 'Идёт таймер — когда прозвенит, стоп'
-      : remaining < limit.seconds
+      : remaining < limitSec
         ? 'На паузе — можно продолжить'
         : 'Ещё не запускал сегодня'
 
   return (
     <div className={`screen-limit ${slot.finished ? 'used' : ''} ${running ? 'live' : ''}`}>
       <div className="card-title-row">
-        <h3>{limit.label}</h3>
-        <span className="pill">{Math.round(limit.seconds / 60)} мин</span>
+        <h3>{meta.label}</h3>
+        <span className="pill">{Math.round(limitSec / 60)} мин</span>
       </div>
       <p className="hint">{status}</p>
+      {bonusNote ? <p className="hint">{bonusNote}</p> : null}
       {slot.usedSec > 0 ? (
         <p className="hint">Сегодня сыграно: {formatPlayTime(slot.usedSec)}</p>
       ) : null}
@@ -124,7 +135,7 @@ export function ScreenLimitCard({ kind, slot, onChange }: Props) {
       <div className="row-gap">
         {!slot.finished && !running ? (
           <button type="button" className="btn primary" onClick={start}>
-            {remaining < limit.seconds ? 'Продолжить' : 'Начать'}
+            {remaining < limitSec ? 'Продолжить' : 'Начать'}
           </button>
         ) : null}
         {running ? (

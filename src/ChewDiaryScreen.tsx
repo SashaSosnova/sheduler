@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CHEW_FOODS, normalizeDayLog, todayKey, uid } from './data'
+import {
+  CHEW_FOODS,
+  chewDurationSec,
+  formatPlayTime,
+  normalizeDayLog,
+  todayKey,
+  uid,
+} from './data'
 import type { AppData, ChewEntry } from './types'
 
 type Props = {
@@ -56,12 +63,16 @@ export function ChewDiaryScreen({ data, onChange, readOnly = false }: Props) {
   const [left, setLeft] = useState(EMPTY_SIDE)
   const [right, setRight] = useState(EMPTY_SIDE)
   const [copyStatus, setCopyStatus] = useState('')
+  /** Wall-clock start of the current fill session (first cell typed) */
+  const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null)
 
   const todayEntry = useMemo(() => {
     const list = (data.chewEntries ?? []).filter((e) => e.date === key)
     if (list.length === 0) return null
     return list.sort((a, b) => b.createdAt - a.createdAt)[0]
   }, [data.chewEntries, key])
+
+  const todayChewSec = todayEntry ? chewDurationSec(todayEntry) : null
 
   const allEntries = useMemo(() => {
     const byDate = new Map<string, ChewEntry>()
@@ -87,6 +98,7 @@ export function ChewDiaryScreen({ data, onChange, readOnly = false }: Props) {
       setCustomFood(fields.customFood)
       setLeft(fields.left)
       setRight(fields.right)
+      setSessionStartedAt(todayEntry.startedAt ?? null)
     }
     if (!todayEntry) {
       setEditing(false)
@@ -94,6 +106,7 @@ export function ChewDiaryScreen({ data, onChange, readOnly = false }: Props) {
       setCustomFood('')
       setLeft(EMPTY_SIDE())
       setRight(EMPTY_SIDE())
+      setSessionStartedAt(null)
     }
   }, [todayEntry, editing])
 
@@ -106,6 +119,9 @@ export function ChewDiaryScreen({ data, onChange, readOnly = false }: Props) {
 
   function setCell(side: 'left' | 'right', index: number, value: string) {
     const clean = value.replace(/[^\d]/g, '').slice(0, 3)
+    if (clean !== '' && sessionStartedAt == null) {
+      setSessionStartedAt(Date.now())
+    }
     if (side === 'left') {
       setLeft((prev) => prev.map((v, i) => (i === index ? clean : v)))
     } else {
@@ -115,13 +131,17 @@ export function ChewDiaryScreen({ data, onChange, readOnly = false }: Props) {
 
   function saveEntry() {
     if (!canSave) return
+    const now = Date.now()
+    const startedAt = todayEntry?.startedAt ?? sessionStartedAt ?? now
     const entry: ChewEntry = {
       id: todayEntry?.id ?? uid(),
       date: key,
       food: selectedFood,
       left: leftNums,
       right: rightNums,
-      createdAt: Date.now(),
+      startedAt,
+      // Keep first-save finish time so duration stays stable on edits
+      createdAt: todayEntry?.startedAt != null ? todayEntry.createdAt : now,
     }
     const withoutToday = (data.chewEntries ?? []).filter((e) => e.date !== key)
     const day = normalizeDayLog(key, data.days[key])
@@ -137,6 +157,7 @@ export function ChewDiaryScreen({ data, onChange, readOnly = false }: Props) {
       },
     })
     setEditing(false)
+    setSessionStartedAt(null)
   }
 
   async function copyReport() {
@@ -176,6 +197,9 @@ export function ChewDiaryScreen({ data, onChange, readOnly = false }: Props) {
             ? 'Сводка по дням. Заполнить можно только на телефоне ребёнка.'
             : '5 укусов слева и 5 справа. В ячейку — сколько раз жевал за укус.'}
         </p>
+        {todayChewSec != null ? (
+          <p className="sub">Сегодня жевание заняло {formatPlayTime(todayChewSec)}</p>
+        ) : null}
       </header>
 
       {todayEntry && !editing ? (
@@ -186,6 +210,9 @@ export function ChewDiaryScreen({ data, onChange, readOnly = false }: Props) {
           </p>
           <p className="hint">Левая: {sideText(todayEntry.left)}</p>
           <p className="hint">Правая: {sideText(todayEntry.right)}</p>
+          {todayChewSec != null ? (
+            <p className="hint">Жевание заняло {formatPlayTime(todayChewSec)}</p>
+          ) : null}
           {!readOnly ? (
             <div className="row-gap">
               <button type="button" className="btn" onClick={() => setEditing(true)}>
@@ -299,55 +326,57 @@ export function ChewDiaryScreen({ data, onChange, readOnly = false }: Props) {
         </>
       ) : null}
 
-      <section className="card">
-        <div className="card-title-row">
-          <h2>Сводка для миотерапевта</h2>
-          <span className="pill">{allEntries.length}</span>
-        </div>
-        <p className="hint">
-          Одна строка — один день. Можно скопировать или отправить сообщением.
-        </p>
-
-        {allEntries.length === 0 ? (
-          <p className="hint" style={{ marginTop: 10 }}>
-            Пока нечего отправлять — сначала сохрани запись за сегодня.
+      {readOnly ? (
+        <section className="card">
+          <div className="card-title-row">
+            <h2>Сводка для миотерапевта</h2>
+            <span className="pill">{allEntries.length}</span>
+          </div>
+          <p className="hint">
+            Одна строка — один день. Можно скопировать или отправить сообщением.
           </p>
-        ) : (
-          <>
-            <div className="chew-table-wrap">
-              <table className="chew-table">
-                <thead>
-                  <tr>
-                    <th>День</th>
-                    <th>Что жевал</th>
-                    <th>Левая</th>
-                    <th>Правая</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {allEntries.map((entry) => (
-                    <tr key={entry.id}>
-                      <td>{formatDateRu(entry.date)}</td>
-                      <td>{entry.food}</td>
-                      <td>{sideText(entry.left)}</td>
-                      <td>{sideText(entry.right)}</td>
+
+          {allEntries.length === 0 ? (
+            <p className="hint" style={{ marginTop: 10 }}>
+              Пока нечего отправлять — сначала сохрани запись за сегодня.
+            </p>
+          ) : (
+            <>
+              <div className="chew-table-wrap">
+                <table className="chew-table">
+                  <thead>
+                    <tr>
+                      <th>День</th>
+                      <th>Что жевал</th>
+                      <th>Левая</th>
+                      <th>Правая</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="row-gap">
-              <button type="button" className="btn primary" onClick={shareReport}>
-                Отправить
-              </button>
-              <button type="button" className="btn" onClick={copyReport}>
-                Скопировать текст
-              </button>
-            </div>
-            {copyStatus ? <p className="hint">{copyStatus}</p> : null}
-          </>
-        )}
-      </section>
+                  </thead>
+                  <tbody>
+                    {allEntries.map((entry) => (
+                      <tr key={entry.id}>
+                        <td>{formatDateRu(entry.date)}</td>
+                        <td>{entry.food}</td>
+                        <td>{sideText(entry.left)}</td>
+                        <td>{sideText(entry.right)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="row-gap">
+                <button type="button" className="btn primary" onClick={shareReport}>
+                  Отправить
+                </button>
+                <button type="button" className="btn" onClick={copyReport}>
+                  Скопировать текст
+                </button>
+              </div>
+              {copyStatus ? <p className="hint">{copyStatus}</p> : null}
+            </>
+          )}
+        </section>
+      ) : null}
     </div>
   )
 }

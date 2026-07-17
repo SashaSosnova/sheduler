@@ -2,10 +2,13 @@ import { useEffect, useState } from 'react'
 import {
   MUST_DO_ITEMS,
   SCREEN_LIMITS,
+  chewDurationSec,
   formatPlayTime,
   normalizeDayLog,
   todayKey,
+  workoutDurationSec,
 } from './data'
+import { robloxLimitSeconds } from './progress'
 import type { AppData } from './types'
 
 type Props = {
@@ -26,13 +29,15 @@ export function ParentSummaryScreen({
   const doneCount = MUST_DO_ITEMS.filter((i) => day.mustDo[i.id]).length
   const exerciseDone = data.exercises.filter((e) => day.exercisesDone[e.id]).length
   const exerciseTotal = data.exercises.length
+  const workoutSec = workoutDurationSec(day)
   const extraDone = day.extraTasks.filter((t) => t.done).length
   const chewToday = (data.chewEntries ?? [])
     .filter((e) => e.date === key)
     .sort((a, b) => b.createdAt - a.createdAt)[0]
+  const chewSec = chewToday ? chewDurationSec(chewToday) : null
 
   const roblox = day.screens.roblox
-  const limitSec = SCREEN_LIMITS.roblox.seconds
+  const limitSec = robloxLimitSeconds(data.days, key)
   const running = Boolean(roblox.endsAt && !roblox.finished)
   const [now, setNow] = useState(Date.now())
 
@@ -161,6 +166,11 @@ export function ParentSummaryScreen({
               ? 'Весь комплекс отмечен.'
               : `Сделано ${exerciseDone} из ${exerciseTotal}.`}
         </p>
+        {workoutSec != null ? (
+          <p className="sub" style={{ marginTop: 8 }}>
+            Сегодня зарядка заняла {formatPlayTime(workoutSec)}
+          </p>
+        ) : null}
         <div className="row-gap">
           <button type="button" className="btn" onClick={onOpenExercises}>
             Смотреть упражнения →
@@ -182,6 +192,11 @@ export function ParentSummaryScreen({
             </p>
             <p className="hint">Левая: {chewToday.left.join(', ')}</p>
             <p className="hint">Правая: {chewToday.right.join(', ')}</p>
+            {chewSec != null ? (
+              <p className="sub" style={{ marginTop: 8 }}>
+                Сегодня жевание заняло {formatPlayTime(chewSec)}
+              </p>
+            ) : null}
           </>
         ) : (
           <p className="hint">Сегодня ещё не заполнено.</p>

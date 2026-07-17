@@ -3,6 +3,7 @@ import type { TabId, UserRole } from './types'
 const ALL_TABS: { id: TabId; label: string }[] = [
   { id: 'today', label: 'Сегодня' },
   { id: 'progress', label: 'Прогресс' },
+  { id: 'calendar', label: 'Дни' },
   { id: 'exercises', label: 'Зарядка' },
   { id: 'chew', label: 'Жевание' },
   { id: 'settings', label: 'Ещё' },
@@ -14,15 +15,10 @@ type Props = {
   onChange: (tab: TabId) => void
 }
 
-export function BottomNav({ active, role, onChange }: Props) {
-  const tabs =
-    role === 'parent'
-      ? ALL_TABS.filter((tab) => tab.id !== 'progress')
-      : ALL_TABS
-
+export function BottomNav({ active, onChange }: Props) {
   return (
     <nav className="bottom-nav" aria-label="Главное меню">
-      {tabs.map((tab) => (
+      {ALL_TABS.map((tab) => (
         <button
           key={tab.id}
           type="button"

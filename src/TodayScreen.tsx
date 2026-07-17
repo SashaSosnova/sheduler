@@ -1,13 +1,25 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { Confetti } from './Confetti'
 import {
+  APP_LOCKED_MUST_DO,
   CREATE_IDEAS,
   EXTRA_TASK_IDEAS,
+  MAIN_MUST_DO,
   MUST_DO_ITEMS,
+  SCREEN_LIMITS,
+  chewDurationSec,
+  formatPlayTime,
   normalizeDayLog,
   todayKey,
   uid,
+  workoutDurationSec,
 } from './data'
+import {
+  robloxBonusMinutes,
+  robloxLimitSeconds,
+} from './progress'
 import { ScreenLimitCard } from './ScreenLimitCard'
+import { playDing } from './sound'
 import type { AppData, MustDoId, ScreenKind, ScreenSlot } from './types'
 
 type Props = {
@@ -30,8 +42,32 @@ export function TodayScreen({
   const doneCount = MUST_DO_ITEMS.filter((i) => day.mustDo[i.id]).length
   const exerciseDone = data.exercises.filter((e) => day.exercisesDone[e.id]).length
   const exerciseTotal = data.exercises.length
+  const workoutSec = workoutDurationSec(day)
+  const chewToday = (data.chewEntries ?? [])
+    .filter((e) => e.date === key)
+    .sort((a, b) => b.createdAt - a.createdAt)[0]
+  const chewSec = chewToday ? chewDurationSec(chewToday) : null
+  const exerciseComplete =
+    exerciseTotal > 0 && exerciseDone === exerciseTotal
+  const chewComplete = Boolean(chewToday)
   const extraDone = day.extraTasks.filter((t) => t.done).length
   const [extraDraft, setExtraDraft] = useState('')
+  const [celebrate, setCelebrate] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
+  const prevDoneRef = useRef(doneCount)
+  const robloxLimit = robloxLimitSeconds(data.days, key)
+  const robloxBonusMin = robloxBonusMinutes(data.days, key)
+
+  useEffect(() => {
+    if (
+      prevDoneRef.current < MUST_DO_ITEMS.length &&
+      doneCount >= MUST_DO_ITEMS.length
+    ) {
+      playDing()
+      setCelebrate(true)
+    }
+    prevDoneRef.current = doneCount
+  }, [doneCount])
 
   function patchDay(partial: Partial<typeof day>) {
     const next = normalizeDayLog(key, { ...day, ...partial })
@@ -44,10 +80,59 @@ export function TodayScreen({
     })
   }
 
+  // Keep mustDo in sync: exercise/chew only from real app completion
+  useEffect(() => {
+    if (
+      day.mustDo.exercise === exerciseComplete &&
+      day.mustDo.chew === chewComplete
+    ) {
+      return
+    }
+    patchDay({
+      mustDo: {
+        ...day.mustDo,
+        exercise: exerciseComplete,
+        chew: chewComplete,
+      },
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exerciseComplete, chewComplete, day.mustDo.exercise, day.mustDo.chew])
+
+  // Sync unused Roblox slot to today's limit (base + achievement bonuses)
+  const robloxSlot = day.screens.roblox
+  useEffect(() => {
+    if (robloxSlot.finished || robloxSlot.endsAt || robloxSlot.usedSec > 0) return
+    if (robloxSlot.remainingSec === robloxLimit) return
+    // Only auto-adjust when still at a "full unused" amount (base or a prior bonus)
+    const base = SCREEN_LIMITS.roblox.seconds
+    if (robloxSlot.remainingSec < base) return
+    patchDay({
+      screens: {
+        ...day.screens,
+        roblox: { ...robloxSlot, remainingSec: robloxLimit },
+      },
+    })
+    // Intentionally narrow deps: only re-check when slot/limit change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    robloxLimit,
+    robloxSlot.remainingSec,
+    robloxSlot.finished,
+    robloxSlot.endsAt,
+    robloxSlot.usedSec,
+  ])
+
   function toggleMust(id: MustDoId) {
+    if (APP_LOCKED_MUST_DO.includes(id)) return
     patchDay({
       mustDo: { ...day.mustDo, [id]: !day.mustDo[id] },
     })
+  }
+
+  function isMustChecked(id: MustDoId): boolean {
+    if (id === 'exercise') return exerciseComplete
+    if (id === 'chew') return chewComplete
+    return Boolean(day.mustDo[id])
   }
 
   function setScreen(kind: ScreenKind, slot: ScreenSlot) {
@@ -88,6 +173,7 @@ export function TodayScreen({
 
   return (
     <div className="screen">
+      <Confetti show={celebrate} onDone={() => setCelebrate(false)} />
       <header className="screen-head">
         <div className="screen-head-row">
           <p className="eyebrow">Сегодня</p>
@@ -117,69 +203,131 @@ export function TodayScreen({
             {doneCount}/{MUST_DO_ITEMS.length}
           </span>
         </div>
-        <p className="hint">Время можно сдвигать — главное отметить сделанное.</p>
+        <p className="hint">
+          Зарядку и жевание отмечает приложение. Остальное можно отметить самому.
+        </p>
         <ul className="check-list">
-          {MUST_DO_ITEMS.map((item) => (
-            <li key={item.id}>
-              <label className="check-row">
+          {MUST_DO_ITEMS.map((item) => {
+            const locked = APP_LOCKED_MUST_DO.includes(item.id)
+            return (
+            <li
+              key={item.id}
+              className={MAIN_MUST_DO.includes(item.id) ? 'must-main' : undefined}
+            >
+              <label
+                className={`check-row ${locked ? 'locked' : ''}`}
+                onClick={locked ? (e) => e.preventDefault() : undefined}
+              >
                 <input
                   type="checkbox"
-                  checked={Boolean(day.mustDo[item.id])}
+                  checked={isMustChecked(item.id)}
+                  readOnly={locked}
+                  tabIndex={locked ? -1 : undefined}
+                  aria-readonly={locked || undefined}
                   onChange={() => toggleMust(item.id)}
                 />
-                <span>{item.label}</span>
+                <span>
+                  {item.label}
+                  {MAIN_MUST_DO.includes(item.id) ? (
+                    <span className="must-main-tag"> главное</span>
+                  ) : null}
+                </span>
               </label>
               {item.id === 'exercise' ? (
-                <button type="button" className="linkish" onClick={onOpenExercises}>
-                  Открыть упражнения →
-                </button>
+                <>
+                  {workoutSec != null ? (
+                    <p className="hint">
+                      Сегодня зарядка заняла {formatPlayTime(workoutSec)}
+                    </p>
+                  ) : null}
+                  <button type="button" className="linkish" onClick={onOpenExercises}>
+                    Открыть упражнения →
+                  </button>
+                </>
               ) : null}
               {item.id === 'chew' ? (
-                <button type="button" className="linkish" onClick={onOpenChew}>
-                  Открыть дневник жевания →
-                </button>
+                <>
+                  {chewSec != null ? (
+                    <p className="hint">
+                      Сегодня жевание заняло {formatPlayTime(chewSec)}
+                    </p>
+                  ) : null}
+                  <button type="button" className="linkish" onClick={onOpenChew}>
+                    Открыть дневник жевания →
+                  </button>
+                </>
               ) : null}
               {item.id === 'create' ? (
                 <div className="create-box">
-                  <p className="hint">Выбери одно занятие на сегодня:</p>
-                  <div className="chip-row">
-                    {CREATE_IDEAS.map((idea) => (
-                      <button
-                        key={idea}
-                        type="button"
-                        className={day.createNote === idea ? 'chip active' : 'chip'}
-                        onClick={() =>
-                          patchDay({
-                            createNote: idea,
-                            mustDo: { ...day.mustDo, create: true },
-                          })
-                        }
-                      >
-                        {idea}
-                      </button>
-                    ))}
-                  </div>
-                  <label className="field">
-                    <span>Или своё</span>
-                    <input
-                      value={CREATE_IDEAS.includes(day.createNote) ? '' : day.createNote}
-                      onChange={(e) => {
-                        const v = e.target.value
-                        patchDay({
-                          createNote: v,
-                          mustDo: {
-                            ...day.mustDo,
-                            create: Boolean(v.trim()),
-                          },
-                        })
-                      }}
-                      placeholder="Напиши сам"
-                    />
-                  </label>
+                  {day.createNote ? (
+                    <p className="hint create-chosen">
+                      Сегодня: <strong>{day.createNote}</strong>
+                    </p>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="linkish"
+                    onClick={() => setCreateOpen((v) => !v)}
+                  >
+                    {createOpen
+                      ? 'Скрыть выбор'
+                      : day.createNote
+                        ? 'Сменить занятие →'
+                        : 'Выбрать занятие →'}
+                  </button>
+                  {createOpen ? (
+                    <div className="create-picker">
+                      <div className="create-chip-grid">
+                        {CREATE_IDEAS.map((idea) => (
+                          <button
+                            key={idea}
+                            type="button"
+                            className={
+                              day.createNote === idea ? 'chip active' : 'chip'
+                            }
+                            onClick={() => {
+                              patchDay({
+                                createNote: idea,
+                                mustDo: { ...day.mustDo, create: true },
+                              })
+                              setCreateOpen(false)
+                            }}
+                          >
+                            {idea}
+                          </button>
+                        ))}
+                      </div>
+                      <label className="field">
+                        <span>Или своё</span>
+                        <input
+                          value={
+                            CREATE_IDEAS.includes(day.createNote)
+                              ? ''
+                              : day.createNote
+                          }
+                          onChange={(e) => {
+                            const v = e.target.value
+                            patchDay({
+                              createNote: v,
+                              mustDo: {
+                                ...day.mustDo,
+                                create: Boolean(v.trim()),
+                              },
+                            })
+                          }}
+                          onBlur={() => {
+                            if (day.createNote.trim()) setCreateOpen(false)
+                          }}
+                          placeholder="Напиши сам"
+                        />
+                      </label>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </li>
-          ))}
+            )
+          })}
         </ul>
       </section>
 
@@ -224,25 +372,29 @@ export function TodayScreen({
           </ul>
         ) : null}
 
-        <p className="hint" style={{ marginTop: 12 }}>
-          Быстро добавить:
-        </p>
-        <div className="chip-row">
-          {EXTRA_TASK_IDEAS.map((idea) => {
-            const exists = day.extraTasks.some((t) => t.text === idea)
-            return (
-              <button
-                key={idea}
-                type="button"
-                className={exists ? 'chip active' : 'chip'}
-                disabled={exists}
-                onClick={() => addExtraTask(idea)}
-              >
-                {idea}
-              </button>
-            )
-          })}
-        </div>
+        {EXTRA_TASK_IDEAS.length > 0 ? (
+          <>
+            <p className="hint" style={{ marginTop: 12 }}>
+              Быстро добавить:
+            </p>
+            <div className="chip-row">
+              {EXTRA_TASK_IDEAS.map((idea) => {
+                const exists = day.extraTasks.some((t) => t.text === idea)
+                return (
+                  <button
+                    key={idea}
+                    type="button"
+                    className={exists ? 'chip active' : 'chip'}
+                    disabled={exists}
+                    onClick={() => addExtraTask(idea)}
+                  >
+                    {idea}
+                  </button>
+                )
+              })}
+            </div>
+          </>
+        ) : null}
 
         <div className="add-row">
           <label className="field grow">
@@ -280,6 +432,12 @@ export function TodayScreen({
           <ScreenLimitCard
             kind="roblox"
             slot={day.screens.roblox}
+            limitSeconds={robloxLimit}
+            bonusNote={
+              robloxBonusMin > 0
+                ? `Сегодня бонус: +${robloxBonusMin} мин (разово за серию)`
+                : undefined
+            }
             onChange={(slot) => setScreen('roblox', slot)}
           />
         </div>

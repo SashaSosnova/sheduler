@@ -3,7 +3,13 @@ export type DayMode = 'home' | 'outing' | 'cooking'
 /** Per-device role — chosen once at first launch */
 export type UserRole = 'child' | 'parent'
 
-export type TabId = 'today' | 'progress' | 'exercises' | 'chew' | 'settings'
+export type TabId =
+  | 'today'
+  | 'progress'
+  | 'calendar'
+  | 'exercises'
+  | 'chew'
+  | 'settings'
 
 export type Exercise = {
   id: string
@@ -46,6 +52,8 @@ export type ChewEntry = {
   /** Chews per bite on the right side (5 bites) */
   right: number[]
   createdAt: number
+  /** Unix ms when the first chew cell was filled (optional for older entries) */
+  startedAt?: number
 }
 
 /** One-off important task for a single day (not part of the fixed minimum) */
@@ -60,6 +68,10 @@ export type DayLog = {
   mode: DayMode
   mustDo: Partial<Record<MustDoId, boolean>>
   exercisesDone: Record<string, boolean>
+  /** Unix ms of the first exercise check today */
+  workoutStartedAt: number | null
+  /** Unix ms when the full routine was completed */
+  workoutFinishedAt: number | null
   note: string
   outing: string
   /** One-time must-dos for this day only */
@@ -67,6 +79,8 @@ export type DayLog = {
   /** What creative thing they did */
   createNote: string
   screens: Record<ScreenKind, ScreenSlot>
+  /** One-day Roblox bonus minutes claimed for this date (not permanent) */
+  robloxBonusMin: number
 }
 
 export type AppData = {
@@ -76,4 +90,8 @@ export type AppData = {
   cookingLeft: number
   /** Homework set id — bump when replacing the built-in routine */
   routineId: string
+  /** Streak milestones already paid out (one-time Roblox day bonuses) */
+  claimedRobloxStreaks: number[]
+  /** Best consecutive perfect-day streak ever (stickers stay unlocked) */
+  bestStreak: number
 }

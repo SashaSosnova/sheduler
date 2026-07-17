@@ -20,6 +20,8 @@ export type CloudPayload = {
   days: Record<string, DayLog>
   chewEntries: ChewEntry[]
   cookingLeft: number
+  claimedRobloxStreaks?: number[]
+  bestStreak?: number
   updatedAt: number
 }
 
@@ -90,6 +92,8 @@ export function toCloudPayload(data: AppData, updatedAt = Date.now()): CloudPayl
     days: data.days,
     chewEntries: data.chewEntries ?? [],
     cookingLeft: data.cookingLeft,
+    claimedRobloxStreaks: data.claimedRobloxStreaks ?? [],
+    bestStreak: data.bestStreak ?? 0,
     updatedAt,
   }
 }

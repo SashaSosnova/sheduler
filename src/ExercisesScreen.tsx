@@ -2,10 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ROUTINE_NOTE,
   formatDuration,
+  formatPlayTime,
   groupExercises,
   normalizeDayLog,
   todayKey,
+  workoutDurationSec,
 } from './data'
+import { playDing } from './sound'
 import { Timer, parseTimerRounds } from './Timer'
 import type { AppData } from './types'
 
@@ -24,6 +27,7 @@ export function ExercisesScreen({ data, onChange, readOnly = false }: Props) {
 
   const doneCount = data.exercises.filter((e) => day.exercisesDone[e.id]).length
   const timedCount = data.exercises.filter((e) => e.durationSec > 0).length
+  const workoutSec = workoutDurationSec(day)
   const groups = useMemo(() => groupExercises(data.exercises), [data.exercises])
   const active = data.exercises.find((e) => e.id === activeId) ?? null
   const sheetOpen = Boolean(active && active.durationSec > 0)
@@ -44,9 +48,29 @@ export function ExercisesScreen({ data, onChange, readOnly = false }: Props) {
   }, [sheetOpen, activeId])
 
   function patchDayExercises(exercisesDone: Record<string, boolean>) {
+    const now = Date.now()
     const allDone =
       data.exercises.length > 0 &&
       data.exercises.every((e) => exercisesDone[e.id])
+    const anyDone = data.exercises.some((e) => exercisesDone[e.id])
+
+    let workoutStartedAt = day.workoutStartedAt
+    let workoutFinishedAt = day.workoutFinishedAt
+
+    if (!anyDone) {
+      workoutStartedAt = null
+      workoutFinishedAt = null
+    } else {
+      if (workoutStartedAt == null) workoutStartedAt = now
+      workoutFinishedAt = allDone
+        ? workoutFinishedAt ?? now
+        : null
+    }
+
+    if (allDone && day.workoutFinishedAt == null) {
+      playDing()
+    }
+
     onChange({
       ...data,
       days: {
@@ -54,9 +78,11 @@ export function ExercisesScreen({ data, onChange, readOnly = false }: Props) {
         [key]: {
           ...day,
           exercisesDone,
+          workoutStartedAt,
+          workoutFinishedAt,
           mustDo: {
             ...day.mustDo,
-            exercise: allDone ? true : day.mustDo.exercise,
+            exercise: allDone,
           },
         },
       },
@@ -82,6 +108,11 @@ export function ExercisesScreen({ data, onChange, readOnly = false }: Props) {
           Сегодня {doneCount} из {data.exercises.length}
           {readOnly ? '' : ` · с таймером: ${timedCount}`}
         </p>
+        {workoutSec != null ? (
+          <p className="sub workout-time">
+            Сегодня зарядка заняла {formatPlayTime(workoutSec)}
+          </p>
+        ) : null}
       </header>
 
       {readOnly ? (

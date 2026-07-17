@@ -98,11 +98,17 @@ jobs:
           gh release create apk-latest \
             release/sheduler.apk \
             release/kanikuly.apk \
-            --title "Sheduler 2.4" \
+            --title "Sheduler 2.5" \
             --notes "$(cat <<'EOF'
-          **Sheduler v2.4** — APK для установки с файла (без adb).
+          **Sheduler v2.5** — APK для установки с файла (без adb).
 
-          Новый package id: `com.sosnova.sheduler` (не конфликтует со старыми установками).
+          Что нового:
+          - прогресс: уровни со скинами, стикеры-достижения и вау-экран при разблокировке
+          - вкладка «Дни»: календарь со звёздочками и сводкой дня
+          - бонусы Roblox за серии идеальных дней
+          - напоминания и мелкие правки must-do
+
+          Package id: `com.sosnova.sheduler`.
 
           Как поставить на Samsung:
           1. Удали старое приложение Kanikuly / Sheduler, если есть.

@@ -1,25 +1,29 @@
-import { useMemo } from 'react'
-import { MUST_DO_ITEMS, normalizeDayLog, todayKey } from './data'
+import { useMemo, useState } from 'react'
+import { todayKey } from './data'
 import {
+  STICKERS,
   countPerfectDays,
   countStars,
   currentStreak,
-  dayStars,
+  isStickerUnlocked,
   levelFromStars,
+  levelRank,
   perfectDaysInMonth,
-  progressMilestones,
+  stickerNeedText,
+  stickerRewardText,
+  stickerUnlockHint,
+  unlockedStickers,
 } from './progress'
 import type { AppData } from './types'
 
 type Props = {
   data: AppData
-  onOpenToday: () => void
 }
 
-export function ProgressScreen({ data, onOpenToday }: Props) {
+export function ProgressScreen({ data }: Props) {
   const today = todayKey()
-  const todayLog = normalizeDayLog(today, data.days[today])
-  const todayDone = dayStars(todayLog)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const bestStreak = data.bestStreak ?? 0
 
   const stats = useMemo(() => {
     const stars = countStars(data.days)
@@ -27,33 +31,75 @@ export function ProgressScreen({ data, onOpenToday }: Props) {
     const streak = currentStreak(data.days, today)
     const perfectMonth = perfectDaysInMonth(data.days)
     const perfectTotal = countPerfectDays(data.days)
-    const milestones = progressMilestones({
-      streak,
-      perfectTotal,
-      level,
+    const stickers = unlockedStickers(perfectTotal, streak, bestStreak)
+    return {
       stars,
-    })
-    return { stars, level, intoLevel, need, streak, perfectMonth, milestones }
-  }, [data.days, today])
+      level,
+      intoLevel,
+      need,
+      streak,
+      perfectMonth,
+      perfectTotal,
+      stickers,
+    }
+  }, [data.days, bestStreak, today])
+
+  const selectedSticker =
+    STICKERS.find((s) => s.id === selectedId) ?? null
+  const selectedOpen = selectedSticker
+    ? isStickerUnlocked(
+        selectedSticker,
+        stats.perfectTotal,
+        stats.streak,
+        bestStreak,
+      )
+    : false
+  const selectedReward = selectedSticker
+    ? stickerRewardText(selectedSticker)
+    : null
 
   const levelPct = Math.min(100, (stats.intoLevel / stats.need) * 100)
+  const rank = levelRank(stats.level)
 
   return (
     <div className="screen">
       <header className="screen-head">
         <p className="eyebrow">Прогресс</p>
         <h1>Мой прогресс</h1>
-        <p className="sub">Звёзды за каждый пункт минимума · идеальный день — все 6</p>
       </header>
 
-      <section className="card accent">
-        <p className="eyebrow">Уровень</p>
-        <p className="progress-level">{stats.level}</p>
-        <p className="hint">
-          {stats.intoLevel} из {stats.need} звёзд до уровня {stats.level + 1}
-        </p>
-        <div className="play-bar" aria-hidden>
-          <div className="play-bar-fill" style={{ width: `${levelPct}%` }} />
+      <section className="level-card-wrap">
+        <div className="card level-card">
+          <div className="level-progress-box">
+            <p className="level-badge">
+              Уровень <span>{stats.level}</span>
+            </p>
+            <p className="level-hero-progress-hint">
+              <span className="level-star" aria-hidden>
+                ★
+              </span>
+              <span className="level-frac">
+                {stats.intoLevel}/{stats.need}
+              </span>
+              <span className="level-next"> до ур. {stats.level + 1}</span>
+            </p>
+            <div className="play-bar" aria-hidden>
+              <div
+                className="play-bar-fill"
+                style={{
+                  width: `${Math.max(levelPct, levelPct > 0 ? 8 : 0)}%`,
+                }}
+              />
+            </div>
+          </div>
+        </div>
+        <div className="level-hero-art-wrap" aria-hidden>
+          <img
+            className="level-hero-art"
+            src={rank.image}
+            alt=""
+            draggable={false}
+          />
         </div>
       </section>
 
@@ -74,43 +120,88 @@ export function ProgressScreen({ data, onOpenToday }: Props) {
 
       <section className="card">
         <div className="card-title-row">
-          <h2>Сегодня</h2>
-          <span className="pill">
-            {todayDone}/{MUST_DO_ITEMS.length}
+          <h2>Достижения</h2>
+          <span className="pill muted">
+            {stats.stickers.length}/{STICKERS.length}
           </span>
         </div>
-        <p className="sub">
-          {todayDone >= MUST_DO_ITEMS.length
-            ? 'Идеальный день! Так держать.'
-            : `Ещё ${MUST_DO_ITEMS.length - todayDone}, чтобы закрыть идеальный день.`}
-        </p>
-        <div className="play-bar" aria-hidden>
+        <div className="sticker-row">
+          {STICKERS.map((s) => {
+            const open = isStickerUnlocked(
+              s,
+              stats.perfectTotal,
+              stats.streak,
+              bestStreak,
+            )
+            const selected = selectedId === s.id
+            return (
+              <button
+                key={s.id}
+                type="button"
+                className={`sticker kind-${s.kind} ${open ? 'open' : 'locked'} ${selected ? 'selected' : ''}`}
+                aria-pressed={selected}
+                aria-label={
+                  open
+                    ? `${s.label}. ${s.quote}. ${s.detail}`
+                    : `${stickerNeedText(s)}. ${stickerUnlockHint(s)}`
+                }
+                onClick={() =>
+                  setSelectedId((prev) => (prev === s.id ? null : s.id))
+                }
+              >
+                <img
+                  className="sticker-art"
+                  src={s.image}
+                  alt=""
+                  draggable={false}
+                />
+                <span className="sticker-caption">
+                  <span className="sticker-label">
+                    {open ? s.label : stickerNeedText(s)}
+                  </span>
+                  {open ? (
+                    <span className="sticker-quote">«{s.quote}»</span>
+                  ) : null}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+        {selectedSticker ? (
           <div
-            className="play-bar-fill"
-            style={{
-              width: `${(todayDone / MUST_DO_ITEMS.length) * 100}%`,
-            }}
-          />
-        </div>
-        <div className="row-gap">
-          <button type="button" className="btn primary" onClick={onOpenToday}>
-            Открыть «Сегодня»
-          </button>
-        </div>
-      </section>
-
-      <section className="card">
-        <h2>Вехи</h2>
-        <ul className="status-list">
-          {stats.milestones.map((m) => (
-            <li key={m.id} className={m.done ? 'is-done' : ''}>
-              <span className="status-mark" aria-hidden>
-                {m.done ? '✓' : '○'}
-              </span>
-              <span>{m.label}</span>
-            </li>
-          ))}
-        </ul>
+            className={`sticker-detail ${selectedOpen ? 'is-open' : 'is-locked'}`}
+          >
+            <div className="sticker-detail-head">
+              <img
+                className={`sticker-art detail ${selectedOpen ? '' : 'is-locked'}`}
+                src={selectedSticker.image}
+                alt=""
+                draggable={false}
+              />
+              <div>
+                <p className="sticker-detail-title">
+                  {selectedOpen ? selectedSticker.label : 'Ещё закрыто'}
+                </p>
+                {selectedOpen ? (
+                  <p className="sticker-detail-quote">
+                    «{selectedSticker.quote}»
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            <p className="hint">{stickerUnlockHint(selectedSticker)}</p>
+            {selectedOpen ? (
+              <p className="hint" style={{ marginTop: 4 }}>
+                {selectedSticker.detail}
+              </p>
+            ) : null}
+            {selectedOpen && selectedReward ? (
+              <p className="hint" style={{ marginTop: 4, whiteSpace: 'pre-line' }}>
+                {selectedReward}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </section>
     </div>
   )

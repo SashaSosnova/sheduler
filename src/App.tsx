@@ -1,14 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { BottomNav } from './BottomNav'
+import { CalendarScreen } from './CalendarScreen'
 import { ChewDiaryScreen } from './ChewDiaryScreen'
 import { ExercisesScreen } from './ExercisesScreen'
 import { ParentSummaryScreen } from './ParentSummaryScreen'
 import { ProgressScreen } from './ProgressScreen'
 import { RoleSetupScreen } from './RoleSetupScreen'
 import { SettingsScreen } from './SettingsScreen'
+import { StickerUnlockOverlay } from './StickerUnlockOverlay'
 import { TodayScreen } from './TodayScreen'
 import type { TabId } from './types'
 import { useAppData } from './useAppData'
+import { useNotifications } from './useNotifications'
 import { useUserRole } from './useUserRole'
 import './App.css'
 
@@ -23,14 +26,9 @@ function App() {
     firebaseReady,
   } = useAppData()
   const { role, setRole } = useUserRole()
+  const notifications = useNotifications(role)
   const [tab, setTab] = useState<TabId>('today')
   const isParent = role === 'parent'
-
-  useEffect(() => {
-    if (isParent && tab === 'progress') {
-      setTab('today')
-    }
-  }, [isParent, tab])
 
   if (!role) {
     return (
@@ -63,9 +61,8 @@ function App() {
             />
           )
         ) : null}
-        {tab === 'progress' && !isParent ? (
-          <ProgressScreen data={data} onOpenToday={() => setTab('today')} />
-        ) : null}
+        {tab === 'progress' ? <ProgressScreen data={data} /> : null}
+        {tab === 'calendar' ? <CalendarScreen data={data} /> : null}
         {tab === 'exercises' ? (
           <ExercisesScreen data={data} onChange={setData} readOnly={isParent} />
         ) : null}
@@ -77,6 +74,13 @@ function App() {
             role={role}
             family={family}
             firebaseReady={firebaseReady}
+            notificationsEnabled={notifications.enabled}
+            notificationsSupported={notifications.supported}
+            notificationsBusy={notifications.busy}
+            notificationsDenied={notifications.denied}
+            onToggleNotifications={(v) => {
+              void notifications.setEnabled(v)
+            }}
             onCreateFamily={createFamilyCloud}
             onJoinFamily={joinFamilyCloud}
             onLeaveFamily={leaveFamilyCloud}
@@ -85,6 +89,7 @@ function App() {
         ) : null}
       </main>
       <BottomNav active={tab} role={role} onChange={setTab} />
+      <StickerUnlockOverlay data={data} enabled={!isParent} />
     </div>
   )
 }
