@@ -52,6 +52,7 @@ export function TodayScreen({
   const chewComplete = Boolean(chewToday)
   const extraDone = day.extraTasks.filter((t) => t.done).length
   const [extraDraft, setExtraDraft] = useState('')
+  const [extraOpen, setExtraOpen] = useState(false)
   const [celebrate, setCelebrate] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const prevDoneRef = useRef(doneCount)
@@ -168,6 +169,8 @@ export function TodayScreen({
   }
 
   function removeExtraTask(id: string) {
+    const task = day.extraTasks.find((t) => t.id === id)
+    if (task?.fromParent) return
     patchDay({
       extraTasks: day.extraTasks.filter((t) => t.id !== id),
     })
@@ -351,76 +354,92 @@ export function TodayScreen({
           <ul className="check-list">
             {day.extraTasks.map((task) => (
               <li key={task.id}>
-                <div className="check-row with-action">
+                <div
+                  className={
+                    task.fromParent ? 'check-row' : 'check-row with-action'
+                  }
+                >
                   <label className="check-row-main">
                     <input
                       type="checkbox"
                       checked={task.done}
                       onChange={() => toggleExtraTask(task.id)}
                     />
-                    <span className={task.done ? 'is-done' : undefined}>{task.text}</span>
+                    <span className={task.done ? 'is-done' : undefined}>
+                      {task.text}
+                      {task.fromParent ? (
+                        <span className="hint"> · от родителя</span>
+                      ) : null}
+                    </span>
                   </label>
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    aria-label="Удалить"
-                    onClick={() => removeExtraTask(task.id)}
-                  >
-                    ×
-                  </button>
+                  {task.fromParent ? null : (
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      aria-label="Удалить"
+                      onClick={() => removeExtraTask(task.id)}
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
               </li>
             ))}
           </ul>
         ) : null}
 
-        {EXTRA_TASK_IDEAS.length > 0 ? (
-          <>
-            <p className="hint" style={{ marginTop: 12 }}>
-              Быстро добавить:
-            </p>
-            <div className="chip-row">
-              {EXTRA_TASK_IDEAS.map((idea) => {
-                const exists = day.extraTasks.some((t) => t.text === idea)
-                return (
-                  <button
-                    key={idea}
-                    type="button"
-                    className={exists ? 'chip active' : 'chip'}
-                    disabled={exists}
-                    onClick={() => addExtraTask(idea)}
-                  >
-                    {idea}
-                  </button>
-                )
-              })}
-            </div>
-          </>
-        ) : null}
-
-        <div className="add-row">
-          <label className="field grow">
-            <span>Своё дело</span>
-            <input
-              value={extraDraft}
-              onChange={(e) => setExtraDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  addExtraTask(extraDraft)
-                }
-              }}
-              placeholder="Например: разобрать стол"
-            />
-          </label>
+        <div className="extra-picker-box">
           <button
             type="button"
-            className="btn primary"
-            disabled={!extraDraft.trim()}
-            onClick={() => addExtraTask(extraDraft)}
+            className="linkish"
+            onClick={() => setExtraOpen((v) => !v)}
           >
-            Добавить
+            {extraOpen ? 'Скрыть выбор' : 'Быстро добавить →'}
           </button>
+          {extraOpen ? (
+            <div className="create-picker">
+              <div className="create-chip-grid">
+                {EXTRA_TASK_IDEAS.map((idea) => {
+                  const exists = day.extraTasks.some((t) => t.text === idea)
+                  return (
+                    <button
+                      key={idea}
+                      type="button"
+                      className={exists ? 'chip active' : 'chip'}
+                      disabled={exists}
+                      onClick={() => addExtraTask(idea)}
+                    >
+                      {idea}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="add-row">
+                <label className="field grow">
+                  <span>Своё дело</span>
+                  <input
+                    value={extraDraft}
+                    onChange={(e) => setExtraDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        addExtraTask(extraDraft)
+                      }
+                    }}
+                    placeholder="Например: разобрать стол"
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="btn primary"
+                  disabled={!extraDraft.trim()}
+                  onClick={() => addExtraTask(extraDraft)}
+                >
+                  Добавить
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       </section>
 

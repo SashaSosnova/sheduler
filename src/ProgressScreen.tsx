@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { todayKey } from './data'
 import {
   STICKERS,
@@ -10,6 +10,7 @@ import {
   levelRank,
   perfectDaysInMonth,
   stickerNeedText,
+  stickerOpenedHint,
   stickerRewardText,
   stickerUnlockHint,
   unlockedStickers,
@@ -23,6 +24,7 @@ type Props = {
 export function ProgressScreen({ data }: Props) {
   const today = todayKey()
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const detailRef = useRef<HTMLDivElement>(null)
   const bestStreak = data.bestStreak ?? 0
 
   const stats = useMemo(() => {
@@ -57,6 +59,11 @@ export function ProgressScreen({ data }: Props) {
   const selectedReward = selectedSticker
     ? stickerRewardText(selectedSticker)
     : null
+
+  useEffect(() => {
+    if (!selectedId || !detailRef.current) return
+    detailRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [selectedId])
 
   const levelPct = Math.min(100, (stats.intoLevel / stats.need) * 100)
   const rank = levelRank(stats.level)
@@ -125,6 +132,42 @@ export function ProgressScreen({ data }: Props) {
             {stats.stickers.length}/{STICKERS.length}
           </span>
         </div>
+        {selectedSticker ? (
+          <div
+            ref={detailRef}
+            className={`sticker-detail ${selectedOpen ? 'is-open' : 'is-locked'}`}
+          >
+            <div className="sticker-detail-head">
+              <img
+                className={`sticker-art detail ${selectedOpen ? '' : 'is-locked'}`}
+                src={selectedSticker.image}
+                alt=""
+                draggable={false}
+              />
+              <div>
+                <p className="sticker-detail-franchise">
+                  {selectedSticker.detail}
+                </p>
+                <p className="sticker-detail-title">
+                  {selectedOpen ? selectedSticker.label : 'Ещё закрыто'}
+                </p>
+                {selectedOpen ? (
+                  <p className="sticker-detail-quote">
+                    «{selectedSticker.quote}»
+                  </p>
+                ) : null}
+              </div>
+            </div>
+            <p className="hint">
+              {selectedOpen
+                ? stickerOpenedHint(selectedSticker)
+                : stickerUnlockHint(selectedSticker)}
+            </p>
+            {selectedReward ? (
+              <p className="hint sticker-detail-reward">{selectedReward}</p>
+            ) : null}
+          </div>
+        ) : null}
         <div className="sticker-row">
           {STICKERS.map((s) => {
             const open = isStickerUnlocked(
@@ -167,41 +210,6 @@ export function ProgressScreen({ data }: Props) {
             )
           })}
         </div>
-        {selectedSticker ? (
-          <div
-            className={`sticker-detail ${selectedOpen ? 'is-open' : 'is-locked'}`}
-          >
-            <div className="sticker-detail-head">
-              <img
-                className={`sticker-art detail ${selectedOpen ? '' : 'is-locked'}`}
-                src={selectedSticker.image}
-                alt=""
-                draggable={false}
-              />
-              <div>
-                <p className="sticker-detail-title">
-                  {selectedOpen ? selectedSticker.label : 'Ещё закрыто'}
-                </p>
-                {selectedOpen ? (
-                  <p className="sticker-detail-quote">
-                    «{selectedSticker.quote}»
-                  </p>
-                ) : null}
-              </div>
-            </div>
-            <p className="hint">{stickerUnlockHint(selectedSticker)}</p>
-            {selectedOpen ? (
-              <p className="hint" style={{ marginTop: 4 }}>
-                {selectedSticker.detail}
-              </p>
-            ) : null}
-            {selectedOpen && selectedReward ? (
-              <p className="hint" style={{ marginTop: 4, whiteSpace: 'pre-line' }}>
-                {selectedReward}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
       </section>
     </div>
   )

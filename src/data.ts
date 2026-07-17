@@ -484,6 +484,7 @@ function normalizeExtraTasks(raw: unknown): DayExtraTask[] {
         id: typeof row.id === 'string' && row.id ? row.id : uid(),
         text,
         done: Boolean(row.done),
+        ...(row.fromParent ? { fromParent: true } : {}),
       }
     })
     .filter((t): t is DayExtraTask => t !== null)

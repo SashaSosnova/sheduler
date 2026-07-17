@@ -61,6 +61,8 @@ export type DayExtraTask = {
   id: string
   text: string
   done: boolean
+  /** Set when parent creates the task — child can complete but not delete */
+  fromParent?: boolean
 }
 
 export type DayLog = {

@@ -132,7 +132,7 @@ export const STICKERS: Sticker[] = [
     image: './stickers/genos.png',
     label: 'Генос',
     quote: 'Учитель Сайтама!',
-    detail: 'One Punch Man · разово +20 мин Roblox на день',
+    detail: 'One Punch Man',
     robloxExtraMin: 20,
   },
   {
@@ -160,7 +160,7 @@ export const STICKERS: Sticker[] = [
     image: './stickers/megumi.png',
     label: 'Мегуми',
     quote: 'Техника десяти теней',
-    detail: 'Магическая битва · разово +25 мин Roblox на день',
+    detail: 'Магическая битва',
     robloxExtraMin: 25,
   },
   {
@@ -180,7 +180,7 @@ export const STICKERS: Sticker[] = [
     label: 'Инумаки',
     quote: 'Лосось!',
     detail: 'Магическая битва',
-    giftHint: 'Подарок: мороженое — скажи родителю',
+    giftHint: 'Подарок: онигири',
   },
   {
     id: 'hero-roblox',
@@ -189,17 +189,8 @@ export const STICKERS: Sticker[] = [
     image: './stickers/roblox-wings.png',
     label: 'Тёмный',
     quote: 'Крылья тьмы',
-    detail: 'Roblox · разово +30 мин Roblox на день',
+    detail: 'Roblox',
     robloxExtraMin: 30,
-  },
-  {
-    id: 'hero-nezuko',
-    kind: 'art',
-    needPerfect: 8,
-    image: './stickers/nezuko.png',
-    label: 'Незуко',
-    quote: 'Ммф!',
-    detail: 'Клинок, рассекающий демонов',
   },
   {
     id: 'hero-yuji',
@@ -227,7 +218,7 @@ export const STICKERS: Sticker[] = [
     label: 'Данте',
     quote: 'Jackpot!',
     detail: 'Devil May Cry',
-    giftHint: 'Подарок: кино-вечер / аниме с родителем',
+    giftHint: 'Подарок: кино-вечер',
   },
   {
     id: 'hero-mahito',
@@ -236,7 +227,7 @@ export const STICKERS: Sticker[] = [
     image: './stickers/mahito.png',
     label: 'Махито',
     quote: 'Души людей… забавные',
-    detail: 'Магическая битва · разово +40 мин Roblox на день',
+    detail: 'Магическая битва',
     robloxExtraMin: 40,
   },
   {
@@ -246,8 +237,7 @@ export const STICKERS: Sticker[] = [
     image: './stickers/garou.png',
     label: 'Гарроу',
     quote: 'Я стану абсолютным злом',
-    detail:
-      'One Punch Man · 30 дней подряд · разово +60 мин Roblox',
+    detail: 'One Punch Man',
     robloxExtraMin: 60,
     giftHint: 'Большой подарок-сюрприз от родителя за месяц идеальных дней!',
   },
@@ -306,27 +296,41 @@ export function stickerNeedText(sticker: Sticker): string {
   return '…'
 }
 
-/** Same as card text — used in the detail panel */
+/** Condition line for locked stickers in the detail panel */
 export function stickerUnlockHint(sticker: Sticker): string {
-  let base = 'Скоро откроется'
   if (sticker.needStreak != null) {
-    base = `Чтобы открыть: ${sticker.needStreak} идеальных ${ruDays(sticker.needStreak)} подряд`
-  } else if (sticker.needPerfect === 1) {
-    base = 'Чтобы открыть: 1 идеальный день (все 5 пунктов минимума)'
-  } else if (sticker.needPerfect != null) {
-    base = `Чтобы открыть: всего ${sticker.needPerfect} идеальных ${ruDays(sticker.needPerfect)}`
+    return `Чтобы открыть: ${sticker.needStreak} идеальных ${ruDays(sticker.needStreak)} подряд`
   }
-  if (sticker.robloxExtraMin) {
-    return `${base}. Награда: разово +${sticker.robloxExtraMin} мин Roblox на один день`
+  if (sticker.needPerfect === 1) {
+    return 'Чтобы открыть: 1 идеальный день (все 5 пунктов минимума)'
   }
-  return base
+  if (sticker.needPerfect != null) {
+    return `Чтобы открыть: всего ${sticker.needPerfect} идеальных ${ruDays(sticker.needPerfect)}`
+  }
+  return 'Скоро откроется'
 }
 
-/** Prize line for the unlock wow-screen / detail panel */
+/** Condition line for already unlocked stickers */
+export function stickerOpenedHint(sticker: Sticker): string {
+  if (sticker.needStreak != null) {
+    const n = sticker.needStreak
+    return `Открыто: ${n} идеальных ${ruDays(n)} подряд`
+  }
+  if (sticker.needPerfect === 1) return 'Открыто: 1 идеальный день'
+  if (sticker.needPerfect != null) {
+    const n = sticker.needPerfect
+    return `Открыто: ${n} идеальных ${ruDays(n)}`
+  }
+  return 'Открыто'
+}
+
+/** Prize line for the unlock wow-screen / detail panel (shown once). */
 export function stickerRewardText(sticker: Sticker): string | null {
   const parts: string[] = []
   if (sticker.robloxExtraMin) {
-    parts.push(`+${sticker.robloxExtraMin} мин Roblox сегодня (разово)`)
+    parts.push(
+      `Награда: разово +${sticker.robloxExtraMin} мин Roblox на один день`,
+    )
   }
   if (sticker.giftHint) {
     parts.push(sticker.giftHint)

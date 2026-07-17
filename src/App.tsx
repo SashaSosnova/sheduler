@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BottomNav } from './BottomNav'
 import { CalendarScreen } from './CalendarScreen'
 import { ChewDiaryScreen } from './ChewDiaryScreen'
@@ -32,6 +32,12 @@ function App() {
   const [tab, setTab] = useState<TabId>('today')
   const isParent = role === 'parent'
   const showNav = tab !== 'settings'
+
+  useEffect(() => {
+    window.scrollTo(0, 0)
+    document.documentElement.scrollTop = 0
+    document.body.scrollTop = 0
+  }, [tab])
 
   if (!role) {
     return (

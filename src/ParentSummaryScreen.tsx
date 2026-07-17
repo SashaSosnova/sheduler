@@ -45,6 +45,7 @@ export function ParentSummaryScreen({
   const running = Boolean(roblox.endsAt && !roblox.finished)
   const [now, setNow] = useState(Date.now())
   const [extraDraft, setExtraDraft] = useState('')
+  const [extraOpen, setExtraOpen] = useState(false)
 
   useEffect(() => {
     if (!running) return
@@ -93,7 +94,10 @@ export function ParentSummaryScreen({
     )
     if (already) return
     patchDay({
-      extraTasks: [...day.extraTasks, { id: uid(), text: trimmed, done: false }],
+      extraTasks: [
+        ...day.extraTasks,
+        { id: uid(), text: trimmed, done: false, fromParent: true },
+      ],
     })
     setExtraDraft('')
   }
@@ -227,53 +231,58 @@ export function ParentSummaryScreen({
           </ul>
         ) : null}
 
-        {EXTRA_TASK_IDEAS.length > 0 ? (
-          <>
-            <p className="hint" style={{ marginTop: 12 }}>
-              Быстро добавить:
-            </p>
-            <div className="create-chip-grid">
-              {EXTRA_TASK_IDEAS.map((idea) => {
-                const exists = day.extraTasks.some((t) => t.text === idea)
-                return (
-                  <button
-                    key={idea}
-                    type="button"
-                    className={exists ? 'chip active' : 'chip'}
-                    disabled={exists}
-                    onClick={() => addExtraTask(idea)}
-                  >
-                    {idea}
-                  </button>
-                )
-              })}
-            </div>
-          </>
-        ) : null}
-
-        <div className="add-row">
-          <label className="field grow">
-            <span>Своё дело</span>
-            <input
-              value={extraDraft}
-              onChange={(e) => setExtraDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  addExtraTask(extraDraft)
-                }
-              }}
-              placeholder="Например: пропылесосить"
-            />
-          </label>
+        <div className="extra-picker-box">
           <button
             type="button"
-            className="btn primary"
-            disabled={!extraDraft.trim()}
-            onClick={() => addExtraTask(extraDraft)}
+            className="linkish"
+            onClick={() => setExtraOpen((v) => !v)}
           >
-            Добавить
+            {extraOpen ? 'Скрыть выбор' : 'Быстро добавить →'}
           </button>
+          {extraOpen ? (
+            <div className="create-picker">
+              <div className="create-chip-grid">
+                {EXTRA_TASK_IDEAS.map((idea) => {
+                  const exists = day.extraTasks.some((t) => t.text === idea)
+                  return (
+                    <button
+                      key={idea}
+                      type="button"
+                      className={exists ? 'chip active' : 'chip'}
+                      disabled={exists}
+                      onClick={() => addExtraTask(idea)}
+                    >
+                      {idea}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="add-row">
+                <label className="field grow">
+                  <span>Своё дело</span>
+                  <input
+                    value={extraDraft}
+                    onChange={(e) => setExtraDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        addExtraTask(extraDraft)
+                      }
+                    }}
+                    placeholder="Например: пропылесосить"
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="btn primary"
+                  disabled={!extraDraft.trim()}
+                  onClick={() => addExtraTask(extraDraft)}
+                >
+                  Добавить
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       </section>
 
