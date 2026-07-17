@@ -98,14 +98,15 @@ jobs:
           gh release create apk-latest \
             release/sheduler.apk \
             release/kanikuly.apk \
-            --title "Sheduler 2.6" \
+            --title "Sheduler 2.6.1" \
             --notes "$(cat <<'EOF'
-          **Sheduler v2.6** — APK для установки с файла (без adb).
+          **Sheduler v2.6.1** — APK для установки с файла (без adb).
 
           Что нового:
           - крупнее нижнее меню (настройки через ⚙ на главном)
           - родитель может отмечать must-do и добавлять планы на день
           - уведомления родителю: зарядка и дневник жевания через облако
+          - одна кнопка «На главную» в настройках
           - правки календаря и UX
 
           Package id: `com.sosnova.sheduler`.

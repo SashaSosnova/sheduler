@@ -69,12 +69,6 @@ export function SettingsScreen({
       </header>
 
       <section className="card">
-        <button type="button" className="btn primary wide" onClick={onGoHome}>
-          На главную
-        </button>
-      </section>
-
-      <section className="card">
         <h2>Режим</h2>
         <p className="hint">
           Сейчас:{' '}
