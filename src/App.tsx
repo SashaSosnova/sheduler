@@ -93,7 +93,9 @@ function App() {
             />
           )
         ) : null}
-        {tab === 'progress' ? <ProgressScreen data={data} /> : null}
+        {tab === 'progress' ? (
+          <ProgressScreen data={data} onChange={setData} />
+        ) : null}
         {tab === 'calendar' ? (
           <CalendarScreen
             data={data}

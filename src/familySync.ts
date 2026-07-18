@@ -27,6 +27,8 @@ export type CloudPayload = {
   chewEntries: ChewEntry[]
   cookingLeft: number
   claimedRobloxStreaks?: number[]
+  robloxBonusBankMin?: number
+  equippedStickerId?: string | null
   bestStreak?: number
   bestParentTasks?: number
   /** @deprecated use readingBooks */
@@ -104,6 +106,8 @@ export function toCloudPayload(data: AppData, updatedAt = Date.now()): CloudPayl
     chewEntries: data.chewEntries ?? [],
     cookingLeft: data.cookingLeft,
     claimedRobloxStreaks: data.claimedRobloxStreaks ?? [],
+    robloxBonusBankMin: data.robloxBonusBankMin ?? 0,
+    equippedStickerId: data.equippedStickerId ?? null,
     bestStreak: data.bestStreak ?? 0,
     bestParentTasks: data.bestParentTasks ?? 0,
     readingBooks: data.readingBooks ?? [],
@@ -153,6 +157,8 @@ export async function joinFamily(rawCode: string): Promise<CloudPayload> {
     chewEntries: remote.chewEntries ?? [],
     cookingLeft: remote.cookingLeft ?? 5,
     claimedRobloxStreaks: remote.claimedRobloxStreaks ?? [],
+    robloxBonusBankMin: remote.robloxBonusBankMin ?? 0,
+    equippedStickerId: remote.equippedStickerId ?? null,
     bestStreak: remote.bestStreak ?? 0,
     bestParentTasks: remote.bestParentTasks ?? 0,
     readingBooks: remote.readingBooks,
@@ -194,6 +200,8 @@ export function subscribeFamily(
         chewEntries: remote.chewEntries ?? [],
         cookingLeft: remote.cookingLeft ?? 5,
         claimedRobloxStreaks: remote.claimedRobloxStreaks ?? [],
+        robloxBonusBankMin: remote.robloxBonusBankMin ?? 0,
+        equippedStickerId: remote.equippedStickerId ?? null,
         bestStreak: remote.bestStreak ?? 0,
         bestParentTasks: remote.bestParentTasks ?? 0,
         readingBooks: remote.readingBooks,

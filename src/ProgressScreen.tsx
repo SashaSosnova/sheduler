@@ -9,6 +9,7 @@ import {
 import {
   STICKERS,
   countStars,
+  equippedRankSticker,
   isStickerUnlocked,
   levelFromStars,
   levelRank,
@@ -18,19 +19,23 @@ import {
   stickerProgressFromData,
   stickerRewardText,
   stickerUnlockHint,
+  unlockedRankStickers,
   unlockedStickers,
   type Sticker,
+  type StickerProgress,
 } from './progress'
 import type { AppData } from './types'
 
 type Props = {
   data: AppData
+  onChange: (next: AppData) => void
 }
 
 const STICKER_COLS_MQ = '(min-width: 700px)'
 
-export function ProgressScreen({ data }: Props) {
+export function ProgressScreen({ data, onChange }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [rankPickerOpen, setRankPickerOpen] = useState(false)
   const [cols, setCols] = useState(3)
   const detailRef = useRef<HTMLDivElement>(null)
 
@@ -43,6 +48,24 @@ export function ProgressScreen({ data }: Props) {
   }, [])
 
   const progress = useMemo(() => stickerProgressFromData(data), [data])
+  const rankOptions = useMemo(() => unlockedRankStickers(progress), [progress])
+  const equipped = useMemo(
+    () => equippedRankSticker(data.equippedStickerId, progress),
+    [data.equippedStickerId, progress],
+  )
+
+  // Persist auto-picked first unlocked rank when unset / stale.
+  useEffect(() => {
+    if (!equipped) {
+      if (data.equippedStickerId != null) {
+        onChange({ ...data, equippedStickerId: null })
+      }
+      return
+    }
+    if (data.equippedStickerId !== equipped.id) {
+      onChange({ ...data, equippedStickerId: equipped.id })
+    }
+  }, [equipped, data, onChange])
 
   const stats = useMemo(() => {
     const stars = countStars(data.days)
@@ -88,12 +111,27 @@ export function ProgressScreen({ data }: Props) {
 
   const levelPct = Math.min(100, (stats.intoLevel / stats.need) * 100)
   const rank = levelRank(stats.level)
+  const rankTitle = equipped ? stickerNeedText(equipped) : null
 
   return (
-    <div className="screen">
-      <header className="screen-head">
-        <p className="eyebrow">Прогресс</p>
-        <h1>Мой прогресс</h1>
+    <div className={`screen ${rankPickerOpen ? 'screen-sheet-open' : ''}`}>
+      <header className="screen-head rank-screen-head">
+        <div className="screen-head-row">
+          <h1>Моё звание</h1>
+          {rankOptions.length > 0 ? (
+            <button
+              type="button"
+              className="rank-edit-btn"
+              aria-label="Выбрать звание"
+              onClick={() => setRankPickerOpen(true)}
+            >
+              <span aria-hidden>✎</span>
+            </button>
+          ) : null}
+        </div>
+        <p className="rank-title-value">
+          {rankTitle ?? 'Звание ещё не получено'}
+        </p>
       </header>
 
       <section className="level-card-wrap">
@@ -166,7 +204,7 @@ export function ProgressScreen({ data }: Props) {
                   aria-label={
                     open
                       ? `${s.label}. ${s.quote}. ${s.detail}`
-                      : `${stickerNeedText(s)}. ${stickerUnlockHint(s)}`
+                      : `${stickerNeedText(s)}. ${stickerUnlockHint(s, progress)}`
                   }
                   onClick={() =>
                     setSelectedId((prev) => (prev === s.id ? null : s.id))
@@ -193,6 +231,7 @@ export function ProgressScreen({ data }: Props) {
                     sticker={selectedSticker}
                     open={selectedOpen}
                     reward={selectedReward}
+                    progress={progress}
                   />
                 ) : null}
               </Fragment>
@@ -200,6 +239,50 @@ export function ProgressScreen({ data }: Props) {
           })}
         </div>
       </section>
+
+      {rankPickerOpen ? (
+        <div
+          className="action-sheet"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Выбрать звание"
+        >
+          <div className="action-sheet-handle" />
+          <div className="action-sheet-head">
+            <h2>Звание</h2>
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={() => setRankPickerOpen(false)}
+            >
+              Закрыть
+            </button>
+          </div>
+          <div className="action-sheet-body">
+            <ul className="rank-picker-list">
+              {rankOptions.map((s) => {
+                const title = stickerNeedText(s)
+                const active = equipped?.id === s.id
+                return (
+                  <li key={s.id}>
+                    <button
+                      type="button"
+                      className={`rank-picker-item ${active ? 'is-active' : ''}`}
+                      onClick={() => {
+                        onChange({ ...data, equippedStickerId: s.id })
+                        setRankPickerOpen(false)
+                      }}
+                    >
+                      <span className="rank-picker-title">{title}</span>
+                      <span className="rank-picker-hero">{s.label}</span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -208,6 +291,7 @@ type DetailProps = {
   sticker: Sticker
   open: boolean
   reward: string | null
+  progress: StickerProgress
 }
 
 function StickerDetailCard({
@@ -215,6 +299,7 @@ function StickerDetailCard({
   sticker,
   open,
   reward,
+  progress,
 }: DetailProps & { ref?: Ref<HTMLDivElement> }) {
   return (
     <div
@@ -239,7 +324,9 @@ function StickerDetailCard({
         </div>
       </div>
       <p className="hint">
-        {open ? stickerOpenedHint(sticker) : stickerUnlockHint(sticker)}
+        {open
+          ? stickerOpenedHint(sticker)
+          : stickerUnlockHint(sticker, progress)}
       </p>
       {reward ? (
         <p className="hint sticker-detail-reward">{reward}</p>

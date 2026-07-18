@@ -38,8 +38,12 @@ export type ScreenSlot = {
   remainingSec: number
   /** Today's limit already used up */
   finished: boolean
-  /** Seconds actually played today (for parent view) */
+  /** Seconds actually played today within the limit (for parent view) */
   usedSec: number
+  /** Accumulated play after the timer hit zero */
+  overtimeSec?: number
+  /** Unix ms when overtime clock started (null when not ticking) */
+  overtimeStartedAt?: number | null
 }
 
 /** One chewing session: 5 bites left + 5 bites right */
@@ -107,6 +111,16 @@ export type AppData = {
   routineId: string
   /** Streak milestones already paid out (one-time Roblox day bonuses) */
   claimedRobloxStreaks: number[]
+  /**
+   * Unspent Roblox bonus minutes from achievements.
+   * Claim onto a day via claimRobloxBankMinutes.
+   */
+  robloxBonusBankMin: number
+  /**
+   * Equipped achievement id for the Progress «Звание» title.
+   * Null = auto first unlocked (non-secret) sticker.
+   */
+  equippedStickerId: string | null
   /** Best consecutive perfect-day streak ever (stickers stay unlocked) */
   bestStreak: number
   /** Best count of completed parent-assigned extra tasks */

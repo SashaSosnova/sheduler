@@ -4,6 +4,7 @@ import {
   SCREEN_LIMITS,
   chewDurationSec,
   formatPlayTime,
+  formatPlayTimeWithOvertime,
   normalizeDayLog,
   todayKey,
   workoutDurationSec,
@@ -160,6 +161,7 @@ export function CalendarScreen({
       chewFood: chewEntry?.food ?? null,
       chewSec: chewEntry ? chewDurationSec(chewEntry) : null,
       robloxUsed: day.screens.roblox.usedSec,
+      robloxOvertime: day.screens.roblox.overtimeSec ?? 0,
       robloxBonusMin: day.robloxBonusMin ?? 0,
     }
   }, [data, selected])
@@ -351,8 +353,11 @@ export function CalendarScreen({
         <div className="calendar-detail-block">
           <h3>Roblox</h3>
           <p className="hint">
-            {detail.robloxUsed > 0
-              ? `Сыграно ${formatPlayTime(detail.robloxUsed)} из ${Math.round(
+            {detail.robloxUsed > 0 || detail.robloxOvertime > 0
+              ? `Сыграно ${formatPlayTimeWithOvertime(
+                  detail.robloxUsed,
+                  detail.robloxOvertime,
+                )} из ${Math.round(
                   (SCREEN_LIMITS.roblox.seconds + detail.robloxBonusMin * 60) /
                     60,
                 )} мин`

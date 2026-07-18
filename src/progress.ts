@@ -2,6 +2,7 @@ import {
   MUST_DO_ITEMS,
   SCREEN_LIMITS,
   chewDurationSec,
+  flushScreenOvertime,
   normalizeDayLog,
   parseTimerRounds,
   todayKey,
@@ -16,22 +17,24 @@ import type {
   ReadingBook,
 } from './types'
 
-/** 2 ideal days at 5 must-dos each → next level (e.g. Танджиро at 10★) */
+/** 2 ideal days at 5 must-dos each → next level */
 const STARS_PER_LEVEL = 10
 
 /** Temporary: show every sticker as unlocked (preview). Set false before release. */
 export const DEBUG_UNLOCK_ALL_STICKERS = false
 
+/** Temporary: show every sticker as locked (preview). */
+export const DEBUG_LOCK_ALL_STICKERS = false
+
 /**
- * One-time Roblox day bonuses for first time hitting a streak milestone.
+ * One-time Roblox day bonuses for first time hitting a perfect-day streak.
  * Rebuilding the same streak after a break does not pay again.
- * Streak 30 is a single gift (Roblox donate) on the sticker — not minutes.
+ * Longer milestones (21 donate / 28 aquapark) are parent gifts on stickers.
  */
 export const ROBLOX_STREAK_REWARDS: { streak: number; minutes: number }[] = [
-  { streak: 3, minutes: 20 },
-  { streak: 5, minutes: 25 },
-  { streak: 7, minutes: 30 },
-  { streak: 14, minutes: 40 },
+  { streak: 7, minutes: 15 },
+  { streak: 14, minutes: 25 },
+  { streak: 21, minutes: 20 },
 ]
 
 export function dayStars(log: DayLog | undefined): number {
@@ -99,8 +102,12 @@ export type Sticker = {
   detail: string
   needPerfect?: number
   needStreak?: number
-  /** At least one honest full-timer workout day */
-  needQualityWorkout?: boolean
+  /** Honest full-timer workout days (count) */
+  needQualityWorkouts?: number
+  /** Days with зарядка checked (total, not consecutive) */
+  needExerciseDays?: number
+  /** Days with a chew diary entry (total, not consecutive) */
+  needChewDays?: number
   /** All chew bites above this count (left + right) */
   needChewMax?: number
   /** Completed parent-assigned extra tasks */
@@ -111,12 +118,17 @@ export type Sticker = {
   needTomSawyerBook?: boolean
   /** Completed extra tasks created by the child (not from parent) */
   needOwnTasks?: number
-  /** Consecutive calendar days with a chew diary entry */
-  needChewStreak?: number
   /** Secret: shortcut / too-fast workout (do not explain while locked) */
   needSecretShortcut?: boolean
   /** Secret: perfect day with zero Roblox play (do not explain while locked) */
   needSecretNoRoblox?: boolean
+  /** Secret: chew entry with all bites above 50 */
+  needSecretChewMax?: boolean
+  /**
+   * Secret: total Roblox bonus minutes from other achievements
+   * (sum of unlocked stickers’ robloxExtraMin) reaches this value.
+   */
+  needSecretRobloxBonusMin?: number
   robloxExtraMin?: number
   /** Parent gift hint when this sticker unlocks */
   giftHint?: string
@@ -129,21 +141,25 @@ export type StickerProgress = {
   perfectTotal: number
   streak: number
   bestStreak: number
-  qualityWorkout: boolean
+  qualityWorkouts: number
+  exerciseDays: number
+  chewDays: number
   chewMax: boolean
   parentTasks: number
   booksFinished: number
   tomSawyerFinished: boolean
   ownTasks: number
-  chewStreak: number
   secretShortcut: boolean
   secretNoRoblox: boolean
+  /** Sum of robloxExtraMin from unlocked reward stickers */
+  achievementRobloxMin: number
 }
 
 /**
- * Display order ≈ unlock journey; franchises mixed where possible.
- * Roblox day bonuses (one-time): серия 3 / 5 / 7 / 14 подряд.
- * Серия 30 — единая награда (донат), см. стикер Гарроу.
+ * Display order mixes franchises (not grouped by series).
+ * Roughly easier → harder; secrets sprinkled through the list.
+ * Ladders: OPM streaks · JJK exercise days · Клинок chew days ·
+ * TMNT quality · TMNT parent · DB own tasks · DMC books · secrets
  */
 export const STICKERS: Sticker[] = [
   {
@@ -156,41 +172,78 @@ export const STICKERS: Sticker[] = [
     detail: 'One Punch Man',
   },
   {
-    id: 'feat-parent-1',
+    id: 'feat-quality-1',
     kind: 'art',
-    needParentTasks: 1,
+    needQualityWorkouts: 1,
+    image: './stickers/casey-jones.png',
+    label: 'Кейси Джонс',
+    quote: 'Бей в маске!',
+    detail: 'Черепашки-ниндзя',
+  },
+  {
+    id: 'hero-lady',
+    kind: 'gift',
+    needBooksFinished: 1,
+    image: './stickers/lady.png',
+    label: 'Леди',
+    quote: 'За работу',
+    detail: 'Devil May Cry',
+    giftHint: 'Награда: манга на выбор',
+  },
+  {
+    id: 'feat-parent-2',
+    kind: 'art',
+    needParentTasks: 2,
     image: './stickers/leonardo.png',
     label: 'Леонардо',
     quote: 'Черепашки, за мной!',
     detail: 'Черепашки-ниндзя',
   },
   {
-    id: 'hero-tanjiro',
+    id: 'hero-megumi',
     kind: 'art',
-    needPerfect: 2,
-    image: './stickers/tanjiro.png',
-    label: 'Танджиро',
-    quote: 'Дыхание воды',
-    detail: 'Клинок, рассекающий демонов',
-  },
-  {
-    id: 'hero-gojo',
-    kind: 'art',
-    needPerfect: 3,
-    image: './stickers/gojo.png',
-    label: 'Годжо',
-    quote: 'Расширение территории',
+    needExerciseDays: 4,
+    image: './stickers/megumi.png',
+    label: 'Мегуми',
+    quote: 'Техника десяти теней',
     detail: 'Магическая битва',
   },
   {
-    id: 'hero-genos',
-    kind: 'roblox',
+    id: 'hero-vegeta',
+    kind: 'art',
+    needOwnTasks: 4,
+    image: './stickers/vegeta.png',
+    label: 'Вегета',
+    quote: 'Я принц всех саян!',
+    detail: 'Dragon Ball',
+  },
+  {
+    id: 'hero-inosuke',
+    kind: 'art',
+    needChewDays: 5,
+    image: './stickers/inosuke.png',
+    label: 'Иноске',
+    quote: 'Свинья-кабан!',
+    detail: 'Клинок, рассекающий демонов',
+  },
+  {
+    id: 'hero-tatsumaki',
+    kind: 'art',
     needStreak: 3,
-    image: './stickers/genos.png',
-    label: 'Генос',
-    quote: 'Учитель Сайтама!',
+    image: './stickers/tatsumaki.png',
+    label: 'Тацумаки',
+    quote: 'Не мешай мне!',
     detail: 'One Punch Man',
-    robloxExtraMin: 20,
+  },
+  {
+    id: 'hero-dante',
+    kind: 'gift',
+    needBooksFinished: 2,
+    image: './stickers/dante.png',
+    label: 'Данте',
+    quote: 'Jackpot!',
+    detail: 'Devil May Cry',
+    giftHint: 'Подарок: кино-вечер',
   },
   {
     id: 'feat-secret-shortcut',
@@ -202,49 +255,115 @@ export const STICKERS: Sticker[] = [
     detail: 'One Punch Man',
   },
   {
-    id: 'feat-chew-50',
+    id: 'feat-parent-6',
     kind: 'art',
-    needChewMax: 50,
-    image: './stickers/nezuko.png',
-    label: 'Незуко',
-    quote: 'Ммпф!',
-    detail: 'Клинок, рассекающий демонов',
+    needParentTasks: 6,
+    image: './stickers/michelangelo.png',
+    label: 'Микеланджело',
+    quote: 'Ковабунга!',
+    detail: 'Черепашки-ниндзя',
   },
   {
-    id: 'feat-chew-streak-5',
+    id: 'hero-genos',
+    kind: 'roblox',
+    needStreak: 7,
+    image: './stickers/genos.png',
+    label: 'Генос',
+    quote: 'Учитель Сайтама!',
+    detail: 'One Punch Man',
+    robloxExtraMin: 15,
+  },
+  {
+    id: 'hero-mahoraga',
     kind: 'art',
-    needChewStreak: 5,
-    image: './stickers/shinobu.png',
-    label: 'Шинобу',
-    quote: 'Улыбнись!',
-    detail: 'Клинок, рассекающий демонов',
+    needExerciseDays: 9,
+    image: './stickers/mahoraga.png',
+    label: 'Мохорога',
+    quote: 'Адаптация',
+    detail: 'Магическая битва',
+  },
+  {
+    id: 'hero-beerus',
+    kind: 'art',
+    needOwnTasks: 8,
+    image: './stickers/beerus.png',
+    label: 'Бирус',
+    quote: 'Развлеки меня',
+    detail: 'Dragon Ball',
+  },
+  {
+    id: 'feat-quality-8',
+    kind: 'art',
+    needQualityWorkouts: 8,
+    image: './stickers/karai.png',
+    label: 'Карай',
+    quote: 'Клан Фут не прощает слабости',
+    detail: 'Черепашки-ниндзя',
+  },
+  {
+    id: 'hero-dante-devil',
+    kind: 'gift',
+    needBooksFinished: 3,
+    image: './stickers/dante-devil.png',
+    label: 'Данте (демон)',
+    quote: 'Devil Trigger!',
+    detail: 'Devil May Cry',
+    giftHint: 'Награда: донат на 400 ₽ в Roblox',
   },
   {
     id: 'hero-zenitsu',
     kind: 'art',
-    needPerfect: 4,
+    needChewDays: 11,
     image: './stickers/zenitsu.png',
     label: 'Зеницу',
     quote: 'Дыхание грома',
     detail: 'Клинок, рассекающий демонов',
   },
   {
-    id: 'feat-own-tasks-5',
+    id: 'feat-parent-11',
     kind: 'art',
-    needOwnTasks: 5,
-    image: './stickers/inosuke.png',
-    label: 'Иноске',
-    quote: 'Свинья-кабан!',
-    detail: 'Клинок, рассекающий демонов',
+    needParentTasks: 11,
+    image: './stickers/raphael.png',
+    label: 'Рафаэль',
+    quote: 'Кто хочет кулаков?',
+    detail: 'Черепашки-ниндзя',
   },
   {
-    id: 'feat-quality-workout',
+    id: 'hero-child-emperor',
+    kind: 'roblox',
+    needStreak: 14,
+    image: './stickers/child-emperor.png',
+    label: 'Ребёнок-император',
+    quote: 'Доверься гению!',
+    detail: 'One Punch Man',
+    robloxExtraMin: 25,
+  },
+  {
+    id: 'hero-goku',
     kind: 'art',
-    needQualityWorkout: true,
+    needOwnTasks: 12,
+    image: './stickers/goku.png',
+    label: 'Гоку',
+    quote: 'Камэхамэха!',
+    detail: 'Dragon Ball',
+  },
+  {
+    id: 'feat-quality-13',
+    kind: 'art',
+    needQualityWorkouts: 13,
     image: './stickers/splinter.png',
     label: 'Сплинтер',
     quote: 'Терпение, мой ученик',
     detail: 'Черепашки-ниндзя',
+  },
+  {
+    id: 'hero-yuji',
+    kind: 'art',
+    needExerciseDays: 15,
+    image: './stickers/yuji.png',
+    label: 'Юдзи',
+    quote: 'Я спасу людей по-своему',
+    detail: 'Магическая битва',
   },
   {
     id: 'feat-secret-no-roblox',
@@ -256,145 +375,100 @@ export const STICKERS: Sticker[] = [
     detail: 'One Punch Man',
   },
   {
-    id: 'hero-vegeta',
+    id: 'feat-parent-16',
     kind: 'art',
-    needPerfect: 5,
-    image: './stickers/vegeta.png',
-    label: 'Вегета',
-    quote: 'Я принц всех саян!',
-    detail: 'Dragon Ball',
-  },
-  {
-    id: 'hero-megumi',
-    kind: 'roblox',
-    needStreak: 5,
-    image: './stickers/megumi.png',
-    label: 'Мегуми',
-    quote: 'Техника десяти теней',
-    detail: 'Магическая битва',
-    robloxExtraMin: 25,
-  },
-  {
-    id: 'feat-parent-5',
-    kind: 'art',
-    needParentTasks: 5,
-    image: './stickers/michelangelo.png',
-    label: 'Микеланджело',
-    quote: 'Ковабунга!',
-    detail: 'Черепашки-ниндзя',
-  },
-  {
-    id: 'hero-roblox-ninja',
-    kind: 'art',
-    needPerfect: 6,
-    image: './stickers/roblox-ninja.png',
-    label: 'Ниндзя',
-    quote: 'Тихий удар',
-    detail: 'Roblox',
-  },
-  {
-    id: 'hero-inumaki',
-    kind: 'gift',
-    needPerfect: 7,
-    image: './stickers/inumaki.png',
-    label: 'Инумаки',
-    quote: 'Лосось!',
-    detail: 'Магическая битва',
-    giftHint: 'Подарок: онигири',
-  },
-  {
-    id: 'hero-roblox',
-    kind: 'roblox',
-    needStreak: 7,
-    image: './stickers/roblox-wings.png',
-    label: 'Тёмный',
-    quote: 'Крылья тьмы',
-    detail: 'Roblox',
-    robloxExtraMin: 30,
-  },
-  {
-    id: 'feat-book-1',
-    kind: 'art',
-    needTomSawyerBook: true,
-    image: './stickers/tom-sawyer.png',
-    label: 'Том Сойер',
-    quote: 'Приключения ждут!',
-    detail: 'Приключения Тома Сойера',
-  },
-  {
-    id: 'feat-books-3',
-    kind: 'art',
-    needBooksFinished: 3,
-    image: './stickers/child-emperor.png',
-    label: 'Ребёнок-император',
-    quote: 'Доверься гению!',
-    detail: 'One Punch Man',
-  },
-  {
-    id: 'hero-yuji',
-    kind: 'art',
-    needPerfect: 10,
-    image: './stickers/yuji.png',
-    label: 'Юдзи',
-    quote: 'Я спасу людей по-своему',
-    detail: 'Магическая битва',
-  },
-  {
-    id: 'feat-parent-10',
-    kind: 'art',
-    needParentTasks: 10,
-    image: './stickers/raphael.png',
-    label: 'Рафаэль',
-    quote: 'Кто хочет кулаков?',
-    detail: 'Черепашки-ниндзя',
-  },
-  {
-    id: 'hero-goku',
-    kind: 'art',
-    needPerfect: 12,
-    image: './stickers/goku.png',
-    label: 'Гоку',
-    quote: 'Камэхамэха!',
-    detail: 'Dragon Ball',
-  },
-  {
-    id: 'hero-dante',
-    kind: 'gift',
-    needPerfect: 14,
-    image: './stickers/dante.png',
-    label: 'Данте',
-    quote: 'Jackpot!',
-    detail: 'Devil May Cry',
-    giftHint: 'Подарок: кино-вечер',
-  },
-  {
-    id: 'hero-mahito',
-    kind: 'roblox',
-    needStreak: 14,
-    image: './stickers/mahito.png',
-    label: 'Махито',
-    quote: 'Души людей… забавные',
-    detail: 'Магическая битва',
-    robloxExtraMin: 40,
-  },
-  {
-    id: 'feat-parent-15',
-    kind: 'art',
-    needParentTasks: 15,
+    needParentTasks: 16,
     image: './stickers/donatello.png',
     label: 'Донателло',
     quote: 'Это же элементарно!',
     detail: 'Черепашки-ниндзя',
   },
   {
+    id: 'hero-nezuko',
+    kind: 'art',
+    needChewDays: 17,
+    image: './stickers/nezuko.png',
+    label: 'Незуко',
+    quote: 'Ммпф!',
+    detail: 'Клинок, рассекающий демонов',
+  },
+  {
+    id: 'hero-bang',
+    kind: 'roblox',
+    needStreak: 21,
+    image: './stickers/bang.png',
+    label: 'Серебряный Клык',
+    quote: 'Путь боевых искусств',
+    detail: 'One Punch Man',
+    robloxExtraMin: 20,
+  },
+  {
+    id: 'hero-inumaki',
+    kind: 'gift',
+    needExerciseDays: 22,
+    image: './stickers/inumaki.png',
+    label: 'Инумаки',
+    quote: 'Лосось!',
+    detail: 'Магическая битва',
+    giftHint: 'Награда: онигири',
+  },
+  {
+    id: 'feat-quality-20',
+    kind: 'gift',
+    needQualityWorkouts: 20,
+    image: './stickers/shredder.png',
+    label: 'Шредер',
+    quote: 'Склонитесь передо мной!',
+    detail: 'Черепашки-ниндзя',
+    giftHint: 'Награда: костюм для косплея',
+  },
+  {
+    id: 'feat-secret-chew-50',
+    kind: 'art',
+    needSecretChewMax: true,
+    image: './stickers/sukuna.png',
+    label: 'Сукуна',
+    quote: 'Знаешь ли ты… кто я?',
+    detail: 'Магическая битва',
+  },
+  {
+    id: 'hero-tanjiro',
+    kind: 'gift',
+    needChewDays: 24,
+    image: './stickers/tanjiro.png',
+    label: 'Танджиро',
+    quote: 'Дыхание воды',
+    detail: 'Клинок, рассекающий демонов',
+    giftHint: 'Награда: донат на 200 ₽ в Roblox',
+  },
+  {
+    id: 'hero-gojo',
+    kind: 'gift',
+    needExerciseDays: 27,
+    image: './stickers/gojo.png',
+    label: 'Годжо',
+    quote: 'Расширение территории',
+    detail: 'Магическая битва',
+    giftHint: 'Награда: донат на 200 ₽ в Roblox',
+  },
+  {
     id: 'hero-garou',
     kind: 'gift',
-    needStreak: 30,
+    needStreak: 28,
     image: './stickers/garou.png',
     label: 'Гарроу',
     quote: 'Я стану абсолютным злом',
     detail: 'One Punch Man',
-    giftHint: 'Награда: донат на 500 ₽ в Roblox',
+    giftHint: 'Награда: поход в аквапарк',
+  },
+  {
+    id: 'feat-secret-roblox-bonus',
+    kind: 'art',
+    needSecretRobloxBonusMin: 60,
+    image: './stickers/white-rabbit.png',
+    label: 'Белый Кролик',
+    quote: 'Мы опаздываем!',
+    detail: 'Devil May Cry',
   },
 ]
 
@@ -453,6 +527,78 @@ function ruBooks(n: number): string {
   return 'книг'
 }
 
+function ruQualityWorkouts(n: number): string {
+  const n10 = n % 10
+  const n100 = n % 100
+  if (n10 === 1 && n100 !== 11) return 'качественная зарядка'
+  if (n10 >= 2 && n10 <= 4 && (n100 < 10 || n100 >= 20)) {
+    return 'качественные зарядки'
+  }
+  return 'качественных зарядок'
+}
+
+/**
+ * Quality-workout ladder (1 → 8 → 13 → 20): Casey → Karai → Splinter → Shredder.
+ * «Идеальная» = вся зарядка без скипа таймеров (не просто отметить день).
+ */
+function qualityWorkoutRank(n: number): string {
+  if (n <= 1) return 'Ученик идеальной зарядки'
+  if (n <= 8) return 'Ниндзя идеальной зарядки'
+  if (n <= 13) return 'Мастер идеальной зарядки'
+  return 'Сэнсэй идеальной зарядки'
+}
+
+/** Parent tasks ladder (2 → 6 → 11 → 16): Leo → Mikey → Raph → Don. */
+function parentTasksRank(n: number): string {
+  if (n <= 2) return 'Сэмпай помощи родителям'
+  if (n <= 6) return 'Сэнсэй помощи родителям'
+  if (n <= 11) return 'Шихан помощи родителям'
+  return 'Сокэ помощи родителям'
+}
+
+/** Own tasks ladder (4 → 8 → 12): Vegeta → Beerus → Goku. */
+function ownTasksRank(n: number): string {
+  if (n <= 4) return 'Воин низшего класса дел'
+  if (n <= 8) return 'Воин среднего класса дел'
+  return 'Элитный воин дел'
+}
+
+/**
+ * Exercise-days ladder (4 → 9 → 15 → 22 → 27).
+ * Jujutsu Kaisen sorcerer grades: Megumi → Mahoraga → Yuji → Inumaki → Gojo.
+ */
+function exerciseDaysRank(n: number): string {
+  if (n <= 4) return 'Колдун зарядки 4-го ранга'
+  if (n <= 9) return 'Колдун зарядки 3-го ранга'
+  if (n <= 15) return 'Колдун зарядки 2-го ранга'
+  if (n <= 22) return 'Колдун зарядки 1-го ранга'
+  return 'Особый ранг зарядки'
+}
+
+/** Chew-diary ladder (5 → 11 → 17 → 24): Inosuke → Zenitsu → Nezuko → Tanjiro. */
+function chewDaysRank(n: number): string {
+  if (n <= 5) return 'Охотник жевания мидзуното'
+  if (n <= 11) return 'Охотник жевания каното'
+  if (n <= 17) return 'Охотник жевания киноэ'
+  return 'Столп жевания'
+}
+
+/** Books ladder (1 → 2 → 3). */
+function booksRank(n: number): string {
+  if (n <= 1) return 'Читатель'
+  if (n <= 2) return 'Книжный охотник'
+  return 'Книжный демон'
+}
+
+/** Ideal-day streak ladder (3 → 7 → 14 → 21 → 28). */
+function streakRank(n: number): string {
+  if (n <= 3) return 'Герой идеальных дней C-класса'
+  if (n <= 7) return 'Герой идеальных дней B-класса'
+  if (n <= 14) return 'Герой идеальных дней A-класса'
+  if (n <= 21) return 'Герой идеальных дней S-класса'
+  return 'Легенда идеальных дней'
+}
+
 /** Assumed length for exercises without a timer (middle of 20–30 sec). */
 export const UNTIMED_EXERCISE_SEC = 25
 
@@ -494,7 +640,26 @@ export function hasQualityWorkout(
   days: Record<string, DayLog>,
   exercises: Exercise[],
 ): boolean {
-  return Object.values(days).some((day) => isQualityWorkoutDay(day, exercises))
+  return countQualityWorkouts(days, exercises) > 0
+}
+
+export function countQualityWorkouts(
+  days: Record<string, DayLog>,
+  exercises: Exercise[],
+): number {
+  return Object.values(days).filter((day) =>
+    isQualityWorkoutDay(day, exercises),
+  ).length
+}
+
+/** Total calendar days with зарядка checked. */
+export function countExerciseDays(days: Record<string, DayLog>): number {
+  return Object.values(days).filter((day) => Boolean(day.mustDo.exercise)).length
+}
+
+/** Total unique calendar days that have at least one chew diary entry. */
+export function countChewDiaryDays(entries: ChewEntry[]): number {
+  return new Set(entries.map((e) => e.date)).size
 }
 
 const SHORTCUT_WORKOUT_MAX_SEC = 20 * 60
@@ -539,25 +704,6 @@ export function hasChewMaxEntry(
       entry.left.every((n) => n > threshold) &&
       entry.right.every((n) => n > threshold),
   )
-}
-
-/** Best run of consecutive calendar days that each have at least one chew entry. */
-export function bestChewDiaryStreak(entries: ChewEntry[]): number {
-  const dates = [...new Set(entries.map((e) => e.date))].sort()
-  if (dates.length === 0) return 0
-  let best = 1
-  let run = 1
-  for (let i = 1; i < dates.length; i++) {
-    const prev = dates[i - 1]
-    const cur = dates[i]
-    if (cur === shiftDayKey(prev, 1)) {
-      run++
-      best = Math.max(best, run)
-    } else {
-      run = 1
-    }
-  }
-  return best
 }
 
 export function countOwnTasksDone(days: Record<string, DayLog>): number {
@@ -626,91 +772,155 @@ export function stickerProgressFromData(data: AppData): StickerProgress {
   const streak = currentStreak(data.days)
   const parentNow = countParentTasksDone(data.days)
   const finishedBooks = data.finishedBooks ?? []
-  return {
+  const progress: StickerProgress = {
     perfectTotal: countPerfectDays(data.days),
     streak,
     bestStreak: Math.max(data.bestStreak ?? 0, streak),
-    qualityWorkout: hasQualityWorkout(data.days, data.exercises),
+    qualityWorkouts: countQualityWorkouts(data.days, data.exercises),
+    exerciseDays: countExerciseDays(data.days),
+    chewDays: countChewDiaryDays(data.chewEntries ?? []),
     chewMax: hasChewMaxEntry(data.chewEntries ?? [], 50),
     parentTasks: Math.max(data.bestParentTasks ?? 0, parentNow),
     booksFinished: finishedBooks.length,
     tomSawyerFinished: isTomSawyerInFinishedBooks(finishedBooks),
     ownTasks: countOwnTasksDone(data.days),
-    chewStreak: bestChewDiaryStreak(data.chewEntries ?? []),
     secretShortcut: hasShortcutWorkout(data.days, data.exercises),
     secretNoRoblox: hasNoRobloxPerfectDay(data.days),
+    achievementRobloxMin: 0,
   }
+  progress.achievementRobloxMin = totalAchievementRobloxMinutes(progress)
+  return progress
 }
 
-/** Full unlock condition shown on the card */
+/** Roblox bonus minutes granted by already-unlocked stickers (excludes bonus-min secrets). */
+export function totalAchievementRobloxMinutes(progress: StickerProgress): number {
+  return STICKERS.filter(
+    (s) =>
+      s.robloxExtraMin != null &&
+      s.needSecretRobloxBonusMin == null &&
+      isStickerUnlocked(s, progress),
+  ).reduce((sum, s) => sum + (s.robloxExtraMin ?? 0), 0)
+}
+
+export function isSecretSticker(sticker: Sticker): boolean {
+  return Boolean(
+    sticker.needSecretShortcut ||
+      sticker.needSecretNoRoblox ||
+      sticker.needSecretChewMax ||
+      sticker.needSecretRobloxBonusMin != null,
+  )
+}
+
+function progressFraction(current: number, need: number): string {
+  return `${Math.min(Math.max(0, current), need)}/${need}`
+}
+
+/** Rank / title shown on the locked card (not the how-to). */
 export function stickerNeedText(sticker: Sticker): string {
-  if (sticker.needSecretShortcut || sticker.needSecretNoRoblox) return '???'
-  if (sticker.needQualityWorkout) return 'Мастер зарядки'
-  if (sticker.needOwnTasks != null) return 'Сам себе хозяин'
-  if (sticker.needChewMax != null) return 'Жевать — не переживать'
-  if (sticker.needChewStreak != null) {
-    const n = sticker.needChewStreak
-    return `${n} ${ruDays(n)} дневника`
+  if (isSecretSticker(sticker)) return '???'
+  if (sticker.needQualityWorkouts != null) {
+    return qualityWorkoutRank(sticker.needQualityWorkouts)
+  }
+  if (sticker.needExerciseDays != null) {
+    return exerciseDaysRank(sticker.needExerciseDays)
+  }
+  if (sticker.needChewDays != null) {
+    return chewDaysRank(sticker.needChewDays)
+  }
+  if (sticker.needOwnTasks != null) {
+    return ownTasksRank(sticker.needOwnTasks)
   }
   if (sticker.needParentTasks != null) {
-    const n = sticker.needParentTasks
-    return `${n} ${ruTasks(n)} от родителя`
+    return parentTasksRank(sticker.needParentTasks)
   }
-  if (sticker.needTomSawyerBook) return 'Приключения'
   if (sticker.needBooksFinished != null) {
-    const n = sticker.needBooksFinished
-    return `${n} ${ruBooks(n)} дочитано`
+    return booksRank(sticker.needBooksFinished)
   }
   if (sticker.needStreak != null) {
-    const n = sticker.needStreak
-    return `${n} идеальных ${ruDays(n)} подряд`
+    return streakRank(sticker.needStreak)
   }
-  if (sticker.needPerfect === 1) return '1 идеальный день'
-  if (sticker.needPerfect != null) {
-    const n = sticker.needPerfect
-    return `${n} идеальных ${ruDays(n)}`
-  }
+  if (sticker.needPerfect != null) return 'Герой-новичок идеальных дней'
   return '…'
 }
 
-/** Condition line for locked stickers in the detail panel */
-export function stickerUnlockHint(sticker: Sticker): string {
-  if (sticker.needSecretShortcut || sticker.needSecretNoRoblox) {
-    return 'Секретный способ получения'
+/** Condition line for locked stickers (card hint + detail panel) */
+export function stickerUnlockHint(
+  sticker: Sticker,
+  progress?: StickerProgress,
+): string {
+  // Veiled secret hints — never spell out the exact rule.
+  if (sticker.needSecretNoRoblox) {
+    return 'Идеальный день… но без портала в игру'
   }
-  if (sticker.needQualityWorkout) {
-    return 'Чтобы открыть: пройти всю зарядку, не скидывая таймеры'
+  if (sticker.needSecretChewMax) {
+    return 'Когда ни один укус не слабее полусотни'
+  }
+  if (sticker.needSecretRobloxBonusMin != null) {
+    return 'Когда на часах увидишь целый накопленный час'
+  }
+  if (isSecretSticker(sticker)) return 'Секретный способ получения'
+  if (sticker.needQualityWorkouts != null) {
+    const n = sticker.needQualityWorkouts
+    const frac = progress
+      ? ` (${progressFraction(progress.qualityWorkouts, n)})`
+      : ''
+    if (n === 1) {
+      return `Пройти всю зарядку, не скидывая таймеры${frac}`
+    }
+    return `${n} ${ruQualityWorkouts(n)} без скипа таймеров${frac}`
+  }
+  if (sticker.needExerciseDays != null) {
+    const n = sticker.needExerciseDays
+    const frac = progress
+      ? ` (${progressFraction(progress.exerciseDays, n)})`
+      : ''
+    return `Делать зарядку ${n} ${ruDays(n)}${frac}`
+  }
+  if (sticker.needChewDays != null) {
+    const n = sticker.needChewDays
+    const frac = progress
+      ? ` (${progressFraction(progress.chewDays, n)})`
+      : ''
+    return `Заполнять дневник жевания ${n} ${ruDays(n)}${frac}`
   }
   if (sticker.needOwnTasks != null) {
     const n = sticker.needOwnTasks
-    return `Чтобы открыть: выполнить ${n} ${ruTasks(n)} от себя (не от родителя)`
-  }
-  if (sticker.needChewMax != null) {
-    return `Чтобы открыть: в дневнике все укусы больше ${sticker.needChewMax}`
-  }
-  if (sticker.needChewStreak != null) {
-    const n = sticker.needChewStreak
-    return `Чтобы открыть: ${n} ${ruDays(n)} подряд с записью в дневнике жевания`
+    const frac = progress
+      ? ` (${progressFraction(progress.ownTasks, n)})`
+      : ''
+    return `Выполнить ${n} ${ruTasks(n)} от себя${frac}`
   }
   if (sticker.needParentTasks != null) {
     const n = sticker.needParentTasks
-    return `Чтобы открыть: выполнить ${n} ${ruTasks(n)} от родителя`
-  }
-  if (sticker.needTomSawyerBook) {
-    return 'Чтобы открыть: прочитать «Приключения Тома Сойера» до конца'
+    const frac = progress
+      ? ` (${progressFraction(progress.parentTasks, n)})`
+      : ''
+    return `Выполнить ${n} ${ruTasks(n)} от родителя${frac}`
   }
   if (sticker.needBooksFinished != null) {
     const n = sticker.needBooksFinished
-    return `Чтобы открыть: дочитать ${n} ${ruBooks(n)}`
+    const frac = progress
+      ? ` (${progressFraction(progress.booksFinished, n)})`
+      : ''
+    return `Дочитать ${n} ${ruBooks(n)}${frac}`
   }
   if (sticker.needStreak != null) {
-    return `Чтобы открыть: ${sticker.needStreak} идеальных ${ruDays(sticker.needStreak)} подряд`
+    const n = sticker.needStreak
+    const streakNow = progress
+      ? Math.max(progress.streak, progress.bestStreak)
+      : 0
+    const frac = progress ? ` (${progressFraction(streakNow, n)})` : ''
+    return `${n} идеальных ${ruDays(n)} подряд${frac}`
   }
   if (sticker.needPerfect === 1) {
-    return 'Чтобы открыть: 1 идеальный день (все 5 пунктов минимума)'
+    return '1 идеальный день (все 5 пунктов минимума)'
   }
   if (sticker.needPerfect != null) {
-    return `Чтобы открыть: всего ${sticker.needPerfect} идеальных ${ruDays(sticker.needPerfect)}`
+    const n = sticker.needPerfect
+    const frac = progress
+      ? ` (${progressFraction(progress.perfectTotal, n)})`
+      : ''
+    return `${n} идеальных ${ruDays(n)}${frac}`
   }
   return 'Скоро откроется'
 }
@@ -723,37 +933,46 @@ export function stickerOpenedHint(sticker: Sticker): string {
   if (sticker.needSecretNoRoblox) {
     return 'Открыто: идеальный день без Roblox'
   }
-  if (sticker.needQualityWorkout) return 'Открыто: супер-зарядка без скипов'
+  if (sticker.needSecretChewMax) {
+    return 'Открыто: все укусы в записи больше 50'
+  }
+  if (sticker.needSecretRobloxBonusMin != null) {
+    return `Открыто: суммарно больше ${sticker.needSecretRobloxBonusMin} мин Roblox с ачивок`
+  }
+  if (sticker.needQualityWorkouts != null) {
+    const n = sticker.needQualityWorkouts
+    const rank = qualityWorkoutRank(n)
+    if (n === 1) {
+      return `Открыто: ранг «${rank}» — зарядка без скипов`
+    }
+    return `Открыто: ранг «${rank}» — ${n} ${ruQualityWorkouts(n)} без скипов`
+  }
+  if (sticker.needExerciseDays != null) {
+    const n = sticker.needExerciseDays
+    return `Открыто: ранг «${exerciseDaysRank(n)}» — зарядка ${n} ${ruDays(n)}`
+  }
+  if (sticker.needChewDays != null) {
+    const n = sticker.needChewDays
+    return `Открыто: ранг «${chewDaysRank(n)}» — дневник ${n} ${ruDays(n)}`
+  }
   if (sticker.needOwnTasks != null) {
     const n = sticker.needOwnTasks
-    return `Открыто: ${n} ${ruTasks(n)} от себя`
-  }
-  if (sticker.needChewMax != null) {
-    return `Открыто: все укусы > ${sticker.needChewMax}`
-  }
-  if (sticker.needChewStreak != null) {
-    const n = sticker.needChewStreak
-    return `Открыто: ${n} ${ruDays(n)} подряд с дневником жевания`
+    return `Открыто: ранг «${ownTasksRank(n)}» — ${n} ${ruTasks(n)} от себя`
   }
   if (sticker.needParentTasks != null) {
     const n = sticker.needParentTasks
-    return `Открыто: ${n} ${ruTasks(n)} от родителя`
-  }
-  if (sticker.needTomSawyerBook) {
-    return 'Открыто: приключения Тома Сойера пройдены до конца'
+    return `Открыто: ранг «${parentTasksRank(n)}» — ${n} ${ruTasks(n)} от родителя`
   }
   if (sticker.needBooksFinished != null) {
     const n = sticker.needBooksFinished
-    return `Открыто: ${n} ${ruBooks(n)} дочитано`
+    return `Открыто: ранг «${booksRank(n)}» — ${n} ${ruBooks(n)}`
   }
   if (sticker.needStreak != null) {
     const n = sticker.needStreak
-    return `Открыто: ${n} идеальных ${ruDays(n)} подряд`
+    return `Открыто: ранг «${streakRank(n)}» — ${n} идеальных ${ruDays(n)} подряд`
   }
-  if (sticker.needPerfect === 1) return 'Открыто: 1 идеальный день'
   if (sticker.needPerfect != null) {
-    const n = sticker.needPerfect
-    return `Открыто: ${n} идеальных ${ruDays(n)}`
+    return 'Открыто: ранг «Герой-новичок идеальных дней» — 1 идеальный день'
   }
   return 'Открыто'
 }
@@ -763,7 +982,7 @@ export function stickerRewardText(sticker: Sticker): string | null {
   const parts: string[] = []
   if (sticker.robloxExtraMin) {
     parts.push(
-      `Награда: разово +${sticker.robloxExtraMin} мин Roblox на один день`,
+      `Награда: +${sticker.robloxExtraMin} мин Roblox в копилку (можно потратить в любой день)`,
     )
   }
   if (sticker.giftHint) {
@@ -782,6 +1001,7 @@ export function isStickerUnlocked(
   sticker: Sticker,
   progress: StickerProgress,
 ): boolean {
+  if (DEBUG_LOCK_ALL_STICKERS) return false
   if (DEBUG_UNLOCK_ALL_STICKERS) return true
   const perfectOk =
     sticker.needPerfect == null || progress.perfectTotal >= sticker.needPerfect
@@ -789,12 +1009,15 @@ export function isStickerUnlocked(
   const streakOk =
     sticker.needStreak == null || streakReach >= sticker.needStreak
   const qualityOk =
-    !sticker.needQualityWorkout || progress.qualityWorkout
+    sticker.needQualityWorkouts == null ||
+    progress.qualityWorkouts >= sticker.needQualityWorkouts
+  const exerciseDaysOk =
+    sticker.needExerciseDays == null ||
+    progress.exerciseDays >= sticker.needExerciseDays
+  const chewDaysOk =
+    sticker.needChewDays == null || progress.chewDays >= sticker.needChewDays
   const chewOk =
     sticker.needChewMax == null || progress.chewMax
-  const chewStreakOk =
-    sticker.needChewStreak == null ||
-    progress.chewStreak >= sticker.needChewStreak
   const ownTasksOk =
     sticker.needOwnTasks == null || progress.ownTasks >= sticker.needOwnTasks
   const parentOk =
@@ -809,23 +1032,55 @@ export function isStickerUnlocked(
     !sticker.needSecretShortcut || progress.secretShortcut
   const secretNoRobloxOk =
     !sticker.needSecretNoRoblox || progress.secretNoRoblox
+  const secretChewMaxOk =
+    !sticker.needSecretChewMax || progress.chewMax
+  const secretRobloxBonusOk =
+    sticker.needSecretRobloxBonusMin == null ||
+    progress.achievementRobloxMin >= sticker.needSecretRobloxBonusMin
   return (
     perfectOk &&
     streakOk &&
     qualityOk &&
+    exerciseDaysOk &&
+    chewDaysOk &&
     chewOk &&
-    chewStreakOk &&
     ownTasksOk &&
     parentOk &&
     booksOk &&
     tomSawyerOk &&
     secretShortcutOk &&
-    secretNoRobloxOk
+    secretNoRobloxOk &&
+    secretChewMaxOk &&
+    secretRobloxBonusOk
   )
 }
 
 export function unlockedStickers(progress: StickerProgress): Sticker[] {
   return STICKERS.filter((s) => isStickerUnlocked(s, progress))
+}
+
+/** Opened non-secret stickers that can be worn as «Звание». */
+export function unlockedRankStickers(progress: StickerProgress): Sticker[] {
+  return STICKERS.filter(
+    (s) => !isSecretSticker(s) && isStickerUnlocked(s, progress),
+  )
+}
+
+/**
+ * Resolve equipped rank sticker: keep selection if still unlocked,
+ * otherwise first unlocked non-secret (STICKERS order).
+ */
+export function equippedRankSticker(
+  equippedStickerId: string | null | undefined,
+  progress: StickerProgress,
+): Sticker | null {
+  const ranks = unlockedRankStickers(progress)
+  if (ranks.length === 0) return null
+  if (equippedStickerId) {
+    const selected = ranks.find((s) => s.id === equippedStickerId)
+    if (selected) return selected
+  }
+  return ranks[0] ?? null
 }
 
 export function normalizeReadingBooks(raw: unknown): ReadingBook[] {
@@ -933,7 +1188,7 @@ function streakTipDay(
 }
 
 /**
- * Pay out any newly reached streak milestones as a one-day Roblox bonus.
+ * Pay out newly reached streak milestones into the Roblox bonus bank.
  * Idempotent: each milestone is claimed at most once ever.
  */
 export function applyPendingRobloxStreakRewards(
@@ -951,45 +1206,78 @@ export function applyPendingRobloxStreakRewards(
     return data
   }
 
-  let next: AppData = {
+  const next: AppData = {
     ...data,
     claimedRobloxStreaks: data.claimedRobloxStreaks ?? [],
+    robloxBonusBankMin: data.robloxBonusBankMin ?? 0,
     bestStreak,
   }
 
   if (newly.length === 0) return next
 
-  const tip = streakTipDay(data.days, today)
-  if (!tip) return next
+  // Only credit the bank when the streak tip day exists (same gate as before).
+  if (!streakTipDay(data.days, today)) return next
 
   const bonusMin = newly.reduce((sum, r) => sum + r.minutes, 0)
-  const day = normalizeDayLog(tip, data.days[tip])
-  const nextBonus = (day.robloxBonusMin ?? 0) + bonusMin
-  const nextLimit = SCREEN_LIMITS.roblox.seconds + nextBonus * 60
-  const slot = day.screens.roblox
-  const unusedFull =
-    !slot.finished && !slot.endsAt && slot.usedSec === 0 && slot.remainingSec >= SCREEN_LIMITS.roblox.seconds
-
-  next = {
+  return {
     ...next,
     claimedRobloxStreaks: [...claimed, ...newly.map((r) => r.streak)].sort(
       (a, b) => a - b,
     ),
+    robloxBonusBankMin: (next.robloxBonusBankMin ?? 0) + bonusMin,
+  }
+}
+
+/**
+ * Move minutes from the bonus bank onto today's Roblox limit.
+ * No-op if the daily limit is already finished or there is nothing to claim.
+ */
+export function claimRobloxBankMinutes(
+  data: AppData,
+  minutes: number,
+  today = todayKey(),
+): AppData {
+  const bank = Math.max(0, Math.floor(data.robloxBonusBankMin ?? 0))
+  const claim = Math.min(bank, Math.max(0, Math.floor(minutes)))
+  if (claim <= 0) return data
+
+  const day = normalizeDayLog(today, data.days[today])
+  const slot = day.screens.roblox
+  if (slot.finished) return data
+
+  const nextBonus = (day.robloxBonusMin ?? 0) + claim
+  const addSec = claim * 60
+  // Claiming more time ends overtime — keep what already accrued.
+  const baseSlot = flushScreenOvertime(slot)
+  let nextSlot = baseSlot
+  if (slot.endsAt != null) {
+    nextSlot = {
+      ...baseSlot,
+      endsAt: slot.endsAt + addSec * 1000,
+      remainingSec: slot.remainingSec + addSec,
+    }
+  } else {
+    nextSlot = {
+      ...baseSlot,
+      remainingSec: slot.remainingSec + addSec,
+    }
+  }
+
+  return {
+    ...data,
+    robloxBonusBankMin: bank - claim,
     days: {
-      ...next.days,
-      [tip]: {
+      ...data.days,
+      [today]: {
         ...day,
         robloxBonusMin: nextBonus,
         screens: {
           ...day.screens,
-          roblox: unusedFull
-            ? { ...slot, remainingSec: nextLimit }
-            : slot,
+          roblox: nextSlot,
         },
       },
     },
   }
-  return next
 }
 
 export function shiftDayKey(key: string, delta: number): string {

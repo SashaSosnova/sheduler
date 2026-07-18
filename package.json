@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "cap:sync": "npm run build && npx cap sync android",
     "cap:open": "npx cap open android",
-    "apk:debug": "npm run cap:sync && cd android && .\\gradlew.bat assembleDebug"
+    "apk:debug": "npm run cap:sync && cd android && .\\gradlew.bat assembleDebug",
+    "apk:release": "npm run cap:sync && cd android && .\\gradlew.bat assembleRelease"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.2",

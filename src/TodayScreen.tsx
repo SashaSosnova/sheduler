@@ -15,6 +15,7 @@ import {
   workoutDurationSec,
 } from './data'
 import {
+  claimRobloxBankMinutes,
   robloxBonusMinutes,
   robloxLimitSeconds,
 } from './progress'
@@ -60,6 +61,8 @@ export function TodayScreen({
   const prevDoneRef = useRef(doneCount)
   const robloxLimit = robloxLimitSeconds(data.days, key)
   const robloxBonusMin = robloxBonusMinutes(data.days, key)
+  const robloxBankMin = Math.max(0, Math.floor(data.robloxBonusBankMin ?? 0))
+  const robloxSlot = day.screens.roblox
 
   useEffect(() => {
     if (
@@ -81,6 +84,10 @@ export function TodayScreen({
         [key]: next,
       },
     })
+  }
+
+  function claimBank(minutes: number) {
+    onChange(claimRobloxBankMinutes(data, minutes, key))
   }
 
   // Auto-mark exercise/chew/read when done in-app; never clear a parent override
@@ -114,7 +121,6 @@ export function TodayScreen({
   ])
 
   // Sync unused Roblox slot to today's limit (base + achievement bonuses)
-  const robloxSlot = day.screens.roblox
   useEffect(() => {
     if (robloxSlot.finished || robloxSlot.endsAt || robloxSlot.usedSec > 0) return
     if (robloxSlot.remainingSec === robloxLimit) return
@@ -472,17 +478,20 @@ export function TodayScreen({
       <section className="card">
         <h2>Roblox — лимит времени</h2>
         <p className="hint">
-          Это не «надо сделать», а ограничение. Нажми «Начать» — запустится таймер.
-          Когда время вышло, на сегодня лимит использован.
+          Нажми «Начать» — запустится таймер. Когда время выйдет, таймер
+          остановится: можно доиграть, потом нажми «Закончить на сегодня».
+          Бонусы с ачивок копятся тут же и тратятся в любой день.
         </p>
         <div className="screen-limits">
           <ScreenLimitCard
             kind="roblox"
             slot={day.screens.roblox}
             limitSeconds={robloxLimit}
+            bankMinutes={robloxBankMin}
+            onClaimBank={claimBank}
             bonusNote={
               robloxBonusMin > 0
-                ? `Сегодня бонус: +${robloxBonusMin} мин (разово за серию)`
+                ? `Сегодня из копилки: +${robloxBonusMin} мин`
                 : undefined
             }
             onChange={(slot) => setScreen('roblox', slot)}

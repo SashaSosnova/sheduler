@@ -5,6 +5,8 @@ import {
   SCREEN_LIMITS,
   chewDurationSec,
   formatPlayTime,
+  formatPlayTimeWithOvertime,
+  screenOvertimeSec,
   normalizeDayLog,
   todayKey,
   uid,
@@ -49,11 +51,15 @@ export function ParentSummaryScreen({
   const [bookDraft, setBookDraft] = useState('')
   const [addingBook, setAddingBook] = useState(false)
 
+  const timedOut =
+    !roblox.finished && !running && roblox.remainingSec <= 0 && roblox.usedSec > 0
+  const overtimeTicking = timedOut && roblox.overtimeStartedAt != null
+
   useEffect(() => {
-    if (!running) return
+    if (!running && !overtimeTicking) return
     const id = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(id)
-  }, [running])
+  }, [running, overtimeTicking])
 
   const livePlayed =
     running && roblox.endsAt
@@ -63,13 +69,18 @@ export function ParentSummaryScreen({
         )
       : 0
   const displayUsed = Math.min(limitSec, roblox.usedSec + livePlayed)
+  const overtimeLive = screenOvertimeSec(roblox, now)
   const statusLabel = roblox.finished
-    ? 'лимит'
+    ? 'лимит закрыт'
     : running
       ? 'сейчас играет'
-      : roblox.usedSec > 0
-        ? 'пауза'
-        : 'ещё не играл'
+      : timedOut
+        ? overtimeLive > 0
+          ? 'доигрывает сверх лимита'
+          : 'время вышло'
+        : roblox.usedSec > 0
+          ? 'пауза'
+          : 'ещё не играл'
 
   function patchDay(partial: Partial<typeof day>) {
     const next = normalizeDayLog(key, { ...day, ...partial })
@@ -193,8 +204,16 @@ export function ParentSummaryScreen({
             {statusLabel}
           </span>
         </div>
-        <p className="parent-play-time">{formatPlayTime(displayUsed)}</p>
+        <p className="parent-play-time">
+          {formatPlayTimeWithOvertime(displayUsed, overtimeLive)}
+        </p>
         <p className="hint">из {Math.round(limitSec / 60)} мин на сегодня</p>
+        {(data.robloxBonusBankMin ?? 0) > 0 ? (
+          <p className="hint">
+            Копилка бонусов: {Math.floor(data.robloxBonusBankMin ?? 0)} мин (ещё не
+            потрачено)
+          </p>
+        ) : null}
         <div className="play-bar" aria-hidden>
           <div
             className="play-bar-fill"

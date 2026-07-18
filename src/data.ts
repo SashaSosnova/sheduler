@@ -48,6 +48,8 @@ export function emptyScreenSlot(limitSec: number): ScreenSlot {
     remainingSec: limitSec,
     finished: false,
     usedSec: 0,
+    overtimeSec: 0,
+    overtimeStartedAt: null,
   }
 }
 
@@ -64,6 +66,44 @@ export function formatPlayTime(sec: number): string {
     return s > 0 && m < 5 ? `${m} мин ${s} сек` : `${m} мин`
   }
   return `${s} сек`
+}
+
+/** Live overtime including an active overtimeStartedAt clock. */
+export function screenOvertimeSec(slot: ScreenSlot, now = Date.now()): number {
+  const base =
+    typeof slot.overtimeSec === 'number' && Number.isFinite(slot.overtimeSec)
+      ? Math.max(0, Math.floor(slot.overtimeSec))
+      : 0
+  if (
+    !slot.finished &&
+    typeof slot.overtimeStartedAt === 'number' &&
+    Number.isFinite(slot.overtimeStartedAt)
+  ) {
+    return base + Math.max(0, Math.floor((now - slot.overtimeStartedAt) / 1000))
+  }
+  return base
+}
+
+/** Fold live overtime into overtimeSec and stop the clock. */
+export function flushScreenOvertime(
+  slot: ScreenSlot,
+  now = Date.now(),
+): ScreenSlot {
+  return {
+    ...slot,
+    overtimeSec: screenOvertimeSec(slot, now),
+    overtimeStartedAt: null,
+  }
+}
+
+/** e.g. "45 мин (+12 мин сверх лимита)" */
+export function formatPlayTimeWithOvertime(
+  usedSec: number,
+  overtimeSec: number,
+): string {
+  const base = formatPlayTime(usedSec)
+  if (overtimeSec <= 0) return base
+  return `${base} (+${formatPlayTime(overtimeSec)} сверх лимита)`
 }
 
 const POSTURE = 'Гимнастика для осанки'
@@ -560,10 +600,21 @@ function normalizeScreenSlot(
     typeof raw.usedSec === 'number' && Number.isFinite(raw.usedSec)
       ? Math.max(0, Math.floor(raw.usedSec))
       : 0
+  const overtimeSec =
+    typeof raw.overtimeSec === 'number' && Number.isFinite(raw.overtimeSec)
+      ? Math.max(0, Math.floor(raw.overtimeSec))
+      : 0
+  const overtimeStartedAt =
+    typeof raw.overtimeStartedAt === 'number' &&
+    Number.isFinite(raw.overtimeStartedAt)
+      ? raw.overtimeStartedAt
+      : null
   return {
     ...base,
     ...raw,
     usedSec,
+    overtimeSec,
+    overtimeStartedAt,
   }
 }
 
@@ -588,6 +639,8 @@ export function defaultAppData(): AppData {
     cookingLeft: 5,
     routineId: ROUTINE_ID,
     claimedRobloxStreaks: [],
+    robloxBonusBankMin: 0,
+    equippedStickerId: null,
     bestStreak: 0,
     bestParentTasks: 0,
     readingBooks: [],

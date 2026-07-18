@@ -36,6 +36,8 @@ type StoredData = {
   cookingLeft?: number
   routineId?: string
   claimedRobloxStreaks?: number[]
+  robloxBonusBankMin?: number
+  equippedStickerId?: string | null
   bestStreak?: number
   bestParentTasks?: number
   /** @deprecated use readingBooks */
@@ -43,6 +45,12 @@ type StoredData = {
   readingBooks?: ReadingBook[]
   finishedBooks?: FinishedBook[]
   exercises?: unknown
+}
+
+function normalizeEquippedStickerId(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const id = raw.trim()
+  return id.length > 0 ? id : null
 }
 
 function normalizeStreakInts(raw: unknown): number[] {
@@ -75,6 +83,12 @@ function hydrateAppData(
     cookingLeft: partial.cookingLeft ?? 5,
     routineId: ROUTINE_ID,
     claimedRobloxStreaks: normalizeStreakInts(partial.claimedRobloxStreaks),
+    robloxBonusBankMin:
+      typeof partial.robloxBonusBankMin === 'number' &&
+      Number.isFinite(partial.robloxBonusBankMin)
+        ? Math.max(0, Math.floor(partial.robloxBonusBankMin))
+        : 0,
+    equippedStickerId: normalizeEquippedStickerId(partial.equippedStickerId),
     bestStreak:
       typeof partial.bestStreak === 'number' && Number.isFinite(partial.bestStreak)
         ? Math.max(0, Math.floor(partial.bestStreak))
@@ -117,6 +131,12 @@ function load(): AppData {
       chewEntries: parsed.chewEntries ?? [],
       cookingLeft: parsed.cookingLeft ?? 5,
       claimedRobloxStreaks,
+      robloxBonusBankMin:
+        typeof parsed.robloxBonusBankMin === 'number' &&
+        Number.isFinite(parsed.robloxBonusBankMin)
+          ? Math.max(0, Math.floor(parsed.robloxBonusBankMin))
+          : 0,
+      equippedStickerId: normalizeEquippedStickerId(parsed.equippedStickerId),
       bestStreak,
       bestParentTasks,
       readingBooks: resolveReadingBooks(
@@ -163,6 +183,12 @@ function applyCloud(prev: AppData, payload: CloudPayload): AppData {
     chewEntries: payload.chewEntries ?? [],
     cookingLeft: payload.cookingLeft ?? prev.cookingLeft,
     claimedRobloxStreaks,
+    robloxBonusBankMin:
+      payload.robloxBonusBankMin ?? prev.robloxBonusBankMin ?? 0,
+    equippedStickerId:
+      payload.equippedStickerId !== undefined
+        ? normalizeEquippedStickerId(payload.equippedStickerId)
+        : normalizeEquippedStickerId(prev.equippedStickerId),
     bestStreak,
     bestParentTasks,
     readingBooks,
@@ -212,6 +238,8 @@ function replaceFromCloud(payload: CloudPayload): AppData {
     chewEntries: payload.chewEntries ?? [],
     cookingLeft: payload.cookingLeft ?? 5,
     claimedRobloxStreaks: payload.claimedRobloxStreaks ?? [],
+    robloxBonusBankMin: payload.robloxBonusBankMin ?? 0,
+    equippedStickerId: normalizeEquippedStickerId(payload.equippedStickerId),
     bestStreak: Math.max(payload.bestStreak ?? 0, streak),
     bestParentTasks: Math.max(payload.bestParentTasks ?? 0, parentNow),
     readingBooks: resolveReadingBooks(
@@ -248,6 +276,8 @@ export function useAppData() {
       cookingLeft: data.cookingLeft,
       routineId: ROUTINE_ID,
       claimedRobloxStreaks: data.claimedRobloxStreaks ?? [],
+      robloxBonusBankMin: data.robloxBonusBankMin ?? 0,
+      equippedStickerId: data.equippedStickerId ?? null,
       bestStreak: data.bestStreak ?? 0,
       bestParentTasks: data.bestParentTasks ?? 0,
       readingBooks: data.readingBooks ?? [],
