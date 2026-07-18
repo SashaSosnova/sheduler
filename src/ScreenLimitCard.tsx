@@ -45,7 +45,7 @@ export function ScreenLimitCard({
   const overtimeLive = screenOvertimeSec(slot, now)
   const overtimeTicking = timedOut && slot.overtimeStartedAt != null
   const bank = Math.max(0, Math.floor(bankMinutes))
-  const canClaimBank = bank > 0 && !slot.finished && Boolean(onClaimBank)
+  const canClaimBank = bank > 0 && Boolean(onClaimBank)
   const bankClaimOptions = [10, 15, 20, 25, 30].filter((n) => n <= bank)
 
   useEffect(() => {
@@ -196,11 +196,7 @@ export function ScreenLimitCard({
               Все {bank} мин сегодня
             </button>
           </div>
-        ) : (
-          <p className="hint">
-            Лимит на сегодня уже закрыт — бонусы можно потратить завтра.
-          </p>
-        )}
+        ) : null}
       </div>
 
       <div className="row-gap">

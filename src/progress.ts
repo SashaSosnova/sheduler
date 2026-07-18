@@ -1247,7 +1247,7 @@ export function giftRobloxBankMinutes(data: AppData, minutes: number): AppData {
 
 /**
  * Move minutes from the bonus bank onto today's Roblox limit.
- * No-op if the daily limit is already finished or there is nothing to claim.
+ * Allowed even after «Закончить» — reopens the day with the claimed minutes.
  */
 export function claimRobloxBankMinutes(
   data: AppData,
@@ -1260,23 +1260,25 @@ export function claimRobloxBankMinutes(
 
   const day = normalizeDayLog(today, data.days[today])
   const slot = day.screens.roblox
-  if (slot.finished) return data
 
   const nextBonus = (day.robloxBonusMin ?? 0) + claim
   const addSec = claim * 60
   // Claiming more time ends overtime — keep what already accrued.
   const baseSlot = flushScreenOvertime(slot)
-  let nextSlot = baseSlot
-  if (slot.endsAt != null) {
+  let nextSlot: typeof slot
+  if (slot.endsAt != null && !slot.finished) {
     nextSlot = {
       ...baseSlot,
       endsAt: slot.endsAt + addSec * 1000,
       remainingSec: slot.remainingSec + addSec,
+      finished: false,
     }
   } else {
     nextSlot = {
       ...baseSlot,
-      remainingSec: slot.remainingSec + addSec,
+      endsAt: null,
+      remainingSec: Math.max(0, slot.remainingSec) + addSec,
+      finished: false,
     }
   }
 
