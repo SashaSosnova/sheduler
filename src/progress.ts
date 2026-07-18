@@ -539,7 +539,7 @@ function ruQualityWorkouts(n: number): string {
 
 /**
  * Quality-workout ladder (1 → 8 → 13 → 20): Casey → Karai → Splinter → Shredder.
- * «Идеальная» = вся зарядка без скипа таймеров (не просто отметить день).
+ * «Идеальная» = вся зарядка ≥25 мин без скипа таймеров.
  */
 function qualityWorkoutRank(n: number): string {
   if (n <= 1) return 'Ученик идеальной зарядки'
@@ -622,6 +622,12 @@ export function expectedWorkoutTimerSec(exercises: Exercise[]): number {
   return workSec + pauses
 }
 
+/**
+ * Honest quality bar: full routine, every timer waited out, at least 25 minutes.
+ * (Calibrated from a real good session — not just “faster than expected timers”.)
+ */
+export const QUALITY_WORKOUT_MIN_SEC = 25 * 60
+
 export function isQualityWorkoutDay(
   day: DayLog,
   exercises: Exercise[],
@@ -633,7 +639,7 @@ export function isQualityWorkoutDay(
   if (!timed.every((ex) => day.timersHonored?.[ex.id])) return false
   const dur = workoutDurationSec(day)
   if (dur == null) return false
-  return dur >= expectedWorkoutTimerSec(exercises)
+  return dur >= QUALITY_WORKOUT_MIN_SEC
 }
 
 export function hasQualityWorkout(
@@ -662,10 +668,11 @@ export function countChewDiaryDays(entries: ChewEntry[]): number {
   return new Set(entries.map((e) => e.date)).size
 }
 
-const SHORTCUT_WORKOUT_MAX_SEC = 20 * 60
+/** Below the quality bar (25 min) counts as “too fast” for the secret. */
+const SHORTCUT_WORKOUT_MAX_SEC = QUALITY_WORKOUT_MIN_SEC
 
 /**
- * Full routine done, but timers skipped and/or finished under 20 minutes.
+ * Full routine done, but timers skipped and/or finished under 25 minutes.
  * Requires workout timestamps so pre-tracking days (exercisesDone only) do not count.
  */
 export function isShortcutWorkoutDay(
@@ -865,9 +872,9 @@ export function stickerUnlockHint(
       ? ` (${progressFraction(progress.qualityWorkouts, n)})`
       : ''
     if (n === 1) {
-      return `Пройти всю зарядку, не скидывая таймеры${frac}`
+      return `Вся зарядка ≥25 мин, не скидывая таймеры${frac}`
     }
-    return `${n} ${ruQualityWorkouts(n)} без скипа таймеров${frac}`
+    return `${n} ${ruQualityWorkouts(n)} ≥25 мин без скипа таймеров${frac}`
   }
   if (sticker.needExerciseDays != null) {
     const n = sticker.needExerciseDays
@@ -928,7 +935,7 @@ export function stickerUnlockHint(
 /** Condition line for already unlocked stickers */
 export function stickerOpenedHint(sticker: Sticker): string {
   if (sticker.needSecretShortcut) {
-    return 'Открыто: скип таймеров или зарядка быстрее 20 минут'
+    return 'Открыто: скип таймеров или зарядка быстрее 25 минут'
   }
   if (sticker.needSecretNoRoblox) {
     return 'Открыто: идеальный день без Roblox'
@@ -943,9 +950,9 @@ export function stickerOpenedHint(sticker: Sticker): string {
     const n = sticker.needQualityWorkouts
     const rank = qualityWorkoutRank(n)
     if (n === 1) {
-      return `Открыто: ранг «${rank}» — зарядка без скипов`
+      return `Открыто: ранг «${rank}» — зарядка ≥25 мин без скипов`
     }
-    return `Открыто: ранг «${rank}» — ${n} ${ruQualityWorkouts(n)} без скипов`
+    return `Открыто: ранг «${rank}» — ${n} ${ruQualityWorkouts(n)} ≥25 мин без скипов`
   }
   if (sticker.needExerciseDays != null) {
     const n = sticker.needExerciseDays
@@ -1225,6 +1232,16 @@ export function applyPendingRobloxStreakRewards(
       (a, b) => a - b,
     ),
     robloxBonusBankMin: (next.robloxBonusBankMin ?? 0) + bonusMin,
+  }
+}
+
+/** Parent gift: add minutes to the shared Roblox bonus bank. */
+export function giftRobloxBankMinutes(data: AppData, minutes: number): AppData {
+  const add = Math.max(0, Math.floor(minutes))
+  if (add <= 0) return data
+  return {
+    ...data,
+    robloxBonusBankMin: Math.max(0, Math.floor(data.robloxBonusBankMin ?? 0)) + add,
   }
 }
 

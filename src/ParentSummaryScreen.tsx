@@ -12,8 +12,10 @@ import {
   uid,
   workoutDurationSec,
 } from './data'
-import { robloxLimitSeconds } from './progress'
+import { giftRobloxBankMinutes, robloxLimitSeconds } from './progress'
 import type { AppData, MustDoId } from './types'
+
+const PARENT_BANK_GIFTS = [5, 10, 15, 30] as const
 
 type Props = {
   data: AppData
@@ -208,12 +210,28 @@ export function ParentSummaryScreen({
           {formatPlayTimeWithOvertime(displayUsed, overtimeLive)}
         </p>
         <p className="hint">из {Math.round(limitSec / 60)} мин на сегодня</p>
-        {(data.robloxBonusBankMin ?? 0) > 0 ? (
+        <div className="parent-roblox-bank">
           <p className="hint">
-            Копилка бонусов: {Math.floor(data.robloxBonusBankMin ?? 0)} мин (ещё не
-            потрачено)
+            Копилка бонусов:{' '}
+            <strong>{Math.floor(data.robloxBonusBankMin ?? 0)} мин</strong>
+            {(data.robloxBonusBankMin ?? 0) > 0
+              ? ' (ребёнок ещё не потратил)'
+              : ''}
           </p>
-        ) : null}
+          <p className="hint">Поблагодарить сверх ачивок — закинуть минуты:</p>
+          <div className="row-gap">
+            {PARENT_BANK_GIFTS.map((n) => (
+              <button
+                key={n}
+                type="button"
+                className="btn ghost"
+                onClick={() => onChange(giftRobloxBankMinutes(data, n))}
+              >
+                +{n} мин
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="play-bar" aria-hidden>
           <div
             className="play-bar-fill"

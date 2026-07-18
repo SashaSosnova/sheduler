@@ -407,6 +407,22 @@
   color: var(--muted);
 }
 
+.parent-roblox-bank {
+  margin: 10px 0 12px;
+  padding: 10px 12px;
+  border: 1px dashed #e5c5ae;
+  border-radius: 12px;
+  background: #fffaf6;
+}
+
+.parent-roblox-bank .hint {
+  margin: 0 0 6px;
+}
+
+.parent-roblox-bank .row-gap {
+  margin-top: 4px;
+}
+
 .row-gap {
   display: flex;
   flex-wrap: wrap;
