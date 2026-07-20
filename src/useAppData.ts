@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { DEFAULT_EXERCISES, ROUTINE_ID, defaultAppData } from './data'
+import {
+  DEFAULT_EXERCISES,
+  ROUTINE_ID,
+  defaultAppData,
+  mergeChewEntries,
+  mergeDaysMaps,
+} from './data'
 import {
   createFamily,
   joinFamily,
@@ -15,10 +21,12 @@ import { isFirebaseConfigured } from './firebase'
 import {
   ROBLOX_STREAK_REWARDS,
   applyPendingRobloxStreakRewards,
+  applyPendingStickerMoneyRewards,
   countParentTasksDone,
   currentStreak,
   normalizeFinishedBooks,
   resolveReadingBooks,
+  seedClaimedStickerMoneyIds,
 } from './progress'
 import type {
   AppData,
@@ -37,6 +45,8 @@ type StoredData = {
   routineId?: string
   claimedRobloxStreaks?: number[]
   robloxBonusBankMin?: number
+  moneyBankRub?: number
+  claimedStickerMoneyIds?: string[]
   equippedStickerId?: string | null
   bestStreak?: number
   bestParentTasks?: number
@@ -45,6 +55,19 @@ type StoredData = {
   readingBooks?: ReadingBook[]
   finishedBooks?: FinishedBook[]
   exercises?: unknown
+}
+
+function normalizeStringIds(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((x): x is string => typeof x === 'string')
+    .map((x) => x.trim())
+    .filter((x) => x.length > 0)
+}
+
+function normalizeNonNegInt(raw: unknown): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return 0
+  return Math.max(0, Math.floor(raw))
 }
 
 function normalizeEquippedStickerId(raw: unknown): string | null {
@@ -74,29 +97,29 @@ function hydrateAppData(
       : 0,
     parentNow,
   )
-  return applyPendingRobloxStreakRewards({
-    ...base,
-    ...partial,
-    exercises: DEFAULT_EXERCISES,
-    days,
-    chewEntries: partial.chewEntries ?? [],
-    cookingLeft: partial.cookingLeft ?? 5,
-    routineId: ROUTINE_ID,
-    claimedRobloxStreaks: normalizeStreakInts(partial.claimedRobloxStreaks),
-    robloxBonusBankMin:
-      typeof partial.robloxBonusBankMin === 'number' &&
-      Number.isFinite(partial.robloxBonusBankMin)
-        ? Math.max(0, Math.floor(partial.robloxBonusBankMin))
-        : 0,
-    equippedStickerId: normalizeEquippedStickerId(partial.equippedStickerId),
-    bestStreak:
-      typeof partial.bestStreak === 'number' && Number.isFinite(partial.bestStreak)
-        ? Math.max(0, Math.floor(partial.bestStreak))
-        : 0,
-    bestParentTasks,
-    readingBooks: resolveReadingBooks(partial.readingBooks, partial.currentBook),
-    finishedBooks: normalizeFinishedBooks(partial.finishedBooks),
-  })
+  return applyPendingStickerMoneyRewards(
+    applyPendingRobloxStreakRewards({
+      ...base,
+      ...partial,
+      exercises: DEFAULT_EXERCISES,
+      days,
+      chewEntries: partial.chewEntries ?? [],
+      cookingLeft: partial.cookingLeft ?? 5,
+      routineId: ROUTINE_ID,
+      claimedRobloxStreaks: normalizeStreakInts(partial.claimedRobloxStreaks),
+      robloxBonusBankMin: normalizeNonNegInt(partial.robloxBonusBankMin),
+      moneyBankRub: normalizeNonNegInt(partial.moneyBankRub),
+      claimedStickerMoneyIds: normalizeStringIds(partial.claimedStickerMoneyIds),
+      equippedStickerId: normalizeEquippedStickerId(partial.equippedStickerId),
+      bestStreak:
+        typeof partial.bestStreak === 'number' && Number.isFinite(partial.bestStreak)
+          ? Math.max(0, Math.floor(partial.bestStreak))
+          : 0,
+      bestParentTasks,
+      readingBooks: resolveReadingBooks(partial.readingBooks, partial.currentBook),
+      finishedBooks: normalizeFinishedBooks(partial.finishedBooks),
+    }),
+  )
 }
 
 function load(): AppData {
@@ -126,16 +149,24 @@ function load(): AppData {
       Number.isFinite(parsed.bestParentTasks)
         ? Math.max(0, Math.floor(parsed.bestParentTasks), parentNow)
         : parentNow
+    // Legacy saves had no money claim list — mark already-unlocked money
+    // stickers as claimed so upgrade doesn't dump a catch-up cash bonus.
+    const claimedStickerMoneyIds = Array.isArray(parsed.claimedStickerMoneyIds)
+      ? normalizeStringIds(parsed.claimedStickerMoneyIds)
+      : seedClaimedStickerMoneyIds({
+          ...defaultAppData(),
+          days,
+          bestParentTasks,
+          bestStreak,
+        })
     return hydrateAppData({
       days,
       chewEntries: parsed.chewEntries ?? [],
       cookingLeft: parsed.cookingLeft ?? 5,
       claimedRobloxStreaks,
-      robloxBonusBankMin:
-        typeof parsed.robloxBonusBankMin === 'number' &&
-        Number.isFinite(parsed.robloxBonusBankMin)
-          ? Math.max(0, Math.floor(parsed.robloxBonusBankMin))
-          : 0,
+      robloxBonusBankMin: normalizeNonNegInt(parsed.robloxBonusBankMin),
+      moneyBankRub: normalizeNonNegInt(parsed.moneyBankRub),
+      claimedStickerMoneyIds,
       equippedStickerId: normalizeEquippedStickerId(parsed.equippedStickerId),
       bestStreak,
       bestParentTasks,
@@ -150,8 +181,27 @@ function load(): AppData {
   }
 }
 
+function resolveClaimedStickerMoneyIds(
+  raw: unknown,
+  days: Record<string, DayLog>,
+  bestParentTasks: number,
+  bestStreak: number,
+): string[] {
+  // Missing field = legacy cloud/local save — seed so already-unlocked
+  // turtle stickers don't dump catch-up cash into the bank.
+  if (!Array.isArray(raw)) {
+    return seedClaimedStickerMoneyIds({
+      ...defaultAppData(),
+      days,
+      bestParentTasks,
+      bestStreak,
+    })
+  }
+  return normalizeStringIds(raw)
+}
+
 function applyCloud(prev: AppData, payload: CloudPayload): AppData {
-  const days = payload.days ?? {}
+  const days = mergeDaysMaps(prev.days ?? {}, payload.days ?? {})
   const streak = currentStreak(days)
   const claimedRobloxStreaks =
     payload.claimedRobloxStreaks ??
@@ -177,14 +227,29 @@ function applyCloud(prev: AppData, payload: CloudPayload): AppData {
     resolveReadingBooks(payload.readingBooks, payload.currentBook),
     finishedBooks,
   )
+  const remoteClaimed = resolveClaimedStickerMoneyIds(
+    payload.claimedStickerMoneyIds,
+    days,
+    bestParentTasks,
+    bestStreak,
+  )
+  const claimedMoney = new Set([
+    ...(prev.claimedStickerMoneyIds ?? []),
+    ...remoteClaimed,
+  ])
   return hydrateAppData({
     ...prev,
     days,
-    chewEntries: payload.chewEntries ?? [],
+    chewEntries: mergeChewEntries(
+      prev.chewEntries ?? [],
+      payload.chewEntries ?? [],
+    ),
     cookingLeft: payload.cookingLeft ?? prev.cookingLeft,
     claimedRobloxStreaks,
     robloxBonusBankMin:
       payload.robloxBonusBankMin ?? prev.robloxBonusBankMin ?? 0,
+    moneyBankRub: payload.moneyBankRub ?? prev.moneyBankRub ?? 0,
+    claimedStickerMoneyIds: [...claimedMoney],
     equippedStickerId:
       payload.equippedStickerId !== undefined
         ? normalizeEquippedStickerId(payload.equippedStickerId)
@@ -233,15 +298,24 @@ function replaceFromCloud(payload: CloudPayload): AppData {
   const days = payload.days ?? {}
   const streak = currentStreak(days)
   const parentNow = countParentTasksDone(days)
+  const bestStreak = Math.max(payload.bestStreak ?? 0, streak)
+  const bestParentTasks = Math.max(payload.bestParentTasks ?? 0, parentNow)
   return hydrateAppData({
     days,
     chewEntries: payload.chewEntries ?? [],
     cookingLeft: payload.cookingLeft ?? 5,
     claimedRobloxStreaks: payload.claimedRobloxStreaks ?? [],
     robloxBonusBankMin: payload.robloxBonusBankMin ?? 0,
+    moneyBankRub: payload.moneyBankRub ?? 0,
+    claimedStickerMoneyIds: resolveClaimedStickerMoneyIds(
+      payload.claimedStickerMoneyIds,
+      days,
+      bestParentTasks,
+      bestStreak,
+    ),
     equippedStickerId: normalizeEquippedStickerId(payload.equippedStickerId),
-    bestStreak: Math.max(payload.bestStreak ?? 0, streak),
-    bestParentTasks: Math.max(payload.bestParentTasks ?? 0, parentNow),
+    bestStreak,
+    bestParentTasks,
     readingBooks: resolveReadingBooks(
       payload.readingBooks,
       payload.currentBook,
@@ -277,6 +351,8 @@ export function useAppData() {
       routineId: ROUTINE_ID,
       claimedRobloxStreaks: data.claimedRobloxStreaks ?? [],
       robloxBonusBankMin: data.robloxBonusBankMin ?? 0,
+      moneyBankRub: data.moneyBankRub ?? 0,
+      claimedStickerMoneyIds: data.claimedStickerMoneyIds ?? [],
       equippedStickerId: data.equippedStickerId ?? null,
       bestStreak: data.bestStreak ?? 0,
       bestParentTasks: data.bestParentTasks ?? 0,

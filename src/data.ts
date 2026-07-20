@@ -1,4 +1,12 @@
-import type { AppData, DayExtraTask, DayLog, Exercise, MustDoId, ScreenSlot } from './types'
+import type {
+  AppData,
+  ChewEntry,
+  DayExtraTask,
+  DayLog,
+  Exercise,
+  MustDoId,
+  ScreenSlot,
+} from './types'
 
 export const ROUTINE_ID = 'daniil-hw-28-v5'
 
@@ -521,11 +529,14 @@ function normalizeExtraTasks(raw: unknown): DayExtraTask[] {
       const row = item as Partial<DayExtraTask>
       const text = typeof row.text === 'string' ? row.text.trim() : ''
       if (!text) return null
+      const fromParentAs =
+        typeof row.fromParentAs === 'string' ? row.fromParentAs.trim() : ''
       return {
         id: typeof row.id === 'string' && row.id ? row.id : uid(),
         text,
         done: Boolean(row.done),
         ...(row.fromParent ? { fromParent: true } : {}),
+        ...(fromParentAs ? { fromParentAs } : {}),
       }
     })
     .filter((t): t is DayExtraTask => t !== null)
@@ -553,6 +564,132 @@ export function normalizeDayLog(date: string, raw?: Partial<DayLog> | null): Day
       ),
     },
   }
+}
+
+function mergeBoolMaps(
+  a: Record<string, boolean>,
+  b: Record<string, boolean>,
+): Record<string, boolean> {
+  const out: Record<string, boolean> = { ...a }
+  for (const [key, value] of Object.entries(b)) {
+    if (value || out[key]) out[key] = true
+  }
+  return out
+}
+
+function mergeExtraTasks(a: DayExtraTask[], b: DayExtraTask[]): DayExtraTask[] {
+  const byId = new Map<string, DayExtraTask>()
+  for (const task of [...a, ...b]) {
+    const prev = byId.get(task.id)
+    if (!prev) {
+      byId.set(task.id, task)
+      continue
+    }
+    byId.set(task.id, {
+      ...prev,
+      ...task,
+      text: task.text || prev.text,
+      done: Boolean(prev.done || task.done),
+      fromParent: Boolean(prev.fromParent || task.fromParent),
+      fromParentAs: task.fromParentAs || prev.fromParentAs,
+    })
+  }
+  return [...byId.values()]
+}
+
+function mergeScreenSlots(a: ScreenSlot, b: ScreenSlot): ScreenSlot {
+  const usedSec = Math.max(a.usedSec, b.usedSec)
+  const overtimeSec = Math.max(a.overtimeSec ?? 0, b.overtimeSec ?? 0)
+  const finished = a.finished || b.finished
+  // Prefer an active timer if one side is still running.
+  const endsAt =
+    a.endsAt != null && !a.finished
+      ? a.endsAt
+      : b.endsAt != null && !b.finished
+        ? b.endsAt
+        : null
+  const remainingSec =
+    endsAt != null
+      ? Math.max(a.remainingSec, b.remainingSec)
+      : Math.max(a.remainingSec, b.remainingSec)
+  const overtimeStartedAt =
+    !finished && (a.overtimeStartedAt != null || b.overtimeStartedAt != null)
+      ? Math.min(
+          a.overtimeStartedAt ?? Number.POSITIVE_INFINITY,
+          b.overtimeStartedAt ?? Number.POSITIVE_INFINITY,
+        )
+      : null
+  return {
+    endsAt,
+    remainingSec,
+    finished,
+    usedSec,
+    overtimeSec,
+    overtimeStartedAt:
+      overtimeStartedAt === Number.POSITIVE_INFINITY ? null : overtimeStartedAt,
+  }
+}
+
+/** Merge two day logs so concurrent parent/child edits keep both sides' progress. */
+export function mergeDayLog(
+  date: string,
+  local?: Partial<DayLog> | null,
+  remote?: Partial<DayLog> | null,
+): DayLog {
+  if (!local) return normalizeDayLog(date, remote)
+  if (!remote) return normalizeDayLog(date, local)
+  const a = normalizeDayLog(date, local)
+  const b = normalizeDayLog(date, remote)
+  const mustDo: Partial<Record<MustDoId, boolean>> = {}
+  for (const item of MUST_DO_ITEMS) {
+    if (a.mustDo[item.id] || b.mustDo[item.id]) mustDo[item.id] = true
+  }
+  const started = [a.workoutStartedAt, b.workoutStartedAt].filter(
+    (n): n is number => n != null,
+  )
+  const finished = [a.workoutFinishedAt, b.workoutFinishedAt].filter(
+    (n): n is number => n != null,
+  )
+  return normalizeDayLog(date, {
+    mode: a.mode !== 'home' ? a.mode : b.mode,
+    mustDo,
+    exercisesDone: mergeBoolMaps(a.exercisesDone, b.exercisesDone),
+    timersHonored: mergeBoolMaps(a.timersHonored, b.timersHonored),
+    workoutStartedAt: started.length ? Math.min(...started) : null,
+    workoutFinishedAt: finished.length ? Math.max(...finished) : null,
+    note: a.note.trim() ? a.note : b.note,
+    outing: a.outing.trim() ? a.outing : b.outing,
+    extraTasks: mergeExtraTasks(a.extraTasks, b.extraTasks),
+    createNote: a.createNote.trim() ? a.createNote : b.createNote,
+    robloxBonusMin: Math.max(a.robloxBonusMin, b.robloxBonusMin),
+    screens: {
+      roblox: mergeScreenSlots(a.screens.roblox, b.screens.roblox),
+    },
+  })
+}
+
+export function mergeDaysMaps(
+  local: Record<string, DayLog>,
+  remote: Record<string, DayLog>,
+): Record<string, DayLog> {
+  const keys = new Set([...Object.keys(local), ...Object.keys(remote)])
+  const out: Record<string, DayLog> = {}
+  for (const key of keys) {
+    out[key] = mergeDayLog(key, local[key], remote[key])
+  }
+  return out
+}
+
+export function mergeChewEntries(
+  local: ChewEntry[],
+  remote: ChewEntry[],
+): ChewEntry[] {
+  const byId = new Map<string, ChewEntry>()
+  for (const entry of [...local, ...remote]) {
+    const prev = byId.get(entry.id)
+    if (!prev || entry.createdAt >= prev.createdAt) byId.set(entry.id, entry)
+  }
+  return [...byId.values()].sort((a, b) => a.createdAt - b.createdAt)
 }
 
 function normalizeBoolMap(raw: unknown): Record<string, boolean> {
@@ -640,6 +777,8 @@ export function defaultAppData(): AppData {
     routineId: ROUTINE_ID,
     claimedRobloxStreaks: [],
     robloxBonusBankMin: 0,
+    moneyBankRub: 0,
+    claimedStickerMoneyIds: [],
     equippedStickerId: null,
     bestStreak: 0,
     bestParentTasks: 0,

@@ -4,6 +4,7 @@ import {
   MUST_DO_ITEMS,
   SCREEN_LIMITS,
   chewDurationSec,
+  flushScreenOvertime,
   formatPlayTime,
   formatPlayTimeWithOvertime,
   screenOvertimeSec,
@@ -12,10 +13,18 @@ import {
   uid,
   workoutDurationSec,
 } from './data'
-import { giftRobloxBankMinutes, robloxLimitSeconds } from './progress'
+import { loadParentLabel } from './parentAlerts'
+import {
+  giftMoneyBankRub,
+  giftRobloxBankMinutes,
+  payoutMoneyBankRub,
+  robloxLimitSeconds,
+} from './progress'
 import type { AppData, MustDoId } from './types'
 
 const PARENT_BANK_GIFTS = [5, 10, 15, 30] as const
+const PARENT_MONEY_GIFTS = [100, 200, 300] as const
+const PARENT_MONEY_PAYOUTS = [100, 200, 300, 500] as const
 
 type Props = {
   data: AppData
@@ -77,7 +86,7 @@ export function ParentSummaryScreen({
     : running
       ? 'сейчас играет'
       : timedOut
-        ? overtimeLive > 0
+        ? overtimeLive > 0 || overtimeTicking
           ? 'доигрывает сверх лимита'
           : 'время вышло'
         : roblox.usedSec > 0
@@ -111,7 +120,13 @@ export function ParentSummaryScreen({
     patchDay({
       extraTasks: [
         ...day.extraTasks,
-        { id: uid(), text: trimmed, done: false, fromParent: true },
+        {
+          id: uid(),
+          text: trimmed,
+          done: false,
+          fromParent: true,
+          fromParentAs: loadParentLabel(),
+        },
       ],
     })
     setExtraDraft('')
@@ -238,6 +253,53 @@ export function ParentSummaryScreen({
             style={{ width: `${Math.min(100, (displayUsed / limitSec) * 100)}%` }}
           />
         </div>
+        {overtimeLive > 0 || overtimeTicking || (timedOut && !roblox.finished) ? (
+          <div className="row-gap" style={{ marginTop: 12 }}>
+            {overtimeLive > 0 || overtimeTicking ? (
+              <button
+                type="button"
+                className="btn ghost"
+                onClick={() =>
+                  patchDay({
+                    screens: {
+                      ...day.screens,
+                      roblox: {
+                        ...flushScreenOvertime(roblox),
+                        overtimeSec: 0,
+                        overtimeStartedAt: null,
+                      },
+                    },
+                  })
+                }
+              >
+                Сбросить превышение
+              </button>
+            ) : null}
+            {!roblox.finished ? (
+              <button
+                type="button"
+                className="btn"
+                onClick={() =>
+                  patchDay({
+                    screens: {
+                      ...day.screens,
+                      roblox: {
+                        ...flushScreenOvertime(roblox),
+                        endsAt: null,
+                        remainingSec: 0,
+                        finished: true,
+                        overtimeSec: 0,
+                        overtimeStartedAt: null,
+                      },
+                    },
+                  })
+                }
+              >
+                Закрыть день без превышения
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </section>
 
       <section className="card">
@@ -269,101 +331,6 @@ export function ParentSummaryScreen({
             </li>
           ))}
         </ul>
-      </section>
-
-      <section className="card">
-        <div className="card-title-row">
-          <h2>Книги</h2>
-          {finishedBooks.length || readingBooks.length ? (
-            <span className="pill">
-              {finishedBooks.length}/{finishedBooks.length + readingBooks.length}
-            </span>
-          ) : null}
-        </div>
-        <p className="hint">
-          Добавь книгу, которую сейчас читает ребёнок. Когда дочитаете — нажми
-          «Дочитали».
-        </p>
-
-        {readingBooks.length || finishedBooks.length ? (
-          <ul className="check-list book-list">
-            {readingBooks.map((book) => (
-              <li key={book.id}>
-                <div className="check-row with-action book-reading-row">
-                  <span className="book-title">{book.title}</span>
-                  <button
-                    type="button"
-                    className="btn primary book-finish-btn"
-                    onClick={() => finishReadingBook(book.id)}
-                  >
-                    Дочитали
-                  </button>
-                </div>
-              </li>
-            ))}
-            {finishedBooks.map((book) => (
-              <li key={book.id}>
-                <label className="check-row book-finished-row">
-                  <input type="checkbox" checked readOnly tabIndex={-1} />
-                  <span className="is-done">{book.title}</span>
-                </label>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="hint" style={{ marginTop: 10 }}>
-            Пока нет книг в списке.
-          </p>
-        )}
-
-        {addingBook ? (
-          <div className="book-add-box">
-            <label className="field">
-              <span>Название книги</span>
-              <input
-                value={bookDraft}
-                onChange={(e) => setBookDraft(e.target.value)}
-                placeholder="Что читает?"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    addReadingBook()
-                  }
-                }}
-              />
-            </label>
-            <div className="row-gap">
-              <button
-                type="button"
-                className="btn primary"
-                disabled={!bookDraft.trim()}
-                onClick={addReadingBook}
-              >
-                Сохранить название
-              </button>
-              <button
-                type="button"
-                className="btn ghost"
-                onClick={() => {
-                  setAddingBook(false)
-                  setBookDraft('')
-                }}
-              >
-                Отмена
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button
-            type="button"
-            className="linkish"
-            style={{ marginTop: 12 }}
-            onClick={() => setAddingBook(true)}
-          >
-            Добавить новую книгу →
-          </button>
-        )}
       </section>
 
       <section className="card">
@@ -462,6 +429,164 @@ export function ParentSummaryScreen({
             </div>
           ) : null}
         </div>
+      </section>
+
+      <section className="card">
+        <div className="card-title-row">
+          <h2>Копилка черепашек</h2>
+          <span className={(data.moneyBankRub ?? 0) > 0 ? 'pill' : 'pill muted'}>
+            {Math.floor(data.moneyBankRub ?? 0)} ₽
+          </span>
+        </div>
+        <p className="hint">
+          Сюда падают награды за ачивки черепашек и то, что закинешь сам. Когда
+          отдашь наличные — спиши из копилки.
+        </p>
+        <div className="parent-roblox-bank">
+          <p className="hint">
+            К выдаче:{' '}
+            <strong>{Math.floor(data.moneyBankRub ?? 0)} ₽</strong>
+            {(data.moneyBankRub ?? 0) > 0 ? ' (ещё не выдано)' : ''}
+          </p>
+          <p className="hint">Поблагодарить сверх ачивок — закинуть:</p>
+          <div className="row-gap">
+            {PARENT_MONEY_GIFTS.map((n) => (
+              <button
+                key={n}
+                type="button"
+                className="btn ghost"
+                onClick={() => onChange(giftMoneyBankRub(data, n))}
+              >
+                +{n} ₽
+              </button>
+            ))}
+          </div>
+          {(data.moneyBankRub ?? 0) > 0 ? (
+            <>
+              <p className="hint" style={{ marginTop: 10 }}>
+                Выдал наличные — списать:
+              </p>
+              <div className="row-gap">
+                {PARENT_MONEY_PAYOUTS.filter(
+                  (n) => n <= (data.moneyBankRub ?? 0),
+                ).map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    className="btn ghost"
+                    onClick={() => onChange(payoutMoneyBankRub(data, n))}
+                  >
+                    −{n} ₽
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() =>
+                    onChange(payoutMoneyBankRub(data, data.moneyBankRub ?? 0))
+                  }
+                >
+                  Списать всё
+                </button>
+              </div>
+            </>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="card-title-row">
+          <h2>Книги</h2>
+          {finishedBooks.length || readingBooks.length ? (
+            <span className="pill">
+              {finishedBooks.length}/{finishedBooks.length + readingBooks.length}
+            </span>
+          ) : null}
+        </div>
+        <p className="hint">
+          Добавь книгу, которую сейчас читает ребёнок. Когда дочитаете — нажми
+          «Дочитали».
+        </p>
+
+        {readingBooks.length || finishedBooks.length ? (
+          <ul className="check-list book-list">
+            {readingBooks.map((book) => (
+              <li key={book.id}>
+                <div className="check-row with-action book-reading-row">
+                  <span className="book-title">{book.title}</span>
+                  <button
+                    type="button"
+                    className="btn primary book-finish-btn"
+                    onClick={() => finishReadingBook(book.id)}
+                  >
+                    Дочитали
+                  </button>
+                </div>
+              </li>
+            ))}
+            {finishedBooks.map((book) => (
+              <li key={book.id}>
+                <label className="check-row book-finished-row">
+                  <input type="checkbox" checked readOnly tabIndex={-1} />
+                  <span className="is-done">{book.title}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="hint" style={{ marginTop: 10 }}>
+            Пока нет книг в списке.
+          </p>
+        )}
+
+        {addingBook ? (
+          <div className="book-add-box">
+            <label className="field">
+              <span>Название книги</span>
+              <input
+                value={bookDraft}
+                onChange={(e) => setBookDraft(e.target.value)}
+                placeholder="Что читает?"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    addReadingBook()
+                  }
+                }}
+              />
+            </label>
+            <div className="row-gap">
+              <button
+                type="button"
+                className="btn primary"
+                disabled={!bookDraft.trim()}
+                onClick={addReadingBook}
+              >
+                Сохранить название
+              </button>
+              <button
+                type="button"
+                className="btn ghost"
+                onClick={() => {
+                  setAddingBook(false)
+                  setBookDraft('')
+                }}
+              >
+                Отмена
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="linkish"
+            style={{ marginTop: 12 }}
+            onClick={() => setAddingBook(true)}
+          >
+            Добавить новую книгу →
+          </button>
+        )}
       </section>
 
       <section className="card">

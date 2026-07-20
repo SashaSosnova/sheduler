@@ -10,10 +10,13 @@ import type { AppData } from './types'
 
 const ENABLED_KEY = 'vacation-parent-alerts-enabled'
 const CHILD_NAME_KEY = 'vacation-child-name'
+const PARENT_LABEL_KEY = 'vacation-parent-label'
 const SEEN_KEY = 'vacation-parent-alerts-seen-v1'
 const SEEDED_KEY = 'vacation-parent-alerts-seeded-v1'
 const CHANNEL_ID = 'parent-activity'
 const DEFAULT_CHILD_NAME = 'Даня'
+/** Genitive: «задание от мамы» */
+const DEFAULT_PARENT_LABEL = 'мамы'
 
 export function notificationsSupported(): boolean {
   return Capacitor.isNativePlatform()
@@ -47,6 +50,22 @@ export function saveChildName(name: string): void {
   const trimmed = name.trim()
   if (!trimmed) localStorage.removeItem(CHILD_NAME_KEY)
   else localStorage.setItem(CHILD_NAME_KEY, trimmed)
+}
+
+export function loadParentLabel(): string {
+  try {
+    const raw = localStorage.getItem(PARENT_LABEL_KEY)
+    const trimmed = raw?.trim()
+    return trimmed || DEFAULT_PARENT_LABEL
+  } catch {
+    return DEFAULT_PARENT_LABEL
+  }
+}
+
+export function saveParentLabel(label: string): void {
+  const trimmed = label.trim()
+  if (!trimmed) localStorage.removeItem(PARENT_LABEL_KEY)
+  else localStorage.setItem(PARENT_LABEL_KEY, trimmed)
 }
 
 function loadSeen(): Set<string> {
@@ -136,6 +155,13 @@ async function ensureChannel(): Promise<void> {
   } catch {
     /* already exists */
   }
+}
+
+export async function hasParentAlertPermission(): Promise<boolean> {
+  if (!notificationsSupported()) return false
+  await ensureChannel()
+  const perm = await LocalNotifications.checkPermissions()
+  return perm.display === 'granted'
 }
 
 export async function requestParentAlertPermission(): Promise<boolean> {

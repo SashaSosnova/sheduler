@@ -186,6 +186,30 @@ export function ProgressScreen({ data, onChange }: Props) {
 
       <section className="card">
         <div className="card-title-row">
+          <h2>Копилка черепашек</h2>
+          <span
+            className={(data.moneyBankRub ?? 0) > 0 ? 'pill' : 'pill muted'}
+          >
+            {Math.floor(data.moneyBankRub ?? 0)} ₽
+          </span>
+        </div>
+        <p className="hint">
+          Сюда падают награды за ачивки черепашек и то, что начислит родитель.
+        </p>
+        {(data.moneyBankRub ?? 0) > 0 ? (
+          <p className="hint" style={{ marginTop: 8 }}>
+            Сейчас в копилке:{' '}
+            <strong>{Math.floor(data.moneyBankRub ?? 0)} ₽</strong>
+          </p>
+        ) : (
+          <p className="hint" style={{ marginTop: 8 }}>
+            Пока пусто — открывай ачивки черепашек.
+          </p>
+        )}
+      </section>
+
+      <section className="card">
+        <div className="card-title-row">
           <h2>Достижения</h2>
           <span className="pill muted">
             {stats.stickers.length}/{STICKERS.length}

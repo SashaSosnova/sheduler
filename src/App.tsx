@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { BottomNav } from './BottomNav'
 import { CalendarScreen } from './CalendarScreen'
 import { ChewDiaryScreen } from './ChewDiaryScreen'
 import { ExercisesScreen } from './ExercisesScreen'
+import { ParentPinDialog } from './ParentPinDialog'
 import { ParentSummaryScreen } from './ParentSummaryScreen'
 import { ProgressScreen } from './ProgressScreen'
 import {
@@ -16,8 +17,9 @@ import { SettingsScreen } from './SettingsScreen'
 import { StickerUnlockOverlay } from './StickerUnlockOverlay'
 import { TodayScreen } from './TodayScreen'
 import { useTomSawyerLive } from './tomSawyerSync'
-import type { TabId } from './types'
+import type { TabId, UserRole } from './types'
 import { useAppData } from './useAppData'
+import { useChildTaskAlerts } from './useChildTaskAlerts'
 import { useNotifications } from './useNotifications'
 import { useParentAlerts } from './useParentAlerts'
 import { useUserRole } from './useUserRole'
@@ -36,10 +38,23 @@ function App() {
   const { role, setRole } = useUserRole()
   const notifications = useNotifications(role)
   const parentAlerts = useParentAlerts(role, data)
+  const childTaskAlerts = useChildTaskAlerts(role, data)
   const tomSawyer = useTomSawyerLive()
   const [tab, setTab] = useState<TabId>('today')
+  const [parentPinOpen, setParentPinOpen] = useState(false)
   const isParent = role === 'parent'
   const showNav = tab !== 'settings'
+
+  const changeRole = useCallback(
+    (next: UserRole) => {
+      if (next === 'parent' && role !== 'parent') {
+        setParentPinOpen(true)
+        return
+      }
+      setRole(next)
+    },
+    [role, setRole],
+  )
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -126,14 +141,23 @@ function App() {
             parentAlertsDenied={parentAlerts.denied}
             parentAlertsSupported={parentAlerts.supported}
             childName={parentAlerts.childName}
+            parentLabel={parentAlerts.parentLabel}
             onToggleParentAlerts={(v) => {
               void parentAlerts.setEnabled(v)
             }}
             onChangeChildName={parentAlerts.setChildName}
+            onChangeParentLabel={parentAlerts.setParentLabel}
+            childTaskAlertsEnabled={childTaskAlerts.enabled}
+            childTaskAlertsBusy={childTaskAlerts.busy}
+            childTaskAlertsDenied={childTaskAlerts.denied}
+            childTaskAlertsSupported={childTaskAlerts.supported}
+            onToggleChildTaskAlerts={(v) => {
+              void childTaskAlerts.setEnabled(v)
+            }}
             onCreateFamily={createFamilyCloud}
             onJoinFamily={joinFamilyCloud}
             onLeaveFamily={leaveFamilyCloud}
-            onChangeRole={setRole}
+            onChangeRole={changeRole}
             onGoHome={() => setTab('today')}
           />
         ) : null}
@@ -142,6 +166,15 @@ function App() {
         <BottomNav active={tab} role={role} onChange={setTab} />
       ) : null}
       <StickerUnlockOverlay data={data} enabled={!isParent} />
+      <ParentPinDialog
+        open={parentPinOpen}
+        onSuccess={() => {
+          setParentPinOpen(false)
+          setRole('parent')
+          setTab('today')
+        }}
+        onCancel={() => setParentPinOpen(false)}
+      />
     </div>
   )
 }

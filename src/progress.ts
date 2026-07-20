@@ -130,6 +130,8 @@ export type Sticker = {
    */
   needSecretRobloxBonusMin?: number
   robloxExtraMin?: number
+  /** Rubles credited to moneyBankRub when this sticker unlocks */
+  moneyRub?: number
   /** Parent gift hint when this sticker unlocks */
   giftHint?: string
 }
@@ -198,6 +200,7 @@ export const STICKERS: Sticker[] = [
     label: 'Леонардо',
     quote: 'Черепашки, за мной!',
     detail: 'Черепашки-ниндзя',
+    moneyRub: 100,
   },
   {
     id: 'hero-megumi',
@@ -262,6 +265,7 @@ export const STICKERS: Sticker[] = [
     label: 'Микеланджело',
     quote: 'Ковабунга!',
     detail: 'Черепашки-ниндзя',
+    moneyRub: 200,
   },
   {
     id: 'hero-genos',
@@ -327,6 +331,7 @@ export const STICKERS: Sticker[] = [
     label: 'Рафаэль',
     quote: 'Кто хочет кулаков?',
     detail: 'Черепашки-ниндзя',
+    moneyRub: 300,
   },
   {
     id: 'hero-child-emperor',
@@ -382,6 +387,7 @@ export const STICKERS: Sticker[] = [
     label: 'Донателло',
     quote: 'Это же элементарно!',
     detail: 'Черепашки-ниндзя',
+    moneyRub: 500,
   },
   {
     id: 'hero-nezuko',
@@ -539,7 +545,7 @@ function ruQualityWorkouts(n: number): string {
 
 /**
  * Quality-workout ladder (1 → 8 → 13 → 20): Casey → Karai → Splinter → Shredder.
- * «Идеальная» = вся зарядка ≥25 мин без скипа таймеров.
+ * «Идеальная» = вся зарядка ≥ QUALITY_WORKOUT_MIN without skipping timers.
  */
 function qualityWorkoutRank(n: number): string {
   if (n <= 1) return 'Ученик идеальной зарядки'
@@ -623,10 +629,11 @@ export function expectedWorkoutTimerSec(exercises: Exercise[]): number {
 }
 
 /**
- * Honest quality bar: full routine, every timer waited out, at least 25 minutes.
+ * Honest quality bar: full routine, every timer waited out, at least 20 minutes.
  * (Calibrated from a real good session — not just “faster than expected timers”.)
  */
-export const QUALITY_WORKOUT_MIN_SEC = 25 * 60
+export const QUALITY_WORKOUT_MIN_SEC = 20 * 60
+const QUALITY_WORKOUT_MIN_MIN = Math.round(QUALITY_WORKOUT_MIN_SEC / 60)
 
 export function isQualityWorkoutDay(
   day: DayLog,
@@ -668,11 +675,11 @@ export function countChewDiaryDays(entries: ChewEntry[]): number {
   return new Set(entries.map((e) => e.date)).size
 }
 
-/** Below the quality bar (25 min) counts as “too fast” for the secret. */
+/** Below the quality bar counts as “too fast” for the secret. */
 const SHORTCUT_WORKOUT_MAX_SEC = QUALITY_WORKOUT_MIN_SEC
 
 /**
- * Full routine done, but timers skipped and/or finished under 25 minutes.
+ * Full routine done, but timers skipped and/or finished under the quality bar.
  * Requires workout timestamps so pre-tracking days (exercisesDone only) do not count.
  */
 export function isShortcutWorkoutDay(
@@ -872,9 +879,9 @@ export function stickerUnlockHint(
       ? ` (${progressFraction(progress.qualityWorkouts, n)})`
       : ''
     if (n === 1) {
-      return `Вся зарядка ≥25 мин, не скидывая таймеры${frac}`
+      return `Вся зарядка ≥${QUALITY_WORKOUT_MIN_MIN} мин, не скидывая таймеры${frac}`
     }
-    return `${n} ${ruQualityWorkouts(n)} ≥25 мин без скипа таймеров${frac}`
+    return `${n} ${ruQualityWorkouts(n)} ≥${QUALITY_WORKOUT_MIN_MIN} мин без скипа таймеров${frac}`
   }
   if (sticker.needExerciseDays != null) {
     const n = sticker.needExerciseDays
@@ -935,7 +942,7 @@ export function stickerUnlockHint(
 /** Condition line for already unlocked stickers */
 export function stickerOpenedHint(sticker: Sticker): string {
   if (sticker.needSecretShortcut) {
-    return 'Открыто: скип таймеров или зарядка быстрее 25 минут'
+    return `Открыто: скип таймеров или зарядка быстрее ${QUALITY_WORKOUT_MIN_MIN} минут`
   }
   if (sticker.needSecretNoRoblox) {
     return 'Открыто: идеальный день без Roblox'
@@ -950,9 +957,9 @@ export function stickerOpenedHint(sticker: Sticker): string {
     const n = sticker.needQualityWorkouts
     const rank = qualityWorkoutRank(n)
     if (n === 1) {
-      return `Открыто: ранг «${rank}» — зарядка ≥25 мин без скипов`
+      return `Открыто: ранг «${rank}» — зарядка ≥${QUALITY_WORKOUT_MIN_MIN} мин без скипов`
     }
-    return `Открыто: ранг «${rank}» — ${n} ${ruQualityWorkouts(n)} ≥25 мин без скипов`
+    return `Открыто: ранг «${rank}» — ${n} ${ruQualityWorkouts(n)} ≥${QUALITY_WORKOUT_MIN_MIN} мин без скипов`
   }
   if (sticker.needExerciseDays != null) {
     const n = sticker.needExerciseDays
@@ -991,6 +998,9 @@ export function stickerRewardText(sticker: Sticker): string | null {
     parts.push(
       `Награда: +${sticker.robloxExtraMin} мин Roblox в копилку (можно потратить в любой день)`,
     )
+  }
+  if (sticker.moneyRub) {
+    parts.push(`Награда: +${sticker.moneyRub} ₽ в копилку`)
   }
   if (sticker.giftHint) {
     parts.push(sticker.giftHint)
@@ -1192,6 +1202,62 @@ function streakTipDay(
 ): string | null {
   const tip = isPerfectDay(days[today]) ? today : shiftDayKey(today, -1)
   return isPerfectDay(days[tip]) ? tip : null
+}
+
+/**
+ * Credit moneyBankRub for newly unlocked stickers with moneyRub.
+ * Idempotent: each sticker id is claimed at most once ever.
+ */
+export function applyPendingStickerMoneyRewards(data: AppData): AppData {
+  const progress = stickerProgressFromData(data)
+  const claimed = new Set(data.claimedStickerMoneyIds ?? [])
+  const newly = STICKERS.filter(
+    (s) =>
+      s.moneyRub != null &&
+      s.moneyRub > 0 &&
+      isStickerUnlocked(s, progress) &&
+      !claimed.has(s.id),
+  )
+  if (newly.length === 0) return data
+
+  const add = newly.reduce((sum, s) => sum + (s.moneyRub ?? 0), 0)
+  return {
+    ...data,
+    claimedStickerMoneyIds: [...claimed, ...newly.map((s) => s.id)],
+    moneyBankRub: Math.max(0, Math.floor(data.moneyBankRub ?? 0)) + add,
+  }
+}
+
+/** Ids of money stickers already unlocked — used to avoid catch-up on upgrade. */
+export function seedClaimedStickerMoneyIds(data: AppData): string[] {
+  const progress = stickerProgressFromData(data)
+  return STICKERS.filter(
+    (s) =>
+      s.moneyRub != null &&
+      s.moneyRub > 0 &&
+      isStickerUnlocked(s, progress),
+  ).map((s) => s.id)
+}
+
+/** Parent gift: add rubles to the shared money bank. */
+export function giftMoneyBankRub(data: AppData, rub: number): AppData {
+  const add = Math.max(0, Math.floor(rub))
+  if (add <= 0) return data
+  return {
+    ...data,
+    moneyBankRub: Math.max(0, Math.floor(data.moneyBankRub ?? 0)) + add,
+  }
+}
+
+/** Parent marks cash as handed over — subtract from the money pool. */
+export function payoutMoneyBankRub(data: AppData, rub: number): AppData {
+  const bank = Math.max(0, Math.floor(data.moneyBankRub ?? 0))
+  const take = Math.min(bank, Math.max(0, Math.floor(rub)))
+  if (take <= 0) return data
+  return {
+    ...data,
+    moneyBankRub: bank - take,
+  }
 }
 
 /**

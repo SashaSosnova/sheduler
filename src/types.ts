@@ -67,6 +67,8 @@ export type DayExtraTask = {
   done: boolean
   /** Set when parent creates the task — child can complete but not delete */
   fromParent?: boolean
+  /** Genitive label for «от …», e.g. «мамы» / «папы» */
+  fromParentAs?: string
 }
 
 export type DayLog = {
@@ -116,6 +118,13 @@ export type AppData = {
    * Claim onto a day via claimRobloxBankMinutes.
    */
   robloxBonusBankMin: number
+  /**
+   * Unspent ruble rewards from parent-task achievements.
+   * Parent marks as paid out via payoutMoneyBankRub.
+   */
+  moneyBankRub: number
+  /** Sticker ids whose moneyRub was already credited to moneyBankRub */
+  claimedStickerMoneyIds: string[]
   /**
    * Equipped achievement id for the Progress «Звание» title.
    * Null = auto first unlocked (non-secret) sticker.

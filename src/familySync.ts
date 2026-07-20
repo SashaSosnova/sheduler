@@ -28,6 +28,8 @@ export type CloudPayload = {
   cookingLeft: number
   claimedRobloxStreaks?: number[]
   robloxBonusBankMin?: number
+  moneyBankRub?: number
+  claimedStickerMoneyIds?: string[]
   equippedStickerId?: string | null
   bestStreak?: number
   bestParentTasks?: number
@@ -107,6 +109,8 @@ export function toCloudPayload(data: AppData, updatedAt = Date.now()): CloudPayl
     cookingLeft: data.cookingLeft,
     claimedRobloxStreaks: data.claimedRobloxStreaks ?? [],
     robloxBonusBankMin: data.robloxBonusBankMin ?? 0,
+    moneyBankRub: data.moneyBankRub ?? 0,
+    claimedStickerMoneyIds: data.claimedStickerMoneyIds ?? [],
     equippedStickerId: data.equippedStickerId ?? null,
     bestStreak: data.bestStreak ?? 0,
     bestParentTasks: data.bestParentTasks ?? 0,
@@ -158,6 +162,9 @@ export async function joinFamily(rawCode: string): Promise<CloudPayload> {
     cookingLeft: remote.cookingLeft ?? 5,
     claimedRobloxStreaks: remote.claimedRobloxStreaks ?? [],
     robloxBonusBankMin: remote.robloxBonusBankMin ?? 0,
+    moneyBankRub: remote.moneyBankRub,
+    // Keep undefined when absent so clients can seed legacy families.
+    claimedStickerMoneyIds: remote.claimedStickerMoneyIds,
     equippedStickerId: remote.equippedStickerId ?? null,
     bestStreak: remote.bestStreak ?? 0,
     bestParentTasks: remote.bestParentTasks ?? 0,
@@ -201,6 +208,8 @@ export function subscribeFamily(
         cookingLeft: remote.cookingLeft ?? 5,
         claimedRobloxStreaks: remote.claimedRobloxStreaks ?? [],
         robloxBonusBankMin: remote.robloxBonusBankMin ?? 0,
+        moneyBankRub: remote.moneyBankRub,
+        claimedStickerMoneyIds: remote.claimedStickerMoneyIds,
         equippedStickerId: remote.equippedStickerId ?? null,
         bestStreak: remote.bestStreak ?? 0,
         bestParentTasks: remote.bestParentTasks ?? 0,

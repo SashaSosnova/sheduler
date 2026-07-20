@@ -400,7 +400,10 @@ export function TodayScreen({
                     <span className={task.done ? 'is-done' : undefined}>
                       {task.text}
                       {task.fromParent ? (
-                        <span className="hint"> · от родителя</span>
+                        <span className="hint">
+                          {' '}
+                          · от {task.fromParentAs?.trim() || 'родителя'}
+                        </span>
                       ) : null}
                     </span>
                   </label>
@@ -478,8 +481,8 @@ export function TodayScreen({
       <section className="card">
         <h2>Roblox — лимит времени</h2>
         <p className="hint">
-          Нажми «Начать» — запустится таймер. Когда время выйдет, таймер
-          остановится: можно доиграть, потом нажми «Закончить на сегодня».
+          Нажми «Начать» — запустится таймер. Когда лимит кончится, придёт
+          напоминание; можно доиграть, потом нажми «Закончить на сегодня».
           Бонусы с ачивок копятся тут же и тратятся в любой день.
         </p>
         <div className="screen-limits">

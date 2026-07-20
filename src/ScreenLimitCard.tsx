@@ -6,6 +6,10 @@ import {
   formatPlayTimeWithOvertime,
   screenOvertimeSec,
 } from './data'
+import {
+  cancelRobloxLimitNotification,
+  scheduleRobloxLimitEndedAt,
+} from './robloxLimitNotify'
 import type { ScreenKind, ScreenSlot } from './types'
 
 type Props = {
@@ -58,7 +62,20 @@ export function ScreenLimitCard({
     return () => window.clearInterval(id)
   }, [running, overtimeTicking])
 
-  // Timer hit zero — stop limit clock, start silent overtime.
+  // Keep a system notification scheduled for the exact limit end (works in background).
+  useEffect(() => {
+    if (kind !== 'roblox') return
+    if (running && slot.endsAt != null) {
+      void scheduleRobloxLimitEndedAt(slot.endsAt)
+      return
+    }
+    if (slot.finished) {
+      void cancelRobloxLimitNotification()
+    }
+  }, [kind, running, slot.endsAt, slot.finished])
+
+  // Timer hit zero — start overtime. Notification is the scheduled one at endsAt
+  // (avoid a second immediate alert that doubles the nudge).
   useEffect(() => {
     if (!running || remaining > 0 || finishedRef.current) return
     finishedRef.current = true
@@ -109,6 +126,9 @@ export function ScreenLimitCard({
     const started = sessionStartRemaining.current ?? slot.remainingSec
     const played = Math.max(0, started - left)
     sessionStartRemaining.current = null
+    if (kind === 'roblox') {
+      void cancelRobloxLimitNotification()
+    }
     onChange({
       endsAt: null,
       remainingSec: left,
@@ -128,6 +148,9 @@ export function ScreenLimitCard({
       played = Math.max(0, started - left)
     }
     sessionStartRemaining.current = null
+    if (kind === 'roblox') {
+      void cancelRobloxLimitNotification()
+    }
     onChange({
       ...next,
       endsAt: null,
@@ -141,7 +164,7 @@ export function ScreenLimitCard({
   const status = slot.finished
     ? 'Лимит на сегодня закрыт'
     : running
-      ? 'Идёт таймер — когда время выйдет, он остановится'
+      ? 'Идёт таймер — когда время выйдет, придёт напоминание'
       : timedOut
         ? 'Время вышло — можно доиграть, потом нажми «Закончить на сегодня»'
         : remaining < limitSec
