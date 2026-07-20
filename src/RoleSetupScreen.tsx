@@ -14,9 +14,6 @@ export function RoleSetupScreen({ onChoose }: Props) {
       <header className="screen-head">
         <p className="eyebrow">Настройка</p>
         <h1>Кто будет пользоваться?</h1>
-        <p className="sub">
-          Выбери один раз — потом экран откроется в нужном режиме.
-        </p>
       </header>
 
       <button
@@ -25,10 +22,6 @@ export function RoleSetupScreen({ onChoose }: Props) {
         onClick={() => onChoose('child')}
       >
         <h2>Я ребёнок</h2>
-        <p className="hint">
-          Чеклист на день, зарядка, дневник жевания и таймер Roblox. Можно
-          отмечать сделанное.
-        </p>
       </button>
 
       <button
@@ -37,10 +30,6 @@ export function RoleSetupScreen({ onChoose }: Props) {
         onClick={() => setPinOpen(true)}
       >
         <h2>Я родитель</h2>
-        <p className="hint">
-          Сводка дня, задания, копилка и облако семьи. Чтобы войти — нужен
-          пин-код.
-        </p>
       </button>
 
       <ParentPinDialog

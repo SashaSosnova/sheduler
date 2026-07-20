@@ -111,12 +111,7 @@ function App() {
       >
         {showNav ? (
           <div className="app-head-actions">
-            <ScreenHeadActions
-              onOpenAchievements={
-                isParent ? undefined : () => setTab('progress')
-              }
-              onOpenSettings={() => setTab('settings')}
-            />
+            <ScreenHeadActions onOpenSettings={() => setTab('settings')} />
           </div>
         ) : null}
         {tab === 'today' ? (
@@ -198,9 +193,6 @@ function App() {
             onLeaveFamily={leaveFamilyCloud}
             onChangeRole={changeRole}
             onGoHome={() => setTab('today')}
-            onOpenAchievements={
-              isParent ? undefined : () => setTab('progress')
-            }
           />
         ) : null}
       </main>

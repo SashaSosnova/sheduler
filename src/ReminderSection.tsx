@@ -182,12 +182,11 @@ export function ReminderSection({ data, onChange, asParent = false }: Props) {
   return (
     <section className="card">
       <div className="card-title-row">
-        <h2>Ближайшие</h2>
+        <h2>Напоминания</h2>
         {listItems.length ? (
           <span className="pill muted">{listItems.length}</span>
         ) : null}
       </div>
-      <p className="hint">Визиты с временем · без галочек</p>
 
       {listItems.length ? (
         <ul className="reminder-list">
@@ -204,9 +203,7 @@ export function ReminderSection({ data, onChange, asParent = false }: Props) {
             />
           ))}
         </ul>
-      ) : (
-        <p className="hint">Пока пусто — например: ортодонт или миотерапевт.</p>
-      )}
+      ) : null}
 
       <div className="extra-picker-box">
         <button
@@ -330,12 +327,12 @@ function removeReminder(
   const day = normalizeDayLog(item.date, data.days[item.date])
   const target = day.reminders.find((r) => r.id === item.id)
   if (!asParent && target?.fromParent) return
+  const nextReminders = day.reminders.filter((r) => r.id !== item.id)
+  const deletedReminderIds = day.deletedReminderIds.includes(item.id)
+    ? day.deletedReminderIds
+    : [...day.deletedReminderIds, item.id]
   onChange(
-    setDayReminders(
-      data,
-      item.date,
-      day.reminders.filter((r) => r.id !== item.id),
-    ),
+    setDayReminders(data, item.date, nextReminders, deletedReminderIds),
   )
 }
 

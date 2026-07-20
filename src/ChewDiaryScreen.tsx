@@ -205,11 +205,6 @@ export function ChewDiaryScreen({
           </p>
         </div>
         <h1>{readOnly ? 'Дневник жевания' : 'Одна запись в день'}</h1>
-        {readOnly ? (
-          <p className="sub">
-            Сводка по дням. Заполнить можно только на телефоне ребёнка.
-          </p>
-        ) : null}
         {todayChewSec != null ? (
           <p className="sub">Сегодня жевание заняло {formatPlayTime(todayChewSec)}</p>
         ) : null}
@@ -233,12 +228,6 @@ export function ChewDiaryScreen({
               </button>
             </div>
           ) : null}
-        </section>
-      ) : null}
-
-      {readOnly && !todayEntry ? (
-        <section className="card soft">
-          <p className="hint">Сегодня запись ещё не сохранена.</p>
         </section>
       ) : null}
 
@@ -343,16 +332,7 @@ export function ChewDiaryScreen({
             <h2>Сводка для миотерапевта</h2>
             <span className="pill">{allEntries.length}</span>
           </div>
-          <p className="hint">
-            Одна строка — один день. Открой таблицу на весь экран для скрина
-            или отправь картинкой в мессенджер.
-          </p>
-
-          {allEntries.length === 0 ? (
-            <p className="hint" style={{ marginTop: 10 }}>
-              Пока нечего отправлять — сначала сохрани запись за сегодня.
-            </p>
-          ) : (
+          {allEntries.length > 0 ? (
             <>
               <div className="chew-table-wrap">
                 <table className="chew-table">
@@ -395,7 +375,7 @@ export function ChewDiaryScreen({
               </div>
               {shareStatus ? <p className="hint">{shareStatus}</p> : null}
             </>
-          )}
+          ) : null}
         </section>
       ) : null}
 
@@ -404,10 +384,11 @@ export function ChewDiaryScreen({
           <div className="chew-report-toolbar">
             <button
               type="button"
-              className="btn ghost"
+              className="icon-btn"
+              aria-label="Закрыть"
               onClick={() => setReportOpen(false)}
             >
-              Закрыть
+              ×
             </button>
             <button
               type="button"
@@ -418,9 +399,6 @@ export function ChewDiaryScreen({
               {shareBusy ? 'Готовим…' : 'Поделиться'}
             </button>
           </div>
-          <p className="chew-report-hint">
-            Можно просто сделать скриншот — или нажать «Поделиться»
-          </p>
           <div className="chew-report-sheet">
             <h2>Дневник жевания</h2>
             <p className="hint">

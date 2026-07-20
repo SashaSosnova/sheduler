@@ -2,6 +2,7 @@ import type { TabId, UserRole } from './types'
 
 const CHILD_TABS: { id: TabId; label: string }[] = [
   { id: 'today', label: 'Сегодня' },
+  { id: 'progress', label: 'Прогресс' },
   { id: 'roblox', label: 'Roblox' },
   { id: 'exercises', label: 'Зарядка' },
   { id: 'chew', label: 'Жевание' },

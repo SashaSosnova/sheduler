@@ -47,6 +47,7 @@ type StoredData = {
   claimedRobloxStreaks?: number[]
   robloxBonusBankMin?: number
   moneyBankRub?: number
+  banksUpdatedAt?: number
   claimedStickerMoneyIds?: string[]
   dismissedGiftStickerIds?: string[]
   equippedStickerId?: string | null
@@ -111,6 +112,7 @@ function hydrateAppData(
       claimedRobloxStreaks: normalizeStreakInts(partial.claimedRobloxStreaks),
       robloxBonusBankMin: normalizeNonNegInt(partial.robloxBonusBankMin),
       moneyBankRub: normalizeNonNegInt(partial.moneyBankRub),
+      banksUpdatedAt: normalizeNonNegInt(partial.banksUpdatedAt),
       claimedStickerMoneyIds: normalizeStringIds(partial.claimedStickerMoneyIds),
       dismissedGiftStickerIds: normalizeStringIds(
         partial.dismissedGiftStickerIds,
@@ -191,6 +193,7 @@ function load(): AppData {
       claimedRobloxStreaks,
       robloxBonusBankMin: normalizeNonNegInt(parsed.robloxBonusBankMin),
       moneyBankRub: normalizeNonNegInt(parsed.moneyBankRub),
+      banksUpdatedAt: normalizeNonNegInt(parsed.banksUpdatedAt),
       claimedStickerMoneyIds,
       dismissedGiftStickerIds,
       equippedStickerId: normalizeEquippedStickerId(parsed.equippedStickerId),
@@ -292,15 +295,24 @@ function applyCloud(prev: AppData, payload: CloudPayload): AppData {
     ...(prev.dismissedGiftStickerIds ?? []),
     ...remoteDismissed,
   ])
+  const remoteBanksAt = normalizeNonNegInt(
+    payload.banksUpdatedAt ?? payload.updatedAt,
+  )
+  const localBanksAt = normalizeNonNegInt(prev.banksUpdatedAt)
+  const preferRemoteBanks = remoteBanksAt >= localBanksAt
   return hydrateAppData({
     ...prev,
     days,
     chewEntries,
     cookingLeft: payload.cookingLeft ?? prev.cookingLeft,
     claimedRobloxStreaks,
-    robloxBonusBankMin:
-      payload.robloxBonusBankMin ?? prev.robloxBonusBankMin ?? 0,
-    moneyBankRub: payload.moneyBankRub ?? prev.moneyBankRub ?? 0,
+    robloxBonusBankMin: preferRemoteBanks
+      ? normalizeNonNegInt(payload.robloxBonusBankMin ?? prev.robloxBonusBankMin)
+      : normalizeNonNegInt(prev.robloxBonusBankMin),
+    moneyBankRub: preferRemoteBanks
+      ? normalizeNonNegInt(payload.moneyBankRub ?? prev.moneyBankRub)
+      : normalizeNonNegInt(prev.moneyBankRub),
+    banksUpdatedAt: Math.max(remoteBanksAt, localBanksAt),
     claimedStickerMoneyIds: [...claimedMoney],
     dismissedGiftStickerIds: [...dismissedGifts],
     equippedStickerId:
@@ -366,6 +378,9 @@ function replaceFromCloud(payload: CloudPayload): AppData {
     claimedRobloxStreaks: payload.claimedRobloxStreaks ?? [],
     robloxBonusBankMin: payload.robloxBonusBankMin ?? 0,
     moneyBankRub: payload.moneyBankRub ?? 0,
+    banksUpdatedAt: normalizeNonNegInt(
+      payload.banksUpdatedAt ?? payload.updatedAt,
+    ),
     claimedStickerMoneyIds: resolveClaimedStickerMoneyIds(
       payload.claimedStickerMoneyIds,
       days,
@@ -419,6 +434,7 @@ export function useAppData() {
       claimedRobloxStreaks: data.claimedRobloxStreaks ?? [],
       robloxBonusBankMin: data.robloxBonusBankMin ?? 0,
       moneyBankRub: data.moneyBankRub ?? 0,
+      banksUpdatedAt: data.banksUpdatedAt ?? 0,
       claimedStickerMoneyIds: data.claimedStickerMoneyIds ?? [],
       dismissedGiftStickerIds: data.dismissedGiftStickerIds ?? [],
       equippedStickerId: data.equippedStickerId ?? null,
@@ -460,7 +476,15 @@ export function useAppData() {
     (action: AppData | ((prev: AppData) => AppData)) => {
       setData((prev) => {
         const next = typeof action === 'function' ? action(prev) : action
-        const normalized = hydrateAppData(next)
+        const banksChanged =
+          normalizeNonNegInt(next.robloxBonusBankMin) !==
+            normalizeNonNegInt(prev.robloxBonusBankMin) ||
+          normalizeNonNegInt(next.moneyBankRub) !==
+            normalizeNonNegInt(prev.moneyBankRub)
+        const withBanks = banksChanged
+          ? { ...next, banksUpdatedAt: Date.now() }
+          : next
+        const normalized = hydrateAppData(withBanks)
         schedulePush(normalized)
         return normalized
       })

@@ -104,8 +104,12 @@ export type DayLog = {
   outing: string
   /** One-time must-dos for this day only */
   extraTasks: DayExtraTask[]
+  /** Ids removed on any device — merge must not resurrect them */
+  deletedExtraTaskIds: string[]
   /** «Не забудь» — appointments / notes without checkboxes */
   reminders: DayReminder[]
+  /** Ids removed on any device — merge must not resurrect them */
+  deletedReminderIds: string[]
   /** What creative thing they did */
   createNote: string
   screens: Record<ScreenKind, ScreenSlot>
@@ -143,6 +147,8 @@ export type AppData = {
    * Parent marks as paid out via payoutMoneyBankRub.
    */
   moneyBankRub: number
+  /** Unix ms when robloxBonusBankMin or moneyBankRub last changed */
+  banksUpdatedAt: number
   /** Sticker ids whose moneyRub was already credited to moneyBankRub */
   claimedStickerMoneyIds: string[]
   /**

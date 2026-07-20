@@ -56,17 +56,7 @@ export function StickerUnlockOverlay({ data, enabled = true }: Props) {
   const seededRef = useRef(false)
   const celebratedRef = useRef<Set<string>>(new Set())
 
-  const unlocked = useMemo(
-    () => unlockedIds(data),
-    [
-      data.days,
-      data.bestStreak,
-      data.bestParentTasks,
-      data.chewEntries,
-      data.finishedBooks,
-      data.exercises,
-    ],
-  )
+  const unlocked = useMemo(() => unlockedIds(data), [data])
 
   useEffect(() => {
     if (!enabled || DEBUG_UNLOCK_ALL_STICKERS) return

@@ -151,6 +151,9 @@ export function ParentSummaryScreen({
   function removeExtraTask(id: string) {
     patchDay({
       extraTasks: day.extraTasks.filter((t) => t.id !== id),
+      deletedExtraTaskIds: day.deletedExtraTaskIds.includes(id)
+        ? day.deletedExtraTaskIds
+        : [...day.deletedExtraTaskIds, id],
     })
   }
 
@@ -233,11 +236,7 @@ export function ParentSummaryScreen({
           <p className="hint">
             Копилка бонусов:{' '}
             <strong>{Math.floor(data.robloxBonusBankMin ?? 0)} мин</strong>
-            {(data.robloxBonusBankMin ?? 0) > 0
-              ? ' (ребёнок ещё не потратил)'
-              : ''}
           </p>
-          <p className="hint">Поблагодарить сверх ачивок — закинуть минуты:</p>
           <div className="row-gap">
             {PARENT_BANK_GIFTS.map((n) => (
               <button
@@ -313,9 +312,6 @@ export function ParentSummaryScreen({
             {doneCount}/{MUST_DO_ITEMS.length}
           </span>
         </div>
-        <p className="hint">
-          Можно отметить за ребёнка, если сделал, но забыл поставить галочку.
-        </p>
         <ul className="check-list">
           {MUST_DO_ITEMS.map((item) => (
             <li key={item.id}>
@@ -346,7 +342,6 @@ export function ParentSummaryScreen({
             </span>
           ) : null}
         </div>
-        <p className="hint">Сверх минимума · появятся у ребёнка через облако</p>
 
         {day.extraTasks.length ? (
           <ul className="check-list">
@@ -462,12 +457,7 @@ export function ParentSummaryScreen({
             {pendingGifts.length > 0 ? ` · ${pendingGifts.length}` : ''}
           </span>
         </div>
-        <p className="hint">
-          Деньги и подарки за ачивки. Наличные спиши после выдачи, подарки —
-          нажми «Выдать».
-        </p>
         <div className="parent-roblox-bank">
-          <p className="hint">Поблагодарить сверх ачивок — закинуть:</p>
           <div className="row-gap">
             {PARENT_MONEY_GIFTS.map((n) => (
               <button
@@ -481,36 +471,27 @@ export function ParentSummaryScreen({
             ))}
           </div>
           {moneyBank > 0 ? (
-            <>
-              <p className="hint" style={{ marginTop: 10 }}>
-                Выдал наличные — списать:
-              </p>
-              <div className="row-gap">
-                {PARENT_MONEY_PAYOUTS.filter((n) => n <= moneyBank).map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    className="btn ghost"
-                    onClick={() => onChange(payoutMoneyBankRub(data, n))}
-                  >
-                    −{n} ₽
-                  </button>
-                ))}
+            <div className="row-gap" style={{ marginTop: 10 }}>
+              {PARENT_MONEY_PAYOUTS.filter((n) => n <= moneyBank).map((n) => (
                 <button
+                  key={n}
                   type="button"
-                  className="btn"
-                  onClick={() => onChange(payoutMoneyBankRub(data, moneyBank))}
+                  className="btn ghost"
+                  onClick={() => onChange(payoutMoneyBankRub(data, n))}
                 >
-                  Списать всё
+                  −{n} ₽
                 </button>
-              </div>
-            </>
+              ))}
+              <button
+                type="button"
+                className="btn"
+                onClick={() => onChange(payoutMoneyBankRub(data, moneyBank))}
+              >
+                Списать всё
+              </button>
+            </div>
           ) : null}
 
-          <p className="hint" style={{ marginTop: 14 }}>
-            Подарки к выдаче:
-            {pendingGifts.length === 0 ? ' пока нет' : ''}
-          </p>
           {pendingGifts.length > 0 ? (
             <ul className="gift-pending-list">
               {pendingGifts.map((gift) => (
@@ -542,11 +523,6 @@ export function ParentSummaryScreen({
             </span>
           ) : null}
         </div>
-        <p className="hint">
-          Добавь книгу, которую сейчас читает ребёнок. Когда дочитаете — нажми
-          «Дочитали».
-        </p>
-
         {readingBooks.length || finishedBooks.length ? (
           <ul className="check-list book-list">
             {readingBooks.map((book) => (
@@ -572,11 +548,7 @@ export function ParentSummaryScreen({
               </li>
             ))}
           </ul>
-        ) : (
-          <p className="hint" style={{ marginTop: 10 }}>
-            Пока нет книг в списке.
-          </p>
-        )}
+        ) : null}
 
         {addingBook ? (
           <div className="book-add-box">
@@ -635,13 +607,6 @@ export function ParentSummaryScreen({
             {exerciseDone}/{exerciseTotal || 0}
           </span>
         </div>
-        <p className="hint">
-          {exerciseDone === 0
-            ? 'Пока ничего не отмечено в упражнениях.'
-            : exerciseDone === exerciseTotal
-              ? 'Весь комплекс отмечен.'
-              : `Сделано ${exerciseDone} из ${exerciseTotal}.`}
-        </p>
         {workoutSec != null ? (
           <p className="sub" style={{ marginTop: 8 }}>
             Сегодня зарядка заняла {formatPlayTime(workoutSec)}
@@ -674,9 +639,7 @@ export function ParentSummaryScreen({
               </p>
             ) : null}
           </>
-        ) : (
-          <p className="hint">Сегодня ещё не заполнено.</p>
-        )}
+        ) : null}
         <div className="row-gap">
           <button type="button" className="btn" onClick={onOpenChew}>
             Открыть дневник →

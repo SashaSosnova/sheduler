@@ -384,7 +384,7 @@
 }
 
 .role-card h2 {
-  margin-bottom: 8px;
+  margin: 0;
 }
 
 .pin-overlay {
@@ -441,7 +441,11 @@
   color: var(--muted);
 }
 
-.exercise-card.read-only .check-row {
+.exercise-card.read-only .ex-check-main {
+  cursor: default;
+}
+
+.exercise-card.read-only .ex-check-main input {
   pointer-events: none;
 }
 
@@ -1022,13 +1026,26 @@
 }
 
 .must-main-tag {
-  display: inline-block;
-  margin-left: 6px;
-  font-size: 0.72rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 0.45em;
+  width: 1.15em;
+  height: 1.15em;
+  border-radius: 50%;
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-size: 0.78rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--accent);
+  line-height: 1;
+  color: #fff;
+  background: var(--accent);
+  vertical-align: 0.1em;
+}
+
+.parent-marked {
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--muted);
 }
 
 .sticker-row {
@@ -1367,6 +1384,108 @@
   }
 }
 
+.ex-wizard-screen {
+  gap: 14px;
+}
+
+.ex-wizard-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  overflow: hidden;
+}
+
+.ex-wizard-progress-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.25s ease;
+}
+
+.ex-wizard-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 18px;
+  margin: 0;
+}
+
+.ex-wizard-step {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.ex-wizard-group {
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.ex-wizard-name {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.ex-wizard-desc {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.45;
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+
+.ex-wizard-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ex-wizard-card .timer {
+  margin-top: 4px;
+}
+
+.ex-wizard-complete {
+  text-align: center;
+  padding: 28px 20px;
+  background: #e8f5ee;
+  border-color: #b9dcc8;
+}
+
+.ex-wizard-complete-title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+
+.ex-wizard-complete-sub {
+  margin: 8px 0 0;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.exercise-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.exercise-group-head {
+  padding: 0 4px;
+}
+
+.exercise-group-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
 .exercise-list {
   list-style: none;
   margin: 0;
@@ -1374,10 +1493,6 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-.card > .exercise-list {
-  margin-top: 4px;
 }
 
 .eyebrow {
@@ -1390,10 +1505,8 @@
 }
 
 .exercise-card {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
   padding: 14px;
+  margin: 0;
 }
 
 .exercise-card.done {
@@ -1401,33 +1514,149 @@
   border-color: #b9dcc8;
 }
 
-.ex-name {
-  font-weight: 700;
-}
-
-.ex-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 8px 0 4px;
-  padding-left: 34px;
-}
-
-.exercise-card .hint {
-  padding-left: 34px;
-}
-
-.ex-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
-  padding-left: 34px;
-}
-
 .exercise-card.active {
   border-color: var(--warm);
   background: #fff8f3;
+}
+
+.ex-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ex-check-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.ex-check-main.needs-timer {
+  cursor: pointer;
+}
+
+.ex-check-main.needs-timer input {
+  pointer-events: none;
+}
+
+.ex-check-main input {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+
+.ex-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ex-name-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35em;
+}
+
+.ex-name {
+  font-weight: 400;
+  font-size: 1rem;
+  line-height: 1.3;
+}
+
+.ex-note-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.2em;
+  height: 1.2em;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  font-family: 'Source Serif 4', Georgia, serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  background: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ex-note-btn:hover,
+.ex-note-btn:focus-visible {
+  filter: brightness(0.95);
+  outline: none;
+}
+
+.ex-note-btn[aria-expanded='true'] {
+  background: var(--ink);
+}
+
+.ex-desc {
+  font-size: 0.82rem;
+  font-weight: 400;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.exercise-card .ex-reps {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+}
+
+button.ex-timer-chip {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  flex-shrink: 0;
+  transition: filter 0.12s ease, transform 0.12s ease;
+}
+
+button.ex-timer-chip:hover,
+button.ex-timer-chip:focus-visible {
+  filter: brightness(0.95);
+  outline: none;
+}
+
+button.ex-timer-chip:active {
+  transform: scale(0.97);
+}
+
+span.ex-timer-chip {
+  flex-shrink: 0;
+}
+
+.screen-sheet-open {
+  padding-bottom: 320px;
+}
+
+.timer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px;
+  background: rgba(20, 16, 12, 0.45);
+}
+
+.timer-overlay-card {
+  width: min(100%, 400px);
+  margin: 0;
+  max-height: min(80dvh, 560px);
+  overflow: auto;
+}
+
+.timer-overlay-card:focus {
+  outline: none;
 }
 
 .action-sheet {
@@ -1474,10 +1703,6 @@
 
 .action-sheet-body {
   padding-bottom: 4px;
-}
-
-.screen-sheet-open {
-  padding-bottom: 320px;
 }
 
 .timer-card {

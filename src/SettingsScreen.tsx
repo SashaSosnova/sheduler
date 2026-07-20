@@ -4,7 +4,6 @@ import {
 } from './notifications'
 import { FamilySyncCard } from './FamilySyncCard'
 import type { FamilyStatus } from './familySync'
-import { ScreenHeadActions } from './ScreenHeadActions'
 import type { UserRole } from './types'
 
 type Props = {
@@ -35,7 +34,6 @@ type Props = {
   onLeaveFamily: () => void
   onChangeRole: (role: UserRole) => void
   onGoHome: () => void
-  onOpenAchievements?: () => void
 }
 
 export function SettingsScreen({
@@ -66,7 +64,6 @@ export function SettingsScreen({
   onLeaveFamily,
   onChangeRole,
   onGoHome,
-  onOpenAchievements,
 }: Props) {
   return (
     <div className="screen">
@@ -74,9 +71,6 @@ export function SettingsScreen({
         <div className="screen-head-row">
           <p className="eyebrow">Настройки</p>
           <div className="screen-head-actions">
-            {onOpenAchievements ? (
-              <ScreenHeadActions onOpenAchievements={onOpenAchievements} />
-            ) : null}
             <button
               type="button"
               className="btn ghost"
@@ -87,16 +81,12 @@ export function SettingsScreen({
           </div>
         </div>
         <h1>Ещё</h1>
-        <p className="sub">Семья в облаке и режим приложения</p>
       </header>
 
       <section className="card">
         <h2>Режим</h2>
         <p className="hint">
-          Сейчас:{' '}
-          {role === 'parent'
-            ? 'родитель (можно отмечать за ребёнка)'
-            : 'ребёнок'}
+          Сейчас: {role === 'parent' ? 'родитель' : 'ребёнок'}
         </p>
         <div className="row-gap">
           {role === 'child' ? (
@@ -123,10 +113,7 @@ export function SettingsScreen({
         <>
           <section className="card">
             <h2>Подпись в заданиях</h2>
-            <p className="hint">
-              Так ребёнок увидит, от кого задание — в списке и в уведомлении.
-            </p>
-            <label className="field" style={{ marginTop: 12 }}>
+            <label className="field">
               <span>От кого (род. падеж)</span>
               <input
                 value={parentLabel}
@@ -135,9 +122,6 @@ export function SettingsScreen({
                 maxLength={24}
               />
             </label>
-            <p className="hint" style={{ marginTop: 8 }}>
-              Пример: «Добавлено задание от {parentLabel || 'мамы'}: Купить хлеб»
-            </p>
             <div className="row-gap" style={{ marginTop: 10 }}>
               <button
                 type="button"
@@ -163,12 +147,7 @@ export function SettingsScreen({
                 {parentAlertsEnabled ? 'вкл' : 'выкл'}
               </span>
             </div>
-            <p className="hint">
-              Когда через облако придёт зарядка или дневник жевания — придёт
-              уведомление. Нужны одно семейное облако и приложение на телефоне
-              родителя (лучше не выгружать его из памяти полностью).
-            </p>
-            <label className="field" style={{ marginTop: 12 }}>
+            <label className="field">
               <span>Имя в уведомлениях</span>
               <input
                 value={childName}
@@ -229,10 +208,6 @@ export function SettingsScreen({
                 {notificationsEnabled ? 'вкл' : 'выкл'}
               </span>
             </div>
-            <p className="hint">
-              Каждый день в одно и то же время — умывание, зарядка и дневник
-              жевания.
-            </p>
             {!notificationsSupported ? (
               <p className="hint" style={{ marginTop: 8 }}>
                 В браузере не работает — только в приложении на телефоне.
@@ -279,11 +254,6 @@ export function SettingsScreen({
                 {childTaskAlertsEnabled ? 'вкл' : 'выкл'}
               </span>
             </div>
-            <p className="hint">
-              Когда родитель добавит задание через облако — придёт уведомление.
-              Нужны одно семейное облако и приложение на телефоне ребёнка (лучше
-              не выгружать его из памяти полностью).
-            </p>
             {!childTaskAlertsSupported ? (
               <p className="hint" style={{ marginTop: 8 }}>
                 В браузере не работает — только в приложении на телефоне.

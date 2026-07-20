@@ -42,7 +42,6 @@ export function ParentPinDialog({
     <div className="pin-overlay" role="dialog" aria-modal="true" aria-label={title}>
       <div className="card pin-card">
         <h2>{title}</h2>
-        <p className="hint">Введи пин-код, чтобы открыть режим родителя.</p>
         <label className="field" style={{ marginTop: 12 }}>
           <span>Пин-код</span>
           <input

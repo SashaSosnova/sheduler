@@ -116,6 +116,7 @@ export function formatPlayTimeWithOvertime(
 }
 
 const POSTURE = 'Гимнастика для осанки'
+const ARTIC_TRAINER = 'Артикуляционная гимнастика с трейнером'
 const ARTIC = 'Артикуляционная гимнастика'
 const SWALLOW = 'Глотание'
 const BREATH = 'Дыхательная гимнастика'
@@ -204,104 +205,105 @@ export const DEFAULT_EXERCISES: Exercise[] = [
     notes: '',
   },
 
-  // —— Артикуляция ——
-  // С пометкой (трейнер) — только те, где это было в ДЗ
+  // —— Артикуляция с трейнером ——
   {
     id: 'a-smile',
-    name: 'Удержание улыбки (трейнер)',
-    group: ARTIC,
+    name: 'Удержание улыбки',
+    group: ARTIC_TRAINER,
     durationSec: 60,
     reps: '',
     notes: 'Удержать мышцы губ 1 минуту.',
   },
   {
     id: 'a-tongues',
-    name: 'Язычки здороваются (трейнер)',
-    group: ARTIC,
+    name: 'Язычки здороваются',
+    group: ARTIC_TRAINER,
     durationSec: 10,
     reps: '3 подхода',
     notes: 'Удерживать язык под счёт от 1 до 10.',
   },
   {
     id: 'a-bagel',
-    name: 'Бублик с удержанием (трейнер)',
-    group: ARTIC,
+    name: 'Бублик с удержанием',
+    group: ARTIC_TRAINER,
     durationSec: 60,
     reps: '',
     notes: 'Удержать мышцы губ 1 минуту.',
   },
   {
     id: 'a-swing-lips',
-    name: 'Качели — губы (трейнер)',
-    group: ARTIC,
+    name: 'Качели — губы',
+    group: ARTIC_TRAINER,
     durationSec: 0,
     reps: '10 раз',
     notes: 'Раскачиваем закрытую улыбку влево–вправо.',
   },
   {
     id: 'a-brush',
-    name: 'Чистим зубы (трейнер)',
-    group: ARTIC,
+    name: 'Чистим зубы',
+    group: ARTIC_TRAINER,
     durationSec: 0,
     reps: 'по 4 раза в каждую сторону',
     notes: 'Кончиком языка по внутренней стороне трейнера по часовой и против.',
   },
   {
     id: 'a-kiss',
-    name: 'Холодный поцелуй (трейнер)',
-    group: ARTIC,
+    name: 'Холодный поцелуй',
+    group: ARTIC_TRAINER,
     durationSec: 60,
     reps: '',
     notes: 'Удерживаем позу 1 минуту. Губы напряжены.',
   },
   {
     id: 'a-koko',
-    name: 'Ко-ко-ко (трейнер)',
-    group: ARTIC,
+    name: 'Ко-ко-ко',
+    group: ARTIC_TRAINER,
     durationSec: 0,
     reps: '20 раз',
     notes: '',
   },
   {
     id: 'a-hare-tiger',
-    name: 'Чередование «Заяц» — «Тигр» (трейнер)',
-    group: ARTIC,
+    name: 'Чередование «Заяц» — «Тигр»',
+    group: ARTIC_TRAINER,
     durationSec: 0,
     reps: '5 подходов',
     notes: 'Чередуем положение губ.',
   },
   {
     id: 'a-eights',
-    name: 'Восьмёрки (трейнер)',
-    group: ARTIC,
+    name: 'Восьмёрки',
+    group: ARTIC_TRAINER,
     durationSec: 0,
     reps: '15–30 раз',
     notes: 'Кончиком языка на твёрдом нёбе.',
   },
   {
     id: 'a-knot',
-    name: 'Узелок (трейнер)',
-    group: ARTIC,
+    name: 'Узелок',
+    group: ARTIC_TRAINER,
     durationSec: 60,
     reps: '',
     notes: 'Удерживать 1 минуту.',
   },
   {
     id: 'a-painter',
-    name: 'Маляр (трейнер)',
-    group: ARTIC,
+    name: 'Маляр',
+    group: ARTIC_TRAINER,
     durationSec: 0,
     reps: '10 раз',
     notes: 'Спокойный темп.',
   },
   {
     id: 'a-pig',
-    name: 'Пятачок (трейнер)',
-    group: ARTIC,
+    name: 'Пятачок',
+    group: ARTIC_TRAINER,
     durationSec: 0,
     reps: 'по 5 кружков в каждую сторону',
     notes: 'Губы слегка вперёд, зубы сомкнуты, челюсть неподвижна.',
   },
+
+  // —— Артикуляция без трейнера ——
   {
     id: 'a-pendulum',
     name: 'Маятник',
@@ -515,7 +517,9 @@ export function emptyDayLog(date: string): DayLog {
     note: '',
     outing: 'none',
     extraTasks: [],
+    deletedExtraTaskIds: [],
     reminders: [],
+    deletedReminderIds: [],
     createNote: '',
     robloxBonusMin: 0,
     screens: {
@@ -577,6 +581,10 @@ function normalizeReminders(raw: unknown): DayReminder[] {
 export function normalizeDayLog(date: string, raw?: Partial<DayLog> | null): DayLog {
   const base = emptyDayLog(date)
   if (!raw) return base
+  const deletedExtraTaskIds = normalizeDeletedIds(raw.deletedExtraTaskIds)
+  const deletedReminderIds = normalizeDeletedIds(raw.deletedReminderIds)
+  const deletedTasks = new Set(deletedExtraTaskIds)
+  const deletedReminders = new Set(deletedReminderIds)
   return {
     ...base,
     ...raw,
@@ -588,8 +596,14 @@ export function normalizeDayLog(date: string, raw?: Partial<DayLog> | null): Day
     workoutFinishedAt: normalizeTimestamp(raw.workoutFinishedAt),
     perfectAt: normalizeTimestamp(raw.perfectAt),
     createNote: raw.createNote ?? '',
-    extraTasks: normalizeExtraTasks(raw.extraTasks),
-    reminders: normalizeReminders(raw.reminders),
+    extraTasks: normalizeExtraTasks(raw.extraTasks).filter(
+      (t) => !deletedTasks.has(t.id),
+    ),
+    deletedExtraTaskIds,
+    reminders: normalizeReminders(raw.reminders).filter(
+      (r) => !deletedReminders.has(r.id),
+    ),
+    deletedReminderIds,
     robloxBonusMin: normalizeNonNegInt(raw.robloxBonusMin),
     screens: {
       roblox: normalizeScreenSlot(
@@ -611,9 +625,31 @@ function mergeBoolMaps(
   return out
 }
 
-function mergeExtraTasks(a: DayExtraTask[], b: DayExtraTask[]): DayExtraTask[] {
+function normalizeDeletedIds(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const item of raw) {
+    if (typeof item !== 'string') continue
+    const id = item.trim()
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    out.push(id)
+  }
+  return out
+}
+
+function mergeExtraTasks(
+  a: DayExtraTask[],
+  b: DayExtraTask[],
+  deletedA: string[],
+  deletedB: string[],
+): { tasks: DayExtraTask[]; deletedIds: string[] } {
+  const deletedIds = normalizeDeletedIds([...deletedA, ...deletedB])
+  const deleted = new Set(deletedIds)
   const byId = new Map<string, DayExtraTask>()
   for (const task of [...a, ...b]) {
+    if (deleted.has(task.id)) continue
     const prev = byId.get(task.id)
     if (!prev) {
       byId.set(task.id, task)
@@ -628,12 +664,20 @@ function mergeExtraTasks(a: DayExtraTask[], b: DayExtraTask[]): DayExtraTask[] {
       fromParentAs: task.fromParentAs || prev.fromParentAs,
     })
   }
-  return [...byId.values()]
+  return { tasks: [...byId.values()], deletedIds }
 }
 
-function mergeReminders(a: DayReminder[], b: DayReminder[]): DayReminder[] {
+function mergeReminders(
+  a: DayReminder[],
+  b: DayReminder[],
+  deletedA: string[],
+  deletedB: string[],
+): { reminders: DayReminder[]; deletedIds: string[] } {
+  const deletedIds = normalizeDeletedIds([...deletedA, ...deletedB])
+  const deleted = new Set(deletedIds)
   const byId = new Map<string, DayReminder>()
   for (const item of [...a, ...b]) {
+    if (deleted.has(item.id)) continue
     const prev = byId.get(item.id)
     if (!prev) {
       byId.set(item.id, item)
@@ -648,7 +692,7 @@ function mergeReminders(a: DayReminder[], b: DayReminder[]): DayReminder[] {
       fromParentAs: item.fromParentAs || prev.fromParentAs,
     })
   }
-  return [...byId.values()]
+  return { reminders: [...byId.values()], deletedIds }
 }
 
 function mergeScreenSlots(a: ScreenSlot, b: ScreenSlot): ScreenSlot {
@@ -713,6 +757,18 @@ export function mergeDayLog(
     perfectTimes.length > 0
       ? Math.min(...perfectTimes)
       : null
+  const extra = mergeExtraTasks(
+    a.extraTasks,
+    b.extraTasks,
+    a.deletedExtraTaskIds,
+    b.deletedExtraTaskIds,
+  )
+  const reminders = mergeReminders(
+    a.reminders,
+    b.reminders,
+    a.deletedReminderIds,
+    b.deletedReminderIds,
+  )
   return normalizeDayLog(date, {
     mode: a.mode !== 'home' ? a.mode : b.mode,
     mustDo,
@@ -723,8 +779,10 @@ export function mergeDayLog(
     perfectAt: mergedPerfect,
     note: a.note.trim() ? a.note : b.note,
     outing: a.outing.trim() ? a.outing : b.outing,
-    extraTasks: mergeExtraTasks(a.extraTasks, b.extraTasks),
-    reminders: mergeReminders(a.reminders, b.reminders),
+    extraTasks: extra.tasks,
+    deletedExtraTaskIds: extra.deletedIds,
+    reminders: reminders.reminders,
+    deletedReminderIds: reminders.deletedIds,
     createNote: a.createNote.trim() ? a.createNote : b.createNote,
     robloxBonusMin: Math.max(a.robloxBonusMin, b.robloxBonusMin),
     screens: {
@@ -843,6 +901,7 @@ export function defaultAppData(): AppData {
     claimedRobloxStreaks: [],
     robloxBonusBankMin: 0,
     moneyBankRub: 0,
+    banksUpdatedAt: 0,
     claimedStickerMoneyIds: [],
     dismissedGiftStickerIds: [],
     equippedStickerId: null,
@@ -920,13 +979,18 @@ export function setDayReminders(
   data: AppData,
   date: string,
   reminders: DayReminder[],
+  deletedReminderIds?: string[],
 ): AppData {
   const day = normalizeDayLog(date, data.days[date])
   return {
     ...data,
     days: {
       ...data.days,
-      [date]: normalizeDayLog(date, { ...day, reminders }),
+      [date]: normalizeDayLog(date, {
+        ...day,
+        reminders,
+        ...(deletedReminderIds ? { deletedReminderIds } : {}),
+      }),
     },
   }
 }

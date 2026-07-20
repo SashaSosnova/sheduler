@@ -76,9 +76,8 @@ export function RobloxScreen({ data, onChange }: Props) {
     robloxSlot.usedSec,
   ])
 
-  const limitMin = Math.round(robloxLimit / 60)
   const usedSec = robloxSlot.usedSec
-  const subParts = [`Лимит ${limitMin} мин`]
+  const subParts: string[] = []
   if (robloxBonusMin > 0) subParts.push(`из копилки +${robloxBonusMin}`)
   if (usedSec > 0) subParts.push(`сыграно ${formatPlayTime(usedSec)}`)
 
@@ -89,7 +88,9 @@ export function RobloxScreen({ data, onChange }: Props) {
           <p className="eyebrow">Игра</p>
         </div>
         <h1 className="no-capitalize">Roblox</h1>
-        <p className="sub">{subParts.join(' · ')}</p>
+        {subParts.length ? (
+          <p className="sub">{subParts.join(' · ')}</p>
+        ) : null}
       </header>
 
       <ScreenLimitCard
@@ -111,12 +112,7 @@ export function RobloxScreen({ data, onChange }: Props) {
             {robloxBankMin} мин
           </span>
         </div>
-        {robloxBankMin <= 0 ? (
-          <p className="hint">
-            Сюда падают бонусные минуты за серии и достижения — потом можно
-            взять в любой день.
-          </p>
-        ) : (
+        {robloxBankMin > 0 ? (
           <div className="roblox-bank-actions">
             {bankClaimOptions.map((n) => (
               <button
@@ -136,7 +132,7 @@ export function RobloxScreen({ data, onChange }: Props) {
               Все {robloxBankMin} мин сегодня
             </button>
           </div>
-        )}
+        ) : null}
       </section>
     </div>
   )

@@ -29,6 +29,8 @@ export type CloudPayload = {
   claimedRobloxStreaks?: number[]
   robloxBonusBankMin?: number
   moneyBankRub?: number
+  /** When bank balances last changed — pick newer side on merge */
+  banksUpdatedAt?: number
   claimedStickerMoneyIds?: string[]
   dismissedGiftStickerIds?: string[]
   equippedStickerId?: string | null
@@ -111,6 +113,7 @@ export function toCloudPayload(data: AppData, updatedAt = Date.now()): CloudPayl
     claimedRobloxStreaks: data.claimedRobloxStreaks ?? [],
     robloxBonusBankMin: data.robloxBonusBankMin ?? 0,
     moneyBankRub: data.moneyBankRub ?? 0,
+    banksUpdatedAt: data.banksUpdatedAt ?? 0,
     claimedStickerMoneyIds: data.claimedStickerMoneyIds ?? [],
     dismissedGiftStickerIds: data.dismissedGiftStickerIds ?? [],
     equippedStickerId: data.equippedStickerId ?? null,

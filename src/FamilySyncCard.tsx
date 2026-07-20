@@ -55,10 +55,8 @@ export function FamilySyncCard({
             Код семьи: <strong className="family-code">{family.code}</strong>
           </p>
           <p className="hint">
-            {family.connected
-              ? 'Синхронизация включена. Введи этот код на другом телефоне.'
-              : 'Подключаемся…'}
-            {family.syncing ? ' Сохраняем…' : ''}
+            {family.connected ? 'Онлайн' : 'Подключаемся…'}
+            {family.syncing ? ' · сохраняем…' : ''}
           </p>
           {family.lastSyncedAt ? (
             <p className="hint">
@@ -84,10 +82,6 @@ export function FamilySyncCard({
         </>
       ) : joinPreferred ? (
         <>
-          <p className="hint">
-            Введи код семьи с телефона ребёнка — увидишь его прогресс на этом
-            устройстве.
-          </p>
           <label className="field">
             <span>Код семьи</span>
             <input
@@ -110,10 +104,6 @@ export function FamilySyncCard({
         </>
       ) : (
         <>
-          <p className="hint">
-            Создай семью на одном телефоне и введи тот же код на другом — данные
-            будут общими.
-          </p>
           <div className="row-gap">
             <button
               type="button"

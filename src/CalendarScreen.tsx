@@ -267,12 +267,6 @@ export function CalendarScreen({
         </div>
 
         {canEditMustDo ? (
-          <p className="hint" style={{ marginTop: 8 }}>
-            Можно отметить за ребёнка, если сделал, но забыл.
-          </p>
-        ) : null}
-
-        {canEditMustDo ? (
           <ul className="check-list" style={{ marginTop: 10 }}>
             {MUST_DO_ITEMS.map((item) => (
               <li key={item.id}>

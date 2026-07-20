@@ -49,6 +49,12 @@ export function ScreenLimitCard({
     finishedRef.current = false
   }, [slot.endsAt, slot.finished])
 
+  // After reload mid-session the ref is empty — restore from unused quota.
+  useEffect(() => {
+    if (!running || sessionStartRemaining.current != null) return
+    sessionStartRemaining.current = Math.max(0, limitSec - slot.usedSec)
+  }, [running, limitSec, slot.usedSec])
+
   useEffect(() => {
     if (!running && !overtimeTicking) return
     const id = window.setInterval(() => setNow(Date.now()), 250)
@@ -72,7 +78,8 @@ export function ScreenLimitCard({
   useEffect(() => {
     if (!running || remaining > 0 || finishedRef.current) return
     finishedRef.current = true
-    const started = sessionStartRemaining.current ?? limitSec
+    const started =
+      sessionStartRemaining.current ?? Math.max(0, limitSec - slot.usedSec)
     sessionStartRemaining.current = null
     onChange({
       endsAt: null,
@@ -116,7 +123,8 @@ export function ScreenLimitCard({
   function pause() {
     if (!slot.endsAt) return
     const left = Math.max(0, Math.ceil((slot.endsAt - Date.now()) / 1000))
-    const started = sessionStartRemaining.current ?? slot.remainingSec
+    const started =
+      sessionStartRemaining.current ?? Math.max(0, limitSec - slot.usedSec)
     const played = Math.max(0, started - left)
     sessionStartRemaining.current = null
     if (kind === 'roblox') {
@@ -137,7 +145,8 @@ export function ScreenLimitCard({
     let played = 0
     if (next.endsAt) {
       const left = Math.max(0, Math.ceil((next.endsAt - Date.now()) / 1000))
-      const started = sessionStartRemaining.current ?? next.remainingSec
+      const started =
+        sessionStartRemaining.current ?? Math.max(0, limitSec - next.usedSec)
       played = Math.max(0, started - left)
     }
     sessionStartRemaining.current = null
@@ -167,16 +176,6 @@ export function ScreenLimitCard({
       overtimeStartedAt: null,
     })
   }
-
-  const status = slot.finished
-    ? 'Лимит на сегодня закрыт — можно снова открыть, если нажал случайно'
-    : running
-      ? 'Идёт таймер — когда время выйдет, придёт напоминание'
-      : timedOut
-        ? 'Время вышло — можно доиграть, потом нажми «Закончить на сегодня»'
-        : remaining < limitSec
-          ? 'На паузе — можно продолжить'
-          : 'Ещё не запускал сегодня'
 
   const playLine =
     slot.usedSec > 0 || overtimeLive > 0
@@ -212,7 +211,6 @@ export function ScreenLimitCard({
                   : 'не начат'}
         </span>
       </div>
-      <p className="hint">{status}</p>
       {bonusNote ? <p className="hint">{bonusNote}</p> : null}
       {playLine ? <p className="hint">{playLine}</p> : null}
       <div className={`screen-clock ${running ? 'live' : ''} ${timedOut ? 'timed-out' : ''}`}>

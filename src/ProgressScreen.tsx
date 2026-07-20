@@ -218,7 +218,6 @@ export function ProgressScreen({ data, onChange }: Props) {
             {pendingGifts.length > 0 ? ` · ${pendingGifts.length}` : ''}
           </span>
         </div>
-        <p className="hint">Деньги и подарки за ачивки.</p>
         {pendingGifts.length > 0 ? (
           <ul className="gift-pending-list">
             {pendingGifts.map((gift) => (
@@ -230,11 +229,6 @@ export function ProgressScreen({ data, onChange }: Props) {
               </li>
             ))}
           </ul>
-        ) : null}
-        {moneyBank <= 0 && pendingGifts.length === 0 ? (
-          <p className="hint" style={{ marginTop: 8 }}>
-            Пока пусто — открывай ачивки.
-          </p>
         ) : null}
       </section>
 
@@ -306,10 +300,11 @@ export function ProgressScreen({ data, onChange }: Props) {
             <h2>Звание</h2>
             <button
               type="button"
-              className="btn ghost"
+              className="icon-btn"
+              aria-label="Закрыть"
               onClick={() => setRankPickerOpen(false)}
             >
-              Закрыть
+              ×
             </button>
           </div>
           <div className="action-sheet-body">

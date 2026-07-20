@@ -119,10 +119,17 @@ export function TodayScreen({
   }
 
   function isMustChecked(id: MustDoId): boolean {
-    if (id === 'exercise') return exerciseComplete
-    if (id === 'chew') return chewComplete
+    if (id === 'exercise') return exerciseComplete || Boolean(day.mustDo.exercise)
+    if (id === 'chew') return chewComplete || Boolean(day.mustDo.chew)
     if (id === 'read') return readComplete || Boolean(day.mustDo.read)
     return Boolean(day.mustDo[id])
+  }
+
+  function isParentMarkedOnly(id: MustDoId): boolean {
+    if (id === 'exercise') return Boolean(day.mustDo.exercise) && !exerciseComplete
+    if (id === 'chew') return Boolean(day.mustDo.chew) && !chewComplete
+    if (id === 'read') return Boolean(day.mustDo.read) && !readComplete
+    return false
   }
 
   function addExtraTask(text: string) {
@@ -151,6 +158,9 @@ export function TodayScreen({
     if (task?.fromParent) return
     patchDay({
       extraTasks: day.extraTasks.filter((t) => t.id !== id),
+      deletedExtraTaskIds: day.deletedExtraTaskIds.includes(id)
+        ? day.deletedExtraTaskIds
+        : [...day.deletedExtraTaskIds, id],
     })
   }
 
@@ -180,13 +190,10 @@ export function TodayScreen({
             {doneCount}/{MUST_DO_ITEMS.length}
           </span>
         </div>
-        <p className="hint">
-          Зарядку, жевание и книгу отмечает приложение. Остальное можно отметить
-          самому.
-        </p>
         <ul className="check-list">
           {MUST_DO_ITEMS.map((item) => {
             const locked = APP_LOCKED_MUST_DO.includes(item.id)
+            const parentOnly = isParentMarkedOnly(item.id)
             return (
             <li
               key={item.id}
@@ -207,7 +214,16 @@ export function TodayScreen({
                 <span>
                   {item.label}
                   {MAIN_MUST_DO.includes(item.id) ? (
-                    <span className="must-main-tag"> главное</span>
+                    <span
+                      className="must-main-tag"
+                      aria-label="главное"
+                      title="Главное"
+                    >
+                      !
+                    </span>
+                  ) : null}
+                  {parentOnly ? (
+                    <span className="parent-marked"> · отметил родитель</span>
                   ) : null}
                 </span>
               </label>
@@ -330,7 +346,6 @@ export function TodayScreen({
             </span>
           ) : null}
         </div>
-        <p className="hint">Сверх минимума · только на сегодня</p>
 
         {day.extraTasks.length ? (
           <ul className="check-list">
