@@ -4,6 +4,7 @@ import {
 } from './notifications'
 import { FamilySyncCard } from './FamilySyncCard'
 import type { FamilyStatus } from './familySync'
+import { ScreenHeadActions } from './ScreenHeadActions'
 import type { UserRole } from './types'
 
 type Props = {
@@ -34,6 +35,7 @@ type Props = {
   onLeaveFamily: () => void
   onChangeRole: (role: UserRole) => void
   onGoHome: () => void
+  onOpenAchievements?: () => void
 }
 
 export function SettingsScreen({
@@ -64,19 +66,25 @@ export function SettingsScreen({
   onLeaveFamily,
   onChangeRole,
   onGoHome,
+  onOpenAchievements,
 }: Props) {
   return (
     <div className="screen">
       <header className="screen-head">
         <div className="screen-head-row">
           <p className="eyebrow">Настройки</p>
-          <button
-            type="button"
-            className="btn ghost"
-            onClick={onGoHome}
-          >
-            ← На главную
-          </button>
+          <div className="screen-head-actions">
+            {onOpenAchievements ? (
+              <ScreenHeadActions onOpenAchievements={onOpenAchievements} />
+            ) : null}
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={onGoHome}
+            >
+              ← На главную
+            </button>
+          </div>
         </div>
         <h1>Ещё</h1>
         <p className="sub">Семья в облаке и режим приложения</p>

@@ -3,6 +3,7 @@ import type {
   ChewEntry,
   DayExtraTask,
   DayLog,
+  DayReminder,
   Exercise,
   MustDoId,
   ScreenSlot,
@@ -510,9 +511,11 @@ export function emptyDayLog(date: string): DayLog {
     timersHonored: {},
     workoutStartedAt: null,
     workoutFinishedAt: null,
+    perfectAt: null,
     note: '',
     outing: 'none',
     extraTasks: [],
+    reminders: [],
     createNote: '',
     robloxBonusMin: 0,
     screens: {
@@ -542,6 +545,35 @@ function normalizeExtraTasks(raw: unknown): DayExtraTask[] {
     .filter((t): t is DayExtraTask => t !== null)
 }
 
+function normalizeReminderTime(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined
+  const trimmed = raw.trim()
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(trimmed)) return undefined
+  return trimmed
+}
+
+function normalizeReminders(raw: unknown): DayReminder[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((item): DayReminder | null => {
+      if (!item || typeof item !== 'object') return null
+      const row = item as Partial<DayReminder>
+      const text = typeof row.text === 'string' ? row.text.trim() : ''
+      if (!text) return null
+      const fromParentAs =
+        typeof row.fromParentAs === 'string' ? row.fromParentAs.trim() : ''
+      const time = normalizeReminderTime(row.time)
+      return {
+        id: typeof row.id === 'string' && row.id ? row.id : uid(),
+        text,
+        ...(time ? { time } : {}),
+        ...(row.fromParent ? { fromParent: true } : {}),
+        ...(fromParentAs ? { fromParentAs } : {}),
+      }
+    })
+    .filter((t): t is DayReminder => t !== null)
+}
+
 export function normalizeDayLog(date: string, raw?: Partial<DayLog> | null): DayLog {
   const base = emptyDayLog(date)
   if (!raw) return base
@@ -554,8 +586,10 @@ export function normalizeDayLog(date: string, raw?: Partial<DayLog> | null): Day
     timersHonored: normalizeBoolMap(raw.timersHonored),
     workoutStartedAt: normalizeTimestamp(raw.workoutStartedAt),
     workoutFinishedAt: normalizeTimestamp(raw.workoutFinishedAt),
+    perfectAt: normalizeTimestamp(raw.perfectAt),
     createNote: raw.createNote ?? '',
     extraTasks: normalizeExtraTasks(raw.extraTasks),
+    reminders: normalizeReminders(raw.reminders),
     robloxBonusMin: normalizeNonNegInt(raw.robloxBonusMin),
     screens: {
       roblox: normalizeScreenSlot(
@@ -592,6 +626,26 @@ function mergeExtraTasks(a: DayExtraTask[], b: DayExtraTask[]): DayExtraTask[] {
       done: Boolean(prev.done || task.done),
       fromParent: Boolean(prev.fromParent || task.fromParent),
       fromParentAs: task.fromParentAs || prev.fromParentAs,
+    })
+  }
+  return [...byId.values()]
+}
+
+function mergeReminders(a: DayReminder[], b: DayReminder[]): DayReminder[] {
+  const byId = new Map<string, DayReminder>()
+  for (const item of [...a, ...b]) {
+    const prev = byId.get(item.id)
+    if (!prev) {
+      byId.set(item.id, item)
+      continue
+    }
+    byId.set(item.id, {
+      ...prev,
+      ...item,
+      text: item.text || prev.text,
+      time: item.time || prev.time,
+      fromParent: Boolean(prev.fromParent || item.fromParent),
+      fromParentAs: item.fromParentAs || prev.fromParentAs,
     })
   }
   return [...byId.values()]
@@ -650,6 +704,15 @@ export function mergeDayLog(
   const finished = [a.workoutFinishedAt, b.workoutFinishedAt].filter(
     (n): n is number => n != null,
   )
+  const perfectTimes = [a.perfectAt, b.perfectAt].filter(
+    (n): n is number => n != null,
+  )
+  const mergedMustDo: Partial<Record<MustDoId, boolean>> = mustDo
+  const mergedPerfect =
+    MUST_DO_ITEMS.every((item) => mergedMustDo[item.id]) &&
+    perfectTimes.length > 0
+      ? Math.min(...perfectTimes)
+      : null
   return normalizeDayLog(date, {
     mode: a.mode !== 'home' ? a.mode : b.mode,
     mustDo,
@@ -657,9 +720,11 @@ export function mergeDayLog(
     timersHonored: mergeBoolMaps(a.timersHonored, b.timersHonored),
     workoutStartedAt: started.length ? Math.min(...started) : null,
     workoutFinishedAt: finished.length ? Math.max(...finished) : null,
+    perfectAt: mergedPerfect,
     note: a.note.trim() ? a.note : b.note,
     outing: a.outing.trim() ? a.outing : b.outing,
     extraTasks: mergeExtraTasks(a.extraTasks, b.extraTasks),
+    reminders: mergeReminders(a.reminders, b.reminders),
     createNote: a.createNote.trim() ? a.createNote : b.createNote,
     robloxBonusMin: Math.max(a.robloxBonusMin, b.robloxBonusMin),
     screens: {
@@ -779,6 +844,7 @@ export function defaultAppData(): AppData {
     robloxBonusBankMin: 0,
     moneyBankRub: 0,
     claimedStickerMoneyIds: [],
+    dismissedGiftStickerIds: [],
     equippedStickerId: null,
     bestStreak: 0,
     bestParentTasks: 0,
@@ -804,6 +870,65 @@ export function parseTimerRounds(reps: string): number {
 
 export function uid(): string {
   return `id-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+export type DatedReminder = DayReminder & { date: string }
+
+function compareReminders(a: DatedReminder, b: DatedReminder): number {
+  if (a.date !== b.date) return a.date < b.date ? -1 : 1
+  const ta = a.time ?? '99:99'
+  const tb = b.time ?? '99:99'
+  if (ta !== tb) return ta < tb ? -1 : 1
+  return a.text.localeCompare(b.text, 'ru')
+}
+
+/** Reminders from today onward, sorted by date then time. */
+export function listUpcomingReminders(
+  days: Record<string, DayLog>,
+  from = todayKey(),
+): DatedReminder[] {
+  const out: DatedReminder[] = []
+  for (const [date, raw] of Object.entries(days ?? {})) {
+    if (date < from) continue
+    const day = normalizeDayLog(date, raw)
+    for (const reminder of day.reminders) {
+      out.push({ ...reminder, date })
+    }
+  }
+  return out.sort(compareReminders)
+}
+
+export function formatReminderDayLabel(dateKey: string, today = todayKey()): string {
+  if (dateKey === today) return 'сегодня'
+  const [y, m, d] = dateKey.split('-').map(Number)
+  const label = new Date(y, m - 1, d).toLocaleDateString('ru-RU', {
+    day: 'numeric',
+    month: 'long',
+  })
+  const tomorrow = (() => {
+    const [ty, tm, td] = today.split('-').map(Number)
+    const next = new Date(ty, tm - 1, td)
+    next.setDate(next.getDate() + 1)
+    return todayKey(next)
+  })()
+  if (dateKey === tomorrow) return `завтра, ${label}`
+  return label
+}
+
+/** Patch reminders on an arbitrary day (appointments may be in the future). */
+export function setDayReminders(
+  data: AppData,
+  date: string,
+  reminders: DayReminder[],
+): AppData {
+  const day = normalizeDayLog(date, data.days[date])
+  return {
+    ...data,
+    days: {
+      ...data.days,
+      [date]: normalizeDayLog(date, { ...day, reminders }),
+    },
+  }
 }
 
 export function groupExercises(exercises: Exercise[]): { group: string; items: Exercise[] }[] {

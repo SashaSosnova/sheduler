@@ -1,8 +1,14 @@
 import type { TabId, UserRole } from './types'
 
-const ALL_TABS: { id: TabId; label: string }[] = [
+const CHILD_TABS: { id: TabId; label: string }[] = [
   { id: 'today', label: 'Сегодня' },
-  { id: 'progress', label: 'Прогресс' },
+  { id: 'roblox', label: 'Roblox' },
+  { id: 'exercises', label: 'Зарядка' },
+  { id: 'chew', label: 'Жевание' },
+]
+
+const PARENT_TABS: { id: TabId; label: string }[] = [
+  { id: 'today', label: 'Сегодня' },
   { id: 'calendar', label: 'Дни' },
   { id: 'exercises', label: 'Зарядка' },
   { id: 'chew', label: 'Жевание' },
@@ -14,10 +20,15 @@ type Props = {
   onChange: (tab: TabId) => void
 }
 
-export function BottomNav({ active, onChange }: Props) {
+export function BottomNav({ active, role, onChange }: Props) {
+  const tabs = role === 'parent' ? PARENT_TABS : CHILD_TABS
   return (
-    <nav className="bottom-nav" aria-label="Главное меню">
-      {ALL_TABS.map((tab) => (
+    <nav
+      className="bottom-nav"
+      aria-label="Главное меню"
+      style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}
+    >
+      {tabs.map((tab) => (
         <button
           key={tab.id}
           type="button"

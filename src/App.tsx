@@ -13,6 +13,8 @@ import {
   removeReadingBookByTitle,
 } from './progress'
 import { RoleSetupScreen } from './RoleSetupScreen'
+import { RobloxScreen } from './RobloxScreen'
+import { ScreenHeadActions } from './ScreenHeadActions'
 import { SettingsScreen } from './SettingsScreen'
 import { StickerUnlockOverlay } from './StickerUnlockOverlay'
 import { TodayScreen } from './TodayScreen'
@@ -52,6 +54,7 @@ function App() {
         return
       }
       setRole(next)
+      setTab('today')
     },
     [role, setRole],
   )
@@ -61,6 +64,15 @@ function App() {
     document.documentElement.scrollTop = 0
     document.body.scrollTop = 0
   }, [tab])
+
+  // Role-based tabs: child has no calendar; parent has no roblox tab
+  useEffect(() => {
+    if (!role) return
+    if (role === 'child' && tab === 'calendar') setTab('today')
+    if (role === 'parent' && (tab === 'roblox' || tab === 'progress')) {
+      setTab('today')
+    }
+  }, [role, tab])
 
   // Auto-add Tom Sawyer to finished books when the reader marks the book complete
   useEffect(() => {
@@ -88,7 +100,25 @@ function App() {
 
   return (
     <div className="app-shell">
-      <main className={showNav ? 'app-main' : 'app-main no-nav'}>
+      <main
+        className={[
+          showNav ? 'app-main' : 'app-main no-nav',
+          showNav ? 'has-head-actions' : '',
+          showNav && isParent ? 'head-actions-parent' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        {showNav ? (
+          <div className="app-head-actions">
+            <ScreenHeadActions
+              onOpenAchievements={
+                isParent ? undefined : () => setTab('progress')
+              }
+              onOpenSettings={() => setTab('settings')}
+            />
+          </div>
+        ) : null}
         {tab === 'today' ? (
           isParent ? (
             <ParentSummaryScreen
@@ -96,7 +126,6 @@ function App() {
               onChange={setData}
               onOpenExercises={() => setTab('exercises')}
               onOpenChew={() => setTab('chew')}
-              onOpenSettings={() => setTab('settings')}
             />
           ) : (
             <TodayScreen
@@ -104,12 +133,14 @@ function App() {
               onChange={setData}
               onOpenExercises={() => setTab('exercises')}
               onOpenChew={() => setTab('chew')}
-              onOpenSettings={() => setTab('settings')}
             />
           )
         ) : null}
         {tab === 'progress' ? (
           <ProgressScreen data={data} onChange={setData} />
+        ) : null}
+        {tab === 'roblox' ? (
+          <RobloxScreen data={data} onChange={setData} />
         ) : null}
         {tab === 'calendar' ? (
           <CalendarScreen
@@ -119,10 +150,18 @@ function App() {
           />
         ) : null}
         {tab === 'exercises' ? (
-          <ExercisesScreen data={data} onChange={setData} readOnly={isParent} />
+          <ExercisesScreen
+            data={data}
+            onChange={setData}
+            readOnly={isParent}
+          />
         ) : null}
         {tab === 'chew' ? (
-          <ChewDiaryScreen data={data} onChange={setData} readOnly={isParent} />
+          <ChewDiaryScreen
+            data={data}
+            onChange={setData}
+            readOnly={isParent}
+          />
         ) : null}
         {tab === 'settings' ? (
           <SettingsScreen
@@ -159,6 +198,9 @@ function App() {
             onLeaveFamily={leaveFamilyCloud}
             onChangeRole={changeRole}
             onGoHome={() => setTab('today')}
+            onOpenAchievements={
+              isParent ? undefined : () => setTab('progress')
+            }
           />
         ) : null}
       </main>

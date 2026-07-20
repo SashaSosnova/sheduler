@@ -6,7 +6,6 @@ import {
   EXTRA_TASK_IDEAS,
   MAIN_MUST_DO,
   MUST_DO_ITEMS,
-  SCREEN_LIMITS,
   chewDurationSec,
   formatPlayTime,
   normalizeDayLog,
@@ -14,22 +13,20 @@ import {
   uid,
   workoutDurationSec,
 } from './data'
+import { stampPerfectAt } from './progress'
 import {
-  claimRobloxBankMinutes,
-  robloxBonusMinutes,
-  robloxLimitSeconds,
-} from './progress'
-import { ScreenLimitCard } from './ScreenLimitCard'
+  ReminderSection,
+  TodayTimedReminderBanner,
+} from './ReminderSection'
 import { playDing } from './sound'
 import { useTomSawyerReadToday } from './tomSawyerSync'
-import type { AppData, MustDoId, ScreenKind, ScreenSlot } from './types'
+import type { AppData, MustDoId } from './types'
 
 type Props = {
   data: AppData
   onChange: (next: AppData) => void
   onOpenExercises: () => void
   onOpenChew: () => void
-  onOpenSettings: () => void
 }
 
 export function TodayScreen({
@@ -37,7 +34,6 @@ export function TodayScreen({
   onChange,
   onOpenExercises,
   onOpenChew,
-  onOpenSettings,
 }: Props) {
   const key = todayKey()
   const day = normalizeDayLog(key, data.days[key])
@@ -59,10 +55,6 @@ export function TodayScreen({
   const [celebrate, setCelebrate] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const prevDoneRef = useRef(doneCount)
-  const robloxLimit = robloxLimitSeconds(data.days, key)
-  const robloxBonusMin = robloxBonusMinutes(data.days, key)
-  const robloxBankMin = Math.max(0, Math.floor(data.robloxBonusBankMin ?? 0))
-  const robloxSlot = day.screens.roblox
 
   useEffect(() => {
     if (
@@ -76,7 +68,10 @@ export function TodayScreen({
   }, [doneCount])
 
   function patchDay(partial: Partial<typeof day>) {
-    const next = normalizeDayLog(key, { ...day, ...partial })
+    const next = stampPerfectAt(
+      day,
+      normalizeDayLog(key, { ...day, ...partial }),
+    )
     onChange({
       ...data,
       days: {
@@ -84,10 +79,6 @@ export function TodayScreen({
         [key]: next,
       },
     })
-  }
-
-  function claimBank(minutes: number) {
-    onChange(claimRobloxBankMinutes(data, minutes, key))
   }
 
   // Auto-mark exercise/chew/read when done in-app; never clear a parent override
@@ -120,29 +111,6 @@ export function TodayScreen({
     day.mustDo.read,
   ])
 
-  // Sync unused Roblox slot to today's limit (base + achievement bonuses)
-  useEffect(() => {
-    if (robloxSlot.finished || robloxSlot.endsAt || robloxSlot.usedSec > 0) return
-    if (robloxSlot.remainingSec === robloxLimit) return
-    // Only auto-adjust when still at a "full unused" amount (base or a prior bonus)
-    const base = SCREEN_LIMITS.roblox.seconds
-    if (robloxSlot.remainingSec < base) return
-    patchDay({
-      screens: {
-        ...day.screens,
-        roblox: { ...robloxSlot, remainingSec: robloxLimit },
-      },
-    })
-    // Intentionally narrow deps: only re-check when slot/limit change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    robloxLimit,
-    robloxSlot.remainingSec,
-    robloxSlot.finished,
-    robloxSlot.endsAt,
-    robloxSlot.usedSec,
-  ])
-
   function toggleMust(id: MustDoId) {
     if (APP_LOCKED_MUST_DO.includes(id)) return
     patchDay({
@@ -155,15 +123,6 @@ export function TodayScreen({
     if (id === 'chew') return chewComplete
     if (id === 'read') return readComplete || Boolean(day.mustDo.read)
     return Boolean(day.mustDo[id])
-  }
-
-  function setScreen(kind: ScreenKind, slot: ScreenSlot) {
-    patchDay({
-      screens: {
-        ...day.screens,
-        [kind]: slot,
-      },
-    })
   }
 
   function addExtraTask(text: string) {
@@ -201,14 +160,6 @@ export function TodayScreen({
       <header className="screen-head">
         <div className="screen-head-row">
           <p className="eyebrow">Сегодня</p>
-          <button
-            type="button"
-            className="btn ghost settings-btn"
-            onClick={onOpenSettings}
-            aria-label="Настройки"
-          >
-            ⚙
-          </button>
         </div>
         <h1>{formatRuDate(key)}</h1>
         <p className="sub">
@@ -219,6 +170,8 @@ export function TodayScreen({
             : ''}
         </p>
       </header>
+
+      <TodayTimedReminderBanner data={data} onChange={onChange} />
 
       <section className="card">
         <div className="card-title-row">
@@ -377,10 +330,7 @@ export function TodayScreen({
             </span>
           ) : null}
         </div>
-        <p className="hint">
-          Разовые дела на сегодня — сверх минимума. Родитель тоже может добавить
-          через облако. На следующий день список будет пустым.
-        </p>
+        <p className="hint">Сверх минимума · только на сегодня</p>
 
         {day.extraTasks.length ? (
           <ul className="check-list">
@@ -478,29 +428,7 @@ export function TodayScreen({
         </div>
       </section>
 
-      <section className="card">
-        <h2>Roblox — лимит времени</h2>
-        <p className="hint">
-          Нажми «Начать» — запустится таймер. Когда лимит кончится, придёт
-          напоминание; можно доиграть, потом нажми «Закончить на сегодня».
-          Бонусы с ачивок копятся тут же и тратятся в любой день.
-        </p>
-        <div className="screen-limits">
-          <ScreenLimitCard
-            kind="roblox"
-            slot={day.screens.roblox}
-            limitSeconds={robloxLimit}
-            bankMinutes={robloxBankMin}
-            onClaimBank={claimBank}
-            bonusNote={
-              robloxBonusMin > 0
-                ? `Сегодня из копилки: +${robloxBonusMin} мин`
-                : undefined
-            }
-            onChange={(slot) => setScreen('roblox', slot)}
-          />
-        </div>
-      </section>
+      <ReminderSection data={data} onChange={onChange} />
     </div>
   )
 }

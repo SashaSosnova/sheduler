@@ -9,6 +9,7 @@ export type TabId =
   | 'calendar'
   | 'exercises'
   | 'chew'
+  | 'roblox'
   | 'settings'
 
 export type Exercise = {
@@ -71,6 +72,21 @@ export type DayExtraTask = {
   fromParentAs?: string
 }
 
+/**
+ * Appointment-style reminder for a day — not a checkbox task.
+ * Does not affect stars, perfect days, or sticker progress.
+ */
+export type DayReminder = {
+  id: string
+  text: string
+  /** Local time HH:mm (required for new reminders) */
+  time?: string
+  /** Set when parent creates the reminder — child cannot delete */
+  fromParent?: boolean
+  /** Genitive label for «от …», e.g. «мамы» / «папы» */
+  fromParentAs?: string
+}
+
 export type DayLog = {
   date: string
   mode: DayMode
@@ -82,10 +98,14 @@ export type DayLog = {
   workoutStartedAt: number | null
   /** Unix ms when the full routine was completed */
   workoutFinishedAt: number | null
+  /** Unix ms when the day first became perfect (all must-dos); cleared if broken */
+  perfectAt: number | null
   note: string
   outing: string
   /** One-time must-dos for this day only */
   extraTasks: DayExtraTask[]
+  /** «Не забудь» — appointments / notes without checkboxes */
+  reminders: DayReminder[]
   /** What creative thing they did */
   createNote: string
   screens: Record<ScreenKind, ScreenSlot>
@@ -125,6 +145,11 @@ export type AppData = {
   moneyBankRub: number
   /** Sticker ids whose moneyRub was already credited to moneyBankRub */
   claimedStickerMoneyIds: string[]
+  /**
+   * Sticker ids whose giftHint was marked «выдано» by the parent.
+   * Unlocked gift stickers not in this list stay pending in the turtle bank.
+   */
+  dismissedGiftStickerIds: string[]
   /**
    * Equipped achievement id for the Progress «Звание» title.
    * Null = auto first unlocked (non-secret) sticker.

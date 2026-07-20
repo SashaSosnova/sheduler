@@ -8,6 +8,7 @@ import {
   todayKey,
   uid,
 } from './data'
+import { stampPerfectAt } from './progress'
 import type { AppData, ChewEntry } from './types'
 
 type Props = {
@@ -41,7 +42,11 @@ function toFields(entry: ChewEntry) {
   }
 }
 
-export function ChewDiaryScreen({ data, onChange, readOnly = false }: Props) {
+export function ChewDiaryScreen({
+  data,
+  onChange,
+  readOnly = false,
+}: Props) {
   const key = todayKey()
   const [editing, setEditing] = useState(false)
   const [food, setFood] = useState<string>(CHEW_FOODS[0])
@@ -153,15 +158,19 @@ export function ChewDiaryScreen({ data, onChange, readOnly = false }: Props) {
     }
     const withoutToday = (data.chewEntries ?? []).filter((e) => e.date !== key)
     const day = normalizeDayLog(key, data.days[key])
+    const nextDay = stampPerfectAt(
+      day,
+      normalizeDayLog(key, {
+        ...day,
+        mustDo: { ...day.mustDo, chew: true },
+      }),
+    )
     onChange({
       ...data,
       chewEntries: [entry, ...withoutToday],
       days: {
         ...data.days,
-        [key]: {
-          ...day,
-          mustDo: { ...day.mustDo, chew: true },
-        },
+        [key]: nextDay,
       },
     })
     setEditing(false)
@@ -190,13 +199,17 @@ export function ChewDiaryScreen({ data, onChange, readOnly = false }: Props) {
   return (
     <div className="screen">
       <header className="screen-head">
-        <p className="eyebrow">{readOnly ? 'Родитель · просмотр' : 'Дневник жевания'}</p>
+        <div className="screen-head-row">
+          <p className="eyebrow">
+            {readOnly ? 'Родитель · просмотр' : 'Дневник жевания'}
+          </p>
+        </div>
         <h1>{readOnly ? 'Дневник жевания' : 'Одна запись в день'}</h1>
-        <p className="sub">
-          {readOnly
-            ? 'Сводка по дням. Заполнить можно только на телефоне ребёнка.'
-            : '5 укусов слева и 5 справа. В ячейку — сколько раз жевал за укус.'}
-        </p>
+        {readOnly ? (
+          <p className="sub">
+            Сводка по дням. Заполнить можно только на телефоне ребёнка.
+          </p>
+        ) : null}
         {todayChewSec != null ? (
           <p className="sub">Сегодня жевание заняло {formatPlayTime(todayChewSec)}</p>
         ) : null}
@@ -266,7 +279,6 @@ export function ChewDiaryScreen({ data, onChange, readOnly = false }: Props) {
 
           <section className="card">
             <h2>Левая сторона</h2>
-            <p className="hint">5 укусов — впиши число жеваний в каждый</p>
             <div className="chew-grid">
               {left.map((value, index) => (
                 <label key={`l-${index}`} className="chew-cell">
@@ -284,7 +296,6 @@ export function ChewDiaryScreen({ data, onChange, readOnly = false }: Props) {
 
           <section className="card">
             <h2>Правая сторона</h2>
-            <p className="hint">5 укусов — впиши число жеваний в каждый</p>
             <div className="chew-grid">
               {right.map((value, index) => (
                 <label key={`r-${index}`} className="chew-cell">

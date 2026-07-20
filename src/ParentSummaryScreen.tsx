@@ -15,11 +15,18 @@ import {
 } from './data'
 import { loadParentLabel } from './parentAlerts'
 import {
+  dismissGiftSticker,
   giftMoneyBankRub,
   giftRobloxBankMinutes,
   payoutMoneyBankRub,
+  pendingGiftStickers,
   robloxLimitSeconds,
+  stampPerfectAt,
 } from './progress'
+import {
+  ReminderSection,
+  TodayTimedReminderBanner,
+} from './ReminderSection'
 import type { AppData, MustDoId } from './types'
 
 const PARENT_BANK_GIFTS = [5, 10, 15, 30] as const
@@ -31,7 +38,6 @@ type Props = {
   onChange: (next: AppData) => void
   onOpenExercises: () => void
   onOpenChew: () => void
-  onOpenSettings: () => void
 }
 
 export function ParentSummaryScreen({
@@ -39,7 +45,6 @@ export function ParentSummaryScreen({
   onChange,
   onOpenExercises,
   onOpenChew,
-  onOpenSettings,
 }: Props) {
   const key = todayKey()
   const day = normalizeDayLog(key, data.days[key])
@@ -94,7 +99,10 @@ export function ParentSummaryScreen({
           : 'ещё не играл'
 
   function patchDay(partial: Partial<typeof day>) {
-    const next = normalizeDayLog(key, { ...day, ...partial })
+    const next = stampPerfectAt(
+      day,
+      normalizeDayLog(key, { ...day, ...partial }),
+    )
     onChange({
       ...data,
       days: {
@@ -148,6 +156,8 @@ export function ParentSummaryScreen({
 
   const readingBooks = data.readingBooks ?? []
   const finishedBooks = data.finishedBooks ?? []
+  const pendingGifts = pendingGiftStickers(data)
+  const moneyBank = Math.floor(data.moneyBankRub ?? 0)
 
   function addReadingBook() {
     const title = bookDraft.trim()
@@ -195,14 +205,6 @@ export function ParentSummaryScreen({
       <header className="screen-head">
         <div className="screen-head-row">
           <p className="eyebrow">Родитель</p>
-          <button
-            type="button"
-            className="btn ghost settings-btn"
-            onClick={onOpenSettings}
-            aria-label="Настройки"
-          >
-            ⚙
-          </button>
         </div>
         <h1>{formatRuDate(key)}</h1>
         <p className="sub">
@@ -213,6 +215,8 @@ export function ParentSummaryScreen({
             : ''}
         </p>
       </header>
+
+      <TodayTimedReminderBanner data={data} onChange={onChange} asParent />
 
       <section className="card parent-screen-card">
         <div className="card-title-row">
@@ -342,10 +346,7 @@ export function ParentSummaryScreen({
             </span>
           ) : null}
         </div>
-        <p className="hint">
-          Задания для ребёнка сверх минимума. Появятся у него на сегодня через
-          облако.
-        </p>
+        <p className="hint">Сверх минимума · появятся у ребёнка через облако</p>
 
         {day.extraTasks.length ? (
           <ul className="check-list">
@@ -431,23 +432,41 @@ export function ParentSummaryScreen({
         </div>
       </section>
 
-      <section className="card">
+      <ReminderSection data={data} onChange={onChange} asParent />
+
+      <section className="card piggy-bank-card">
         <div className="card-title-row">
-          <h2>Копилка черепашек</h2>
-          <span className={(data.moneyBankRub ?? 0) > 0 ? 'pill' : 'pill muted'}>
-            {Math.floor(data.moneyBankRub ?? 0)} ₽
+          <h2 className="piggy-bank-title">
+            <svg
+              className="piggy-bank-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5z" />
+              <path d="M2 9v1c0 1.1.9 2 2 2h1" />
+              <path d="M16 11h.01" />
+            </svg>
+            Свинья-копилка
+          </h2>
+          <span
+            className={
+              moneyBank > 0 || pendingGifts.length > 0 ? 'pill' : 'pill muted'
+            }
+          >
+            {moneyBank} ₽
+            {pendingGifts.length > 0 ? ` · ${pendingGifts.length}` : ''}
           </span>
         </div>
         <p className="hint">
-          Сюда падают награды за ачивки черепашек и то, что закинешь сам. Когда
-          отдашь наличные — спиши из копилки.
+          Деньги и подарки за ачивки. Наличные спиши после выдачи, подарки —
+          нажми «Выдать».
         </p>
         <div className="parent-roblox-bank">
-          <p className="hint">
-            К выдаче:{' '}
-            <strong>{Math.floor(data.moneyBankRub ?? 0)} ₽</strong>
-            {(data.moneyBankRub ?? 0) > 0 ? ' (ещё не выдано)' : ''}
-          </p>
           <p className="hint">Поблагодарить сверх ачивок — закинуть:</p>
           <div className="row-gap">
             {PARENT_MONEY_GIFTS.map((n) => (
@@ -461,15 +480,13 @@ export function ParentSummaryScreen({
               </button>
             ))}
           </div>
-          {(data.moneyBankRub ?? 0) > 0 ? (
+          {moneyBank > 0 ? (
             <>
               <p className="hint" style={{ marginTop: 10 }}>
                 Выдал наличные — списать:
               </p>
               <div className="row-gap">
-                {PARENT_MONEY_PAYOUTS.filter(
-                  (n) => n <= (data.moneyBankRub ?? 0),
-                ).map((n) => (
+                {PARENT_MONEY_PAYOUTS.filter((n) => n <= moneyBank).map((n) => (
                   <button
                     key={n}
                     type="button"
@@ -482,14 +499,36 @@ export function ParentSummaryScreen({
                 <button
                   type="button"
                   className="btn"
-                  onClick={() =>
-                    onChange(payoutMoneyBankRub(data, data.moneyBankRub ?? 0))
-                  }
+                  onClick={() => onChange(payoutMoneyBankRub(data, moneyBank))}
                 >
                   Списать всё
                 </button>
               </div>
             </>
+          ) : null}
+
+          <p className="hint" style={{ marginTop: 14 }}>
+            Подарки к выдаче:
+            {pendingGifts.length === 0 ? ' пока нет' : ''}
+          </p>
+          {pendingGifts.length > 0 ? (
+            <ul className="gift-pending-list">
+              {pendingGifts.map((gift) => (
+                <li key={gift.id} className="gift-pending-item">
+                  <div className="gift-pending-main">
+                    <span className="gift-pending-title">{gift.label}</span>
+                    <span className="hint">{gift.giftHint}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn primary"
+                    onClick={() => onChange(dismissGiftSticker(data, gift.id))}
+                  >
+                    Выдать
+                  </button>
+                </li>
+              ))}
+            </ul>
           ) : null}
         </div>
       </section>

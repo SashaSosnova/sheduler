@@ -27,6 +27,7 @@ import {
   normalizeFinishedBooks,
   resolveReadingBooks,
   seedClaimedStickerMoneyIds,
+  seedDismissedGiftStickerIds,
 } from './progress'
 import type {
   AppData,
@@ -47,6 +48,7 @@ type StoredData = {
   robloxBonusBankMin?: number
   moneyBankRub?: number
   claimedStickerMoneyIds?: string[]
+  dismissedGiftStickerIds?: string[]
   equippedStickerId?: string | null
   bestStreak?: number
   bestParentTasks?: number
@@ -110,6 +112,9 @@ function hydrateAppData(
       robloxBonusBankMin: normalizeNonNegInt(partial.robloxBonusBankMin),
       moneyBankRub: normalizeNonNegInt(partial.moneyBankRub),
       claimedStickerMoneyIds: normalizeStringIds(partial.claimedStickerMoneyIds),
+      dismissedGiftStickerIds: normalizeStringIds(
+        partial.dismissedGiftStickerIds,
+      ),
       equippedStickerId: normalizeEquippedStickerId(partial.equippedStickerId),
       bestStreak:
         typeof partial.bestStreak === 'number' && Number.isFinite(partial.bestStreak)
@@ -159,22 +164,40 @@ function load(): AppData {
           bestParentTasks,
           bestStreak,
         })
+    const chewEntries = parsed.chewEntries ?? []
+    const finishedBooks = parsed.finishedBooks ?? []
+    const readingBooks = resolveReadingBooks(
+      parsed.readingBooks,
+      parsed.currentBook,
+    )
+    // Legacy: already-unlocked gift stickers count as already given.
+    const dismissedGiftStickerIds = Array.isArray(
+      parsed.dismissedGiftStickerIds,
+    )
+      ? normalizeStringIds(parsed.dismissedGiftStickerIds)
+      : seedDismissedGiftStickerIds({
+          ...defaultAppData(),
+          days,
+          chewEntries,
+          finishedBooks,
+          readingBooks,
+          bestParentTasks,
+          bestStreak,
+        })
     return hydrateAppData({
       days,
-      chewEntries: parsed.chewEntries ?? [],
+      chewEntries,
       cookingLeft: parsed.cookingLeft ?? 5,
       claimedRobloxStreaks,
       robloxBonusBankMin: normalizeNonNegInt(parsed.robloxBonusBankMin),
       moneyBankRub: normalizeNonNegInt(parsed.moneyBankRub),
       claimedStickerMoneyIds,
+      dismissedGiftStickerIds,
       equippedStickerId: normalizeEquippedStickerId(parsed.equippedStickerId),
       bestStreak,
       bestParentTasks,
-      readingBooks: resolveReadingBooks(
-        parsed.readingBooks,
-        parsed.currentBook,
-      ),
-      finishedBooks: parsed.finishedBooks ?? [],
+      readingBooks,
+      finishedBooks,
     })
   } catch {
     return defaultAppData()
@@ -195,6 +218,19 @@ function resolveClaimedStickerMoneyIds(
       days,
       bestParentTasks,
       bestStreak,
+    })
+  }
+  return normalizeStringIds(raw)
+}
+
+function resolveDismissedGiftStickerIds(
+  raw: unknown,
+  seedFrom: Partial<AppData>,
+): string[] {
+  if (!Array.isArray(raw)) {
+    return seedDismissedGiftStickerIds({
+      ...defaultAppData(),
+      ...seedFrom,
     })
   }
   return normalizeStringIds(raw)
@@ -237,19 +273,36 @@ function applyCloud(prev: AppData, payload: CloudPayload): AppData {
     ...(prev.claimedStickerMoneyIds ?? []),
     ...remoteClaimed,
   ])
+  const chewEntries = mergeChewEntries(
+    prev.chewEntries ?? [],
+    payload.chewEntries ?? [],
+  )
+  const remoteDismissed = resolveDismissedGiftStickerIds(
+    payload.dismissedGiftStickerIds,
+    {
+      days,
+      chewEntries,
+      finishedBooks,
+      readingBooks,
+      bestParentTasks,
+      bestStreak,
+    },
+  )
+  const dismissedGifts = new Set([
+    ...(prev.dismissedGiftStickerIds ?? []),
+    ...remoteDismissed,
+  ])
   return hydrateAppData({
     ...prev,
     days,
-    chewEntries: mergeChewEntries(
-      prev.chewEntries ?? [],
-      payload.chewEntries ?? [],
-    ),
+    chewEntries,
     cookingLeft: payload.cookingLeft ?? prev.cookingLeft,
     claimedRobloxStreaks,
     robloxBonusBankMin:
       payload.robloxBonusBankMin ?? prev.robloxBonusBankMin ?? 0,
     moneyBankRub: payload.moneyBankRub ?? prev.moneyBankRub ?? 0,
     claimedStickerMoneyIds: [...claimedMoney],
+    dismissedGiftStickerIds: [...dismissedGifts],
     equippedStickerId:
       payload.equippedStickerId !== undefined
         ? normalizeEquippedStickerId(payload.equippedStickerId)
@@ -300,9 +353,15 @@ function replaceFromCloud(payload: CloudPayload): AppData {
   const parentNow = countParentTasksDone(days)
   const bestStreak = Math.max(payload.bestStreak ?? 0, streak)
   const bestParentTasks = Math.max(payload.bestParentTasks ?? 0, parentNow)
+  const chewEntries = payload.chewEntries ?? []
+  const finishedBooks = payload.finishedBooks ?? []
+  const readingBooks = resolveReadingBooks(
+    payload.readingBooks,
+    payload.currentBook,
+  )
   return hydrateAppData({
     days,
-    chewEntries: payload.chewEntries ?? [],
+    chewEntries,
     cookingLeft: payload.cookingLeft ?? 5,
     claimedRobloxStreaks: payload.claimedRobloxStreaks ?? [],
     robloxBonusBankMin: payload.robloxBonusBankMin ?? 0,
@@ -313,14 +372,22 @@ function replaceFromCloud(payload: CloudPayload): AppData {
       bestParentTasks,
       bestStreak,
     ),
+    dismissedGiftStickerIds: resolveDismissedGiftStickerIds(
+      payload.dismissedGiftStickerIds,
+      {
+        days,
+        chewEntries,
+        finishedBooks,
+        readingBooks,
+        bestParentTasks,
+        bestStreak,
+      },
+    ),
     equippedStickerId: normalizeEquippedStickerId(payload.equippedStickerId),
     bestStreak,
     bestParentTasks,
-    readingBooks: resolveReadingBooks(
-      payload.readingBooks,
-      payload.currentBook,
-    ),
-    finishedBooks: payload.finishedBooks ?? [],
+    readingBooks,
+    finishedBooks,
   })
 }
 
@@ -353,6 +420,7 @@ export function useAppData() {
       robloxBonusBankMin: data.robloxBonusBankMin ?? 0,
       moneyBankRub: data.moneyBankRub ?? 0,
       claimedStickerMoneyIds: data.claimedStickerMoneyIds ?? [],
+      dismissedGiftStickerIds: data.dismissedGiftStickerIds ?? [],
       equippedStickerId: data.equippedStickerId ?? null,
       bestStreak: data.bestStreak ?? 0,
       bestParentTasks: data.bestParentTasks ?? 0,

@@ -92,6 +92,21 @@ function collectEvents(data: AppData): AlertEvent[] {
           : `Задание на ${date} — открой приложение`,
       })
     }
+    for (const reminder of day.reminders) {
+      if (!reminder.fromParent) continue
+      const label = parentLabel(reminder)
+      const when = reminder.time ? `${date} в ${reminder.time}` : date
+      events.push({
+        key: `parent-reminder:${reminder.id}`,
+        title: `Напоминание от ${label}: ${reminder.text}`,
+        body:
+          date === today
+            ? reminder.time
+              ? `Сегодня в ${reminder.time} — открой «Не забудь»`
+              : 'Сегодня — открой «Не забудь»'
+            : `${when} — открой приложение`,
+      })
+    }
   }
 
   return events

@@ -181,7 +181,9 @@ export function CalendarScreen({
   return (
     <div className="screen">
       <header className="screen-head">
-        <p className="eyebrow">Сводка</p>
+        <div className="screen-head-row">
+          <p className="eyebrow">Сводка</p>
+        </div>
         <h1>Календарь</h1>
       </header>
 
@@ -344,6 +346,20 @@ export function CalendarScreen({
               {detail.day.extraTasks.map((t) => (
                 <li key={t.id} className={t.done ? 'done' : ''}>
                   {t.done ? '✓' : '·'} {t.text}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        {detail.day.reminders.length > 0 ? (
+          <div className="calendar-detail-block">
+            <h3>Не забудь</h3>
+            <ul className="calendar-exercise-list">
+              {detail.day.reminders.map((r) => (
+                <li key={r.id}>
+                  · {r.time ? `${r.time} · ` : ''}
+                  {r.text}
                 </li>
               ))}
             </ul>

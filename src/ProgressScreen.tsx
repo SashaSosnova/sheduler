@@ -13,6 +13,7 @@ import {
   isStickerUnlocked,
   levelFromStars,
   levelRank,
+  pendingGiftStickers,
   perfectDaysInMonth,
   stickerNeedText,
   stickerOpenedHint,
@@ -48,6 +49,8 @@ export function ProgressScreen({ data, onChange }: Props) {
   }, [])
 
   const progress = useMemo(() => stickerProgressFromData(data), [data])
+  const pendingGifts = useMemo(() => pendingGiftStickers(data), [data])
+  const moneyBank = Math.floor(data.moneyBankRub ?? 0)
   const rankOptions = useMemo(() => unlockedRankStickers(progress), [progress])
   const equipped = useMemo(
     () => equippedRankSticker(data.equippedStickerId, progress),
@@ -117,6 +120,9 @@ export function ProgressScreen({ data, onChange }: Props) {
     <div className={`screen ${rankPickerOpen ? 'screen-sheet-open' : ''}`}>
       <header className="screen-head rank-screen-head">
         <div className="screen-head-row">
+          <p className="eyebrow">Достижения</p>
+        </div>
+        <div className="screen-head-row">
           <h1>Моё звание</h1>
           {rankOptions.length > 0 ? (
             <button
@@ -184,28 +190,52 @@ export function ProgressScreen({ data, onChange }: Props) {
         </div>
       </section>
 
-      <section className="card">
+      <section className="card piggy-bank-card">
         <div className="card-title-row">
-          <h2>Копилка черепашек</h2>
+          <h2 className="piggy-bank-title">
+            <svg
+              className="piggy-bank-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5z" />
+              <path d="M2 9v1c0 1.1.9 2 2 2h1" />
+              <path d="M16 11h.01" />
+            </svg>
+            Свинья-копилка
+          </h2>
           <span
-            className={(data.moneyBankRub ?? 0) > 0 ? 'pill' : 'pill muted'}
+            className={
+              moneyBank > 0 || pendingGifts.length > 0 ? 'pill' : 'pill muted'
+            }
           >
-            {Math.floor(data.moneyBankRub ?? 0)} ₽
+            {moneyBank} ₽
+            {pendingGifts.length > 0 ? ` · ${pendingGifts.length}` : ''}
           </span>
         </div>
-        <p className="hint">
-          Сюда падают награды за ачивки черепашек и то, что начислит родитель.
-        </p>
-        {(data.moneyBankRub ?? 0) > 0 ? (
+        <p className="hint">Деньги и подарки за ачивки.</p>
+        {pendingGifts.length > 0 ? (
+          <ul className="gift-pending-list">
+            {pendingGifts.map((gift) => (
+              <li key={gift.id} className="gift-pending-item is-readonly">
+                <div className="gift-pending-main">
+                  <span className="gift-pending-title">{gift.label}</span>
+                  <span className="hint">{gift.giftHint}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {moneyBank <= 0 && pendingGifts.length === 0 ? (
           <p className="hint" style={{ marginTop: 8 }}>
-            Сейчас в копилке:{' '}
-            <strong>{Math.floor(data.moneyBankRub ?? 0)} ₽</strong>
+            Пока пусто — открывай ачивки.
           </p>
-        ) : (
-          <p className="hint" style={{ marginTop: 8 }}>
-            Пока пусто — открывай ачивки черепашек.
-          </p>
-        )}
+        ) : null}
       </section>
 
       <section className="card">

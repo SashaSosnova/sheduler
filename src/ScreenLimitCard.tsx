@@ -18,9 +18,6 @@ type Props = {
   /** Override today's limit (e.g. streak bonus) */
   limitSeconds?: number
   bonusNote?: string
-  /** Unspent achievement bonus minutes in the bank */
-  bankMinutes?: number
-  onClaimBank?: (minutes: number) => void
   onChange: (slot: ScreenSlot) => void
 }
 
@@ -29,13 +26,12 @@ export function ScreenLimitCard({
   slot,
   limitSeconds,
   bonusNote,
-  bankMinutes = 0,
-  onClaimBank,
   onChange,
 }: Props) {
   const meta = SCREEN_LIMITS[kind]
   const limitSec = limitSeconds ?? meta.seconds
   const [now, setNow] = useState(Date.now())
+  const [confirmFinish, setConfirmFinish] = useState(false)
   const finishedRef = useRef(false)
   /** Remaining seconds when the current session was started/resumed */
   const sessionStartRemaining = useRef<number | null>(null)
@@ -48,9 +44,6 @@ export function ScreenLimitCard({
   const timedOut = !slot.finished && !running && remaining <= 0 && slot.usedSec > 0
   const overtimeLive = screenOvertimeSec(slot, now)
   const overtimeTicking = timedOut && slot.overtimeStartedAt != null
-  const bank = Math.max(0, Math.floor(bankMinutes))
-  const canClaimBank = bank > 0 && Boolean(onClaimBank)
-  const bankClaimOptions = [10, 15, 20, 25, 30].filter((n) => n <= bank)
 
   useEffect(() => {
     finishedRef.current = false
@@ -148,21 +141,35 @@ export function ScreenLimitCard({
       played = Math.max(0, started - left)
     }
     sessionStartRemaining.current = null
+    setConfirmFinish(false)
     if (kind === 'roblox') {
       void cancelRobloxLimitNotification()
     }
+    const usedSec = next.usedSec + played
     onChange({
       ...next,
       endsAt: null,
-      remainingSec: 0,
+      remainingSec: Math.max(0, limitSec - usedSec),
       finished: true,
-      usedSec: next.usedSec + played,
+      usedSec,
+      overtimeStartedAt: null,
+    })
+  }
+
+  /** Undo accidental «finish for today» — restore leftover quota. */
+  function reopenToday() {
+    const left = Math.max(0, limitSec - slot.usedSec)
+    onChange({
+      ...slot,
+      endsAt: null,
+      remainingSec: left,
+      finished: false,
       overtimeStartedAt: null,
     })
   }
 
   const status = slot.finished
-    ? 'Лимит на сегодня закрыт'
+    ? 'Лимит на сегодня закрыт — можно снова открыть, если нажал случайно'
     : running
       ? 'Идёт таймер — когда время выйдет, придёт напоминание'
       : timedOut
@@ -176,13 +183,34 @@ export function ScreenLimitCard({
       ? `Сегодня сыграно: ${formatPlayTimeWithOvertime(slot.usedSec, overtimeLive)}`
       : null
 
+  const hasStarted =
+    running ||
+    timedOut ||
+    slot.usedSec > 0 ||
+    overtimeLive > 0 ||
+    remaining < limitSec
+
   return (
-    <div
-      className={`screen-limit ${slot.finished ? 'used' : ''} ${running ? 'live' : ''} ${timedOut ? 'timed-out' : ''}`}
+    <section
+      className={`card screen-limit-card ${slot.finished ? 'used' : ''} ${running ? 'live' : ''} ${timedOut ? 'timed-out' : ''}`}
     >
       <div className="card-title-row">
-        <h3>{meta.label}</h3>
-        <span className="pill">{Math.round(limitSec / 60)} мин</span>
+        <h2>Таймер</h2>
+        <span
+          className={
+            slot.finished || running || timedOut ? 'pill' : 'pill muted'
+          }
+        >
+          {slot.finished
+            ? 'закрыт'
+            : running
+              ? 'идёт'
+              : timedOut
+                ? 'время вышло'
+                : remaining < limitSec
+                  ? 'пауза'
+                  : 'не начат'}
+        </span>
       </div>
       <p className="hint">{status}</p>
       {bonusNote ? <p className="hint">{bonusNote}</p> : null}
@@ -191,54 +219,51 @@ export function ScreenLimitCard({
         {formatClock(remaining)}
       </div>
 
-      <div className="roblox-bank in-card">
-        <p className="roblox-bank-label">
-          Копилка бонусов: <strong>{bank} мин</strong>
-        </p>
-        {bank <= 0 ? (
-          <p className="hint">
-            Сюда падают бонусные минуты за серии и достижения — потом можно взять в любой день.
-          </p>
-        ) : canClaimBank ? (
-          <div className="roblox-bank-actions">
-            {bankClaimOptions.map((n) => (
-              <button
-                key={n}
-                type="button"
-                className="btn ghost"
-                onClick={() => onClaimBank?.(n)}
-              >
-                +{n} мин сегодня
-              </button>
-            ))}
+      <div className="row-gap">
+        {slot.finished ? (
+          <button type="button" className="btn primary" onClick={reopenToday}>
+            Продолжить игру
+          </button>
+        ) : confirmFinish ? (
+          <>
+            <p className="hint" style={{ margin: 0, flexBasis: '100%' }}>
+              Точно закончить на сегодня?
+            </p>
+            <button type="button" className="btn" onClick={finishToday}>
+              Да, закончить
+            </button>
             <button
               type="button"
-              className="btn primary"
-              onClick={() => onClaimBank?.(bank)}
+              className="btn ghost"
+              onClick={() => setConfirmFinish(false)}
             >
-              Все {bank} мин сегодня
+              Отмена
             </button>
-          </div>
-        ) : null}
+          </>
+        ) : (
+          <>
+            {!running && remaining > 0 ? (
+              <button type="button" className="btn primary" onClick={start}>
+                {remaining < limitSec ? 'Продолжить' : 'Начать'}
+              </button>
+            ) : null}
+            {running ? (
+              <button type="button" className="btn" onClick={pause}>
+                Пауза
+              </button>
+            ) : null}
+            {hasStarted ? (
+              <button
+                type="button"
+                className="btn ghost"
+                onClick={() => setConfirmFinish(true)}
+              >
+                Закончить на сегодня
+              </button>
+            ) : null}
+          </>
+        )}
       </div>
-
-      <div className="row-gap">
-        {!slot.finished && !running && remaining > 0 ? (
-          <button type="button" className="btn primary" onClick={start}>
-            {remaining < limitSec ? 'Продолжить' : 'Начать'}
-          </button>
-        ) : null}
-        {running ? (
-          <button type="button" className="btn" onClick={pause}>
-            Пауза
-          </button>
-        ) : null}
-        {!slot.finished ? (
-          <button type="button" className="btn ghost" onClick={finishToday}>
-            Закончить на сегодня
-          </button>
-        ) : null}
-      </div>
-    </div>
+    </section>
   )
 }

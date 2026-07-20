@@ -129,6 +129,10 @@ export type Sticker = {
    * (sum of unlocked stickers’ robloxExtraMin) reaches this value.
    */
   needSecretRobloxBonusMin?: number
+  /** Secret: workout finished before this local hour */
+  needSecretEarlyPerfectHour?: number
+  /** Secret: day became perfect before this local hour */
+  needSecretPerfectByHour?: number
   robloxExtraMin?: number
   /** Rubles credited to moneyBankRub when this sticker unlocks */
   moneyRub?: number
@@ -153,6 +157,8 @@ export type StickerProgress = {
   ownTasks: number
   secretShortcut: boolean
   secretNoRoblox: boolean
+  /** Workout before 10:00 and perfect day closed before 20:00 */
+  secretDayRhythm: boolean
   /** Sum of robloxExtraMin from unlocked reward stickers */
   achievementRobloxMin: number
 }
@@ -368,6 +374,16 @@ export const STICKERS: Sticker[] = [
     image: './stickers/yuji.png',
     label: 'Юдзи',
     quote: 'Я спасу людей по-своему',
+    detail: 'Магическая битва',
+  },
+  {
+    id: 'feat-secret-day-rhythm',
+    kind: 'art',
+    needSecretEarlyPerfectHour: 10,
+    needSecretPerfectByHour: 20,
+    image: './stickers/mahito.png',
+    label: 'Махито',
+    quote: 'Души так легко менять',
     detail: 'Магическая битва',
   },
   {
@@ -720,6 +736,56 @@ export function hasChewMaxEntry(
   )
 }
 
+/**
+ * Stamp when the day first becomes perfect; clear if the minimum breaks.
+ * Call on every day write path (not on read-only normalize).
+ */
+export function stampPerfectAt(
+  prev: DayLog | undefined,
+  next: DayLog,
+): DayLog {
+  if (!isPerfectDay(next)) {
+    return next.perfectAt == null ? next : { ...next, perfectAt: null }
+  }
+  if (next.perfectAt != null) return next
+  if (prev && isPerfectDay(prev) && prev.perfectAt != null) {
+    return { ...next, perfectAt: prev.perfectAt }
+  }
+  return { ...next, perfectAt: Date.now() }
+}
+
+/**
+ * Workout finished before `workoutBeforeHour`, perfect day closed before
+ * `perfectBeforeHour` (local clock, same calendar day).
+ */
+export function isDayRhythmSecret(
+  day: DayLog,
+  workoutBeforeHour = 10,
+  perfectBeforeHour = 20,
+): boolean {
+  if (!isPerfectDay(day)) return false
+  if (day.workoutFinishedAt == null || day.perfectAt == null) return false
+  const workout = new Date(day.workoutFinishedAt)
+  const perfect = new Date(day.perfectAt)
+  if (todayKey(workout) !== day.date || todayKey(perfect) !== day.date) {
+    return false
+  }
+  return (
+    workout.getHours() < workoutBeforeHour &&
+    perfect.getHours() < perfectBeforeHour
+  )
+}
+
+export function hasDayRhythmSecret(
+  days: Record<string, DayLog>,
+  workoutBeforeHour = 10,
+  perfectBeforeHour = 20,
+): boolean {
+  return Object.values(days).some((day) =>
+    isDayRhythmSecret(day, workoutBeforeHour, perfectBeforeHour),
+  )
+}
+
 export function countOwnTasksDone(days: Record<string, DayLog>): number {
   let n = 0
   for (const day of Object.values(days)) {
@@ -800,6 +866,7 @@ export function stickerProgressFromData(data: AppData): StickerProgress {
     ownTasks: countOwnTasksDone(data.days),
     secretShortcut: hasShortcutWorkout(data.days, data.exercises),
     secretNoRoblox: hasNoRobloxPerfectDay(data.days),
+    secretDayRhythm: hasDayRhythmSecret(data.days, 10, 20),
     achievementRobloxMin: 0,
   }
   progress.achievementRobloxMin = totalAchievementRobloxMinutes(progress)
@@ -821,7 +888,9 @@ export function isSecretSticker(sticker: Sticker): boolean {
     sticker.needSecretShortcut ||
       sticker.needSecretNoRoblox ||
       sticker.needSecretChewMax ||
-      sticker.needSecretRobloxBonusMin != null,
+      sticker.needSecretRobloxBonusMin != null ||
+      sticker.needSecretEarlyPerfectHour != null ||
+      sticker.needSecretPerfectByHour != null,
   )
 }
 
@@ -871,6 +940,13 @@ export function stickerUnlockHint(
   }
   if (sticker.needSecretRobloxBonusMin != null) {
     return 'Когда на часах увидишь целый накопленный час'
+  }
+  if (
+    sticker.needSecretEarlyPerfectHour != null ||
+    sticker.needSecretPerfectByHour != null
+  ) {
+    // 10 = still one digit on a 24h clock; 20 = «два десятка»
+    return 'Пока утро на часах ещё однозначное — и день закрыт до двух десятков'
   }
   if (isSecretSticker(sticker)) return 'Секретный способ получения'
   if (sticker.needQualityWorkouts != null) {
@@ -952,6 +1028,14 @@ export function stickerOpenedHint(sticker: Sticker): string {
   }
   if (sticker.needSecretRobloxBonusMin != null) {
     return `Открыто: суммарно больше ${sticker.needSecretRobloxBonusMin} мин Roblox с ачивок`
+  }
+  if (
+    sticker.needSecretEarlyPerfectHour != null ||
+    sticker.needSecretPerfectByHour != null
+  ) {
+    const w = sticker.needSecretEarlyPerfectHour ?? 10
+    const p = sticker.needSecretPerfectByHour ?? 20
+    return `Открыто: зарядка до ${w}:00 и все дела минимума до ${p}:00`
   }
   if (sticker.needQualityWorkouts != null) {
     const n = sticker.needQualityWorkouts
@@ -1054,6 +1138,10 @@ export function isStickerUnlocked(
   const secretRobloxBonusOk =
     sticker.needSecretRobloxBonusMin == null ||
     progress.achievementRobloxMin >= sticker.needSecretRobloxBonusMin
+  const secretDayRhythmOk =
+    (sticker.needSecretEarlyPerfectHour == null &&
+      sticker.needSecretPerfectByHour == null) ||
+    progress.secretDayRhythm
   return (
     perfectOk &&
     streakOk &&
@@ -1068,7 +1156,8 @@ export function isStickerUnlocked(
     secretShortcutOk &&
     secretNoRobloxOk &&
     secretChewMaxOk &&
-    secretRobloxBonusOk
+    secretRobloxBonusOk &&
+    secretDayRhythmOk
   )
 }
 
@@ -1257,6 +1346,38 @@ export function payoutMoneyBankRub(data: AppData, rub: number): AppData {
   return {
     ...data,
     moneyBankRub: bank - take,
+  }
+}
+
+/** Unlocked stickers with a giftHint that parent has not marked as given yet. */
+export function pendingGiftStickers(data: AppData): Sticker[] {
+  const progress = stickerProgressFromData(data)
+  const dismissed = new Set(data.dismissedGiftStickerIds ?? [])
+  return STICKERS.filter(
+    (s) =>
+      Boolean(s.giftHint) &&
+      isStickerUnlocked(s, progress) &&
+      !dismissed.has(s.id),
+  )
+}
+
+/** Legacy upgrade: treat already-unlocked gifts as already given. */
+export function seedDismissedGiftStickerIds(data: AppData): string[] {
+  const progress = stickerProgressFromData(data)
+  return STICKERS.filter(
+    (s) => Boolean(s.giftHint) && isStickerUnlocked(s, progress),
+  ).map((s) => s.id)
+}
+
+/** Parent marks a physical / non-cash gift as handed over. */
+export function dismissGiftSticker(data: AppData, stickerId: string): AppData {
+  const id = stickerId.trim()
+  if (!id) return data
+  const dismissed = data.dismissedGiftStickerIds ?? []
+  if (dismissed.includes(id)) return data
+  return {
+    ...data,
+    dismissedGiftStickerIds: [...dismissed, id],
   }
 }
 

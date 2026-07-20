@@ -8,6 +8,7 @@ import {
   todayKey,
   workoutDurationSec,
 } from './data'
+import { stampPerfectAt } from './progress'
 import { playDing } from './sound'
 import { Timer, parseTimerRounds } from './Timer'
 import type { AppData } from './types'
@@ -18,7 +19,11 @@ type Props = {
   readOnly?: boolean
 }
 
-export function ExercisesScreen({ data, onChange, readOnly = false }: Props) {
+export function ExercisesScreen({
+  data,
+  onChange,
+  readOnly = false,
+}: Props) {
   const key = todayKey()
   const day = normalizeDayLog(key, data.days[key])
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -74,21 +79,25 @@ export function ExercisesScreen({ data, onChange, readOnly = false }: Props) {
       playDing()
     }
 
+    const next = stampPerfectAt(
+      day,
+      normalizeDayLog(key, {
+        ...day,
+        exercisesDone,
+        timersHonored,
+        workoutStartedAt,
+        workoutFinishedAt,
+        mustDo: {
+          ...day.mustDo,
+          exercise: allDone,
+        },
+      }),
+    )
     onChange({
       ...data,
       days: {
         ...data.days,
-        [key]: {
-          ...day,
-          exercisesDone,
-          timersHonored,
-          workoutStartedAt,
-          workoutFinishedAt,
-          mustDo: {
-            ...day.mustDo,
-            exercise: allDone,
-          },
-        },
+        [key]: next,
       },
     })
   }
@@ -115,9 +124,11 @@ export function ExercisesScreen({ data, onChange, readOnly = false }: Props) {
   return (
     <div className={`screen ${sheetOpen ? 'screen-sheet-open' : ''}`}>
       <header className="screen-head">
-        <p className="eyebrow">
-          {readOnly ? 'Родитель · просмотр' : 'Зарядка · ДЗ №28'}
-        </p>
+        <div className="screen-head-row">
+          <p className="eyebrow">
+            {readOnly ? 'Родитель · просмотр' : 'Зарядка · ДЗ №28'}
+          </p>
+        </div>
         <h1>Комплекс упражнений</h1>
         <p className="sub">
           Сегодня {doneCount} из {data.exercises.length}

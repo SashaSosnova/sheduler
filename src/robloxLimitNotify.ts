@@ -70,7 +70,9 @@ export async function scheduleRobloxLimitEndedAt(
         title: 'Ты ещё играешь в Roblox?',
         body: 'Ты превысил лимит. Если уже закончил — нажми «Закончить на сегодня».',
         channelId: CHANNEL_ID,
-        schedule: { at },
+        // Without allowWhileIdle Android Doze often delays/drops the alert
+        // while the screen is locked or the app is in the background.
+        schedule: { at, allowWhileIdle: true },
         extra: { kind: 'roblox-limit' },
       },
     ],
@@ -91,7 +93,7 @@ export async function notifyRobloxLimitExceeded(): Promise<void> {
         title: 'Ты ещё играешь в Roblox?',
         body: 'Ты превысил лимит. Если уже закончил — нажми «Закончить на сегодня».',
         channelId: CHANNEL_ID,
-        schedule: { at: new Date(Date.now() + 400) },
+        schedule: { at: new Date(Date.now() + 400), allowWhileIdle: true },
         extra: { kind: 'roblox-limit' },
       },
     ],
