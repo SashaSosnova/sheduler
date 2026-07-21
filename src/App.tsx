@@ -42,10 +42,13 @@ function App() {
   const parentAlerts = useParentAlerts(role, data)
   const childTaskAlerts = useChildTaskAlerts(role, data)
   const tomSawyer = useTomSawyerLive()
-  const [tab, setTab] = useState<TabId>('today')
+  const [tab, setTab] = useState<TabId>(() =>
+    role === 'parent' ? 'calendar' : 'today',
+  )
   const [parentPinOpen, setParentPinOpen] = useState(false)
   const isParent = role === 'parent'
   const showNav = tab !== 'settings'
+  const homeTab: TabId = isParent ? 'calendar' : 'today'
 
   const changeRole = useCallback(
     (next: UserRole) => {
@@ -54,7 +57,7 @@ function App() {
         return
       }
       setRole(next)
-      setTab('today')
+      setTab(next === 'parent' ? 'calendar' : 'today')
     },
     [role, setRole],
   )
@@ -70,7 +73,7 @@ function App() {
     if (!role) return
     if (role === 'child' && tab === 'calendar') setTab('today')
     if (role === 'parent' && (tab === 'roblox' || tab === 'progress')) {
-      setTab('today')
+      setTab('calendar')
     }
   }, [role, tab])
 
@@ -116,12 +119,7 @@ function App() {
         ) : null}
         {tab === 'today' ? (
           isParent ? (
-            <ParentSummaryScreen
-              data={data}
-              onChange={setData}
-              onOpenExercises={() => setTab('exercises')}
-              onOpenChew={() => setTab('chew')}
-            />
+            <ParentSummaryScreen data={data} onChange={setData} />
           ) : (
             <TodayScreen
               data={data}
@@ -192,7 +190,7 @@ function App() {
             onJoinFamily={joinFamilyCloud}
             onLeaveFamily={leaveFamilyCloud}
             onChangeRole={changeRole}
-            onGoHome={() => setTab('today')}
+            onGoHome={() => setTab(homeTab)}
           />
         ) : null}
       </main>
@@ -205,7 +203,7 @@ function App() {
         onSuccess={() => {
           setParentPinOpen(false)
           setRole('parent')
-          setTab('today')
+          setTab('calendar')
         }}
         onCancel={() => setParentPinOpen(false)}
       />

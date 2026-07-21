@@ -9,8 +9,8 @@ const CHILD_TABS: { id: TabId; label: string }[] = [
 ]
 
 const PARENT_TABS: { id: TabId; label: string }[] = [
-  { id: 'today', label: 'Сегодня' },
   { id: 'calendar', label: 'Дни' },
+  { id: 'today', label: 'Награды' },
   { id: 'exercises', label: 'Зарядка' },
   { id: 'chew', label: 'Жевание' },
 ]

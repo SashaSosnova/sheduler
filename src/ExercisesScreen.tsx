@@ -238,7 +238,7 @@ function ParentExerciseList({
         <div className="screen-head-row">
           <p className="eyebrow">Родитель · просмотр</p>
         </div>
-        <h1>Комплекс упражнений</h1>
+        <h1>Зарядка</h1>
         <p className="sub">
           Сегодня {doneCount} из {total}
         </p>
@@ -249,53 +249,37 @@ function ParentExerciseList({
         ) : null}
       </header>
 
-      {groups.map(({ group, items }) => {
-        const groupDone = items.filter((ex) => day.exercisesDone[ex.id]).length
-        return (
-          <section key={group} className="exercise-group">
-            <div className="card-title-row exercise-group-head">
-              <h2>{group}</h2>
-              <span className="pill">
-                {groupDone}/{items.length}
-              </span>
-            </div>
-            <ul className="exercise-list">
-              {items.map((ex) => {
-                const checked = Boolean(day.exercisesDone[ex.id])
-                const note = ex.notes.trim()
-                const hasTimer = ex.durationSec > 0
-                const rounds = hasTimer ? parseTimerRounds(ex.reps) : 1
-                return (
-                  <li
-                    key={ex.id}
-                    className={`card exercise-card ${checked ? 'done' : ''} read-only`}
-                  >
-                    <div className="ex-check">
-                      <label className="ex-check-main">
+      <div className="parent-ex-groups">
+        {groups.map(({ group, items }) => {
+          const groupDone = items.filter((ex) => day.exercisesDone[ex.id]).length
+          return (
+            <details key={group} className="parent-ex-group">
+              <summary className="parent-ex-group-head">
+                <span className="parent-ex-group-title">{group}</span>
+                <span className="pill">
+                  {groupDone}/{items.length}
+                </span>
+              </summary>
+              <ul className="parent-ex-list">
+                {items.map((ex) => {
+                  const checked = Boolean(day.exercisesDone[ex.id])
+                  return (
+                    <li
+                      key={ex.id}
+                      className={`parent-ex-row ${checked ? 'is-done' : ''}`}
+                    >
+                      <label className="parent-ex-item">
                         <input type="checkbox" checked={checked} disabled />
-                        <span className="ex-text">
-                          <span className="ex-name">{ex.name}</span>
-                          {note ? <span className="ex-desc">{note}</span> : null}
-                        </span>
-                        {ex.reps ? (
-                          <span className="pill muted ex-reps">{ex.reps}</span>
-                        ) : null}
+                        <span className="ex-name">{ex.name}</span>
                       </label>
-                      {hasTimer ? (
-                        <span className="pill muted ex-timer-chip">
-                          {rounds > 1
-                            ? `${formatDuration(ex.durationSec)} × ${rounds}`
-                            : formatDuration(ex.durationSec)}
-                        </span>
-                      ) : null}
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
-          </section>
-        )
-      })}
+                    </li>
+                  )
+                })}
+              </ul>
+            </details>
+          )
+        })}
+      </div>
     </div>
   )
 }
