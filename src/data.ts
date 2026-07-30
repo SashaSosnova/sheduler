@@ -995,8 +995,7 @@ function normalizeExercise(raw: unknown): Exercise | null {
 
 /**
  * Merge built-in routine with stored overrides:
- * - default text/timers come from code on each load
- * - user `enabled` and list order are preserved
+ * - user edits (name/reps/notes/timer/group), enabled and order are preserved
  * - custom exercises are kept in their stored positions
  * - new defaults (app update) insert near their neighbors
  */
@@ -1020,7 +1019,12 @@ export function resolveExercises(stored: unknown): Exercise[] {
     const def = defaultById.get(row.id)
     if (def) {
       result.push({
-        ...def,
+        id: def.id,
+        name: row.name.trim() || def.name,
+        group: row.group.trim() || def.group,
+        durationSec: row.durationSec,
+        reps: row.reps,
+        notes: row.notes,
         enabled: row.enabled !== false,
         custom: false,
       })
@@ -1104,6 +1108,21 @@ export function moveExerciseInList(
   if (!item) return exercises
   next.splice(toIndex, 0, item)
   return next
+}
+
+/** Move exercise to 1-based position in the routine. */
+export function moveExerciseToPosition(
+  exercises: Exercise[],
+  id: string,
+  position1Based: number,
+): Exercise[] {
+  const fromIndex = exercises.findIndex((e) => e.id === id)
+  if (fromIndex < 0) return exercises
+  const toIndex = Math.max(
+    0,
+    Math.min(exercises.length - 1, Math.floor(position1Based) - 1),
+  )
+  return moveExerciseInList(exercises, fromIndex, toIndex)
 }
 
 export function normalizeExerciseControls(raw: unknown): ExerciseControl[] {
