@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  DEFAULT_EXERCISES,
   ROUTINE_ID,
   defaultAppData,
   mergeChewEntries,
   mergeDaysMaps,
+  mergeExerciseControls,
+  mergeExercises,
+  normalizeExerciseControls,
+  resolveExercises,
 } from './data'
 import {
   createFamily,
@@ -26,6 +29,7 @@ import {
   currentStreak,
   normalizeFinishedBooks,
   resolveReadingBooks,
+  resolveRobloxBonusEarnedMin,
   seedClaimedStickerMoneyIds,
   seedDismissedGiftStickerIds,
 } from './progress'
@@ -46,6 +50,7 @@ type StoredData = {
   routineId?: string
   claimedRobloxStreaks?: number[]
   robloxBonusBankMin?: number
+  robloxBonusEarnedMin?: number
   moneyBankRub?: number
   banksUpdatedAt?: number
   claimedStickerMoneyIds?: string[]
@@ -58,6 +63,7 @@ type StoredData = {
   readingBooks?: ReadingBook[]
   finishedBooks?: FinishedBook[]
   exercises?: unknown
+  exerciseControls?: unknown
 }
 
 function normalizeStringIds(raw: unknown): string[] {
@@ -104,13 +110,23 @@ function hydrateAppData(
     applyPendingRobloxStreakRewards({
       ...base,
       ...partial,
-      exercises: DEFAULT_EXERCISES,
+      exercises: resolveExercises(partial.exercises ?? base.exercises),
       days,
       chewEntries: partial.chewEntries ?? [],
+      exerciseControls: normalizeExerciseControls(
+        partial.exerciseControls ?? base.exerciseControls,
+      ),
       cookingLeft: partial.cookingLeft ?? 5,
       routineId: ROUTINE_ID,
       claimedRobloxStreaks: normalizeStreakInts(partial.claimedRobloxStreaks),
       robloxBonusBankMin: normalizeNonNegInt(partial.robloxBonusBankMin),
+      robloxBonusEarnedMin: resolveRobloxBonusEarnedMin({
+        ...base,
+        ...partial,
+        claimedRobloxStreaks: normalizeStreakInts(partial.claimedRobloxStreaks),
+        robloxBonusBankMin: normalizeNonNegInt(partial.robloxBonusBankMin),
+        robloxBonusEarnedMin: normalizeNonNegInt(partial.robloxBonusEarnedMin),
+      } as AppData),
       moneyBankRub: normalizeNonNegInt(partial.moneyBankRub),
       banksUpdatedAt: normalizeNonNegInt(partial.banksUpdatedAt),
       claimedStickerMoneyIds: normalizeStringIds(partial.claimedStickerMoneyIds),
@@ -189,9 +205,12 @@ function load(): AppData {
     return hydrateAppData({
       days,
       chewEntries,
+      exercises: resolveExercises(parsed.exercises),
+      exerciseControls: normalizeExerciseControls(parsed.exerciseControls),
       cookingLeft: parsed.cookingLeft ?? 5,
       claimedRobloxStreaks,
       robloxBonusBankMin: normalizeNonNegInt(parsed.robloxBonusBankMin),
+      robloxBonusEarnedMin: normalizeNonNegInt(parsed.robloxBonusEarnedMin),
       moneyBankRub: normalizeNonNegInt(parsed.moneyBankRub),
       banksUpdatedAt: normalizeNonNegInt(parsed.banksUpdatedAt),
       claimedStickerMoneyIds,
@@ -300,15 +319,29 @@ function applyCloud(prev: AppData, payload: CloudPayload): AppData {
   )
   const localBanksAt = normalizeNonNegInt(prev.banksUpdatedAt)
   const preferRemoteBanks = remoteBanksAt >= localBanksAt
+  const exercises = mergeExercises(
+    prev.exercises ?? [],
+    resolveExercises(payload.exercises ?? prev.exercises),
+  )
+  const exerciseControls = mergeExerciseControls(
+    normalizeExerciseControls(prev.exerciseControls),
+    normalizeExerciseControls(payload.exerciseControls),
+  )
   return hydrateAppData({
     ...prev,
     days,
     chewEntries,
+    exercises,
+    exerciseControls,
     cookingLeft: payload.cookingLeft ?? prev.cookingLeft,
     claimedRobloxStreaks,
     robloxBonusBankMin: preferRemoteBanks
       ? normalizeNonNegInt(payload.robloxBonusBankMin ?? prev.robloxBonusBankMin)
       : normalizeNonNegInt(prev.robloxBonusBankMin),
+    robloxBonusEarnedMin: Math.max(
+      normalizeNonNegInt(prev.robloxBonusEarnedMin),
+      normalizeNonNegInt(payload.robloxBonusEarnedMin),
+    ),
     moneyBankRub: preferRemoteBanks
       ? normalizeNonNegInt(payload.moneyBankRub ?? prev.moneyBankRub)
       : normalizeNonNegInt(prev.moneyBankRub),
@@ -374,9 +407,12 @@ function replaceFromCloud(payload: CloudPayload): AppData {
   return hydrateAppData({
     days,
     chewEntries,
+    exercises: resolveExercises(payload.exercises),
+    exerciseControls: normalizeExerciseControls(payload.exerciseControls),
     cookingLeft: payload.cookingLeft ?? 5,
     claimedRobloxStreaks: payload.claimedRobloxStreaks ?? [],
     robloxBonusBankMin: payload.robloxBonusBankMin ?? 0,
+    robloxBonusEarnedMin: normalizeNonNegInt(payload.robloxBonusEarnedMin),
     moneyBankRub: payload.moneyBankRub ?? 0,
     banksUpdatedAt: normalizeNonNegInt(
       payload.banksUpdatedAt ?? payload.updatedAt,
@@ -431,8 +467,11 @@ export function useAppData() {
       chewEntries: data.chewEntries,
       cookingLeft: data.cookingLeft,
       routineId: ROUTINE_ID,
+      exercises: data.exercises ?? [],
+      exerciseControls: data.exerciseControls ?? [],
       claimedRobloxStreaks: data.claimedRobloxStreaks ?? [],
       robloxBonusBankMin: data.robloxBonusBankMin ?? 0,
+      robloxBonusEarnedMin: data.robloxBonusEarnedMin ?? 0,
       moneyBankRub: data.moneyBankRub ?? 0,
       banksUpdatedAt: data.banksUpdatedAt ?? 0,
       claimedStickerMoneyIds: data.claimedStickerMoneyIds ?? [],

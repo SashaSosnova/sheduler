@@ -5,6 +5,7 @@ import type {
   DayLog,
   DayReminder,
   Exercise,
+  ExerciseControl,
   MustDoId,
   ScreenSlot,
 } from './types'
@@ -893,13 +894,15 @@ export function isCookingWeekday(dateKey: string): boolean {
 
 export function defaultAppData(): AppData {
   return {
-    exercises: DEFAULT_EXERCISES,
+    exercises: resolveExercises(undefined),
     days: {},
     chewEntries: [],
+    exerciseControls: [],
     cookingLeft: 5,
     routineId: ROUTINE_ID,
     claimedRobloxStreaks: [],
     robloxBonusBankMin: 0,
+    robloxBonusEarnedMin: 0,
     moneyBankRub: 0,
     banksUpdatedAt: 0,
     claimedStickerMoneyIds: [],
@@ -910,6 +913,163 @@ export function defaultAppData(): AppData {
     readingBooks: [],
     finishedBooks: [],
   }
+}
+
+/** Exercises that appear in the child's daily routine */
+export function activeExercises(exercises: Exercise[]): Exercise[] {
+  return exercises.filter((e) => e.enabled !== false)
+}
+
+function normalizeExercise(raw: unknown): Exercise | null {
+  if (!raw || typeof raw !== 'object') return null
+  const row = raw as Partial<Exercise>
+  const id = typeof row.id === 'string' ? row.id.trim() : ''
+  const name = typeof row.name === 'string' ? row.name.trim() : ''
+  if (!id || !name) return null
+  const durationSec =
+    typeof row.durationSec === 'number' && Number.isFinite(row.durationSec)
+      ? Math.max(0, Math.floor(row.durationSec))
+      : 0
+  return {
+    id,
+    name,
+    group: typeof row.group === 'string' && row.group.trim() ? row.group.trim() : 'Другое',
+    durationSec,
+    reps: typeof row.reps === 'string' ? row.reps : '',
+    notes: typeof row.notes === 'string' ? row.notes : '',
+    enabled: row.enabled !== false,
+    ...(row.custom ? { custom: true } : {}),
+  }
+}
+
+/**
+ * Merge built-in routine with stored overrides:
+ * - default text/timers come from code on each load
+ * - user `enabled` is preserved
+ * - custom exercises are kept
+ */
+export function resolveExercises(stored: unknown): Exercise[] {
+  const list = Array.isArray(stored)
+    ? stored.map(normalizeExercise).filter((e): e is Exercise => e !== null)
+    : []
+  const byId = new Map(list.map((e) => [e.id, e]))
+  const result: Exercise[] = []
+
+  for (const def of DEFAULT_EXERCISES) {
+    const prev = byId.get(def.id)
+    result.push({
+      ...def,
+      enabled: prev ? prev.enabled !== false : true,
+      custom: false,
+    })
+    byId.delete(def.id)
+  }
+
+  for (const ex of byId.values()) {
+    result.push({
+      ...ex,
+      custom: true,
+      enabled: ex.enabled !== false,
+    })
+  }
+  return result
+}
+
+export function mergeExercises(a: Exercise[], b: Exercise[]): Exercise[] {
+  const map = new Map<string, Exercise>()
+  for (const ex of [...a, ...b]) {
+    const prev = map.get(ex.id)
+    if (!prev) {
+      map.set(ex.id, ex)
+      continue
+    }
+    map.set(ex.id, {
+      ...prev,
+      ...ex,
+      custom: Boolean(prev.custom || ex.custom),
+      // Disable wins — intentional parent action
+      enabled: prev.enabled === false || ex.enabled === false ? false : true,
+    })
+  }
+  return resolveExercises([...map.values()])
+}
+
+export function normalizeExerciseControls(raw: unknown): ExerciseControl[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((item): ExerciseControl | null => {
+      if (!item || typeof item !== 'object') return null
+      const row = item as Partial<ExerciseControl>
+      const id = typeof row.id === 'string' ? row.id.trim() : ''
+      const exerciseId =
+        typeof row.exerciseId === 'string' ? row.exerciseId.trim() : ''
+      const date = typeof row.date === 'string' ? row.date.trim() : ''
+      if (!id || !exerciseId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null
+      return { id, exerciseId, date, filmed: Boolean(row.filmed) }
+    })
+    .filter((c): c is ExerciseControl => c !== null)
+}
+
+export function mergeExerciseControls(
+  a: ExerciseControl[],
+  b: ExerciseControl[],
+): ExerciseControl[] {
+  const map = new Map<string, ExerciseControl>()
+  for (const item of [...a, ...b]) {
+    const prev = map.get(item.id)
+    if (!prev) {
+      map.set(item.id, item)
+      continue
+    }
+    map.set(item.id, {
+      ...prev,
+      ...item,
+      filmed: Boolean(prev.filmed || item.filmed),
+    })
+  }
+  return [...map.values()].sort((x, y) =>
+    x.date === y.date
+      ? x.id.localeCompare(y.id)
+      : x.date < y.date
+        ? -1
+        : 1,
+  )
+}
+
+/** Mark all active exercises done (parent override / myotherapist session). */
+export function markAllExercisesDone(
+  day: DayLog,
+  exercises: Exercise[],
+): DayLog {
+  const active = activeExercises(exercises)
+  const exercisesDone = { ...day.exercisesDone }
+  for (const ex of active) {
+    exercisesDone[ex.id] = true
+  }
+  // Do not invent workout timestamps — a parent checkbox is not a timed session
+  // (same-ms start/finish would look like a "shortcut" workout for stickers).
+  return normalizeDayLog(day.date, {
+    ...day,
+    exercisesDone,
+    mustDo: { ...day.mustDo, exercise: true },
+  })
+}
+
+export function controlsForDate(
+  controls: ExerciseControl[] | undefined,
+  date: string,
+): ExerciseControl[] {
+  return (controls ?? []).filter((c) => c.date === date)
+}
+
+export function controlForExerciseOnDate(
+  controls: ExerciseControl[] | undefined,
+  date: string,
+  exerciseId: string,
+): ExerciseControl | undefined {
+  return (controls ?? []).find(
+    (c) => c.date === date && c.exerciseId === exerciseId,
+  )
 }
 
 export function formatDuration(sec: number): string {
@@ -1007,4 +1167,17 @@ export function groupExercises(exercises: Exercise[]): { group: string; items: E
     map.get(g)!.push(ex)
   }
   return order.map((group) => ({ group, items: map.get(group)! }))
+}
+
+/** Distinct group names from the current exercise list (for add form). */
+export function exerciseGroupNames(exercises: Exercise[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const ex of exercises) {
+    const g = ex.group || 'Другое'
+    if (seen.has(g)) continue
+    seen.add(g)
+    out.push(g)
+  }
+  return out
 }

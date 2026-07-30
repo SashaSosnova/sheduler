@@ -14,6 +14,8 @@ import type {
   AppData,
   ChewEntry,
   DayLog,
+  Exercise,
+  ExerciseControl,
   FinishedBook,
   ReadingBook,
 } from './types'
@@ -26,8 +28,11 @@ export type CloudPayload = {
   days: Record<string, DayLog>
   chewEntries: ChewEntry[]
   cookingLeft: number
+  exercises?: Exercise[]
+  exerciseControls?: ExerciseControl[]
   claimedRobloxStreaks?: number[]
   robloxBonusBankMin?: number
+  robloxBonusEarnedMin?: number
   moneyBankRub?: number
   /** When bank balances last changed — pick newer side on merge */
   banksUpdatedAt?: number
@@ -110,8 +115,11 @@ export function toCloudPayload(data: AppData, updatedAt = Date.now()): CloudPayl
     days: data.days,
     chewEntries: data.chewEntries ?? [],
     cookingLeft: data.cookingLeft,
+    exercises: data.exercises ?? [],
+    exerciseControls: data.exerciseControls ?? [],
     claimedRobloxStreaks: data.claimedRobloxStreaks ?? [],
     robloxBonusBankMin: data.robloxBonusBankMin ?? 0,
+    robloxBonusEarnedMin: data.robloxBonusEarnedMin ?? 0,
     moneyBankRub: data.moneyBankRub ?? 0,
     banksUpdatedAt: data.banksUpdatedAt ?? 0,
     claimedStickerMoneyIds: data.claimedStickerMoneyIds ?? [],
@@ -165,8 +173,11 @@ export async function joinFamily(rawCode: string): Promise<CloudPayload> {
     days: remote.days ?? {},
     chewEntries: remote.chewEntries ?? [],
     cookingLeft: remote.cookingLeft ?? 5,
+    exercises: remote.exercises,
+    exerciseControls: remote.exerciseControls,
     claimedRobloxStreaks: remote.claimedRobloxStreaks ?? [],
     robloxBonusBankMin: remote.robloxBonusBankMin ?? 0,
+    robloxBonusEarnedMin: remote.robloxBonusEarnedMin,
     moneyBankRub: remote.moneyBankRub,
     // Keep undefined when absent so clients can seed legacy families.
     claimedStickerMoneyIds: remote.claimedStickerMoneyIds,
@@ -212,9 +223,13 @@ export function subscribeFamily(
         days: remote.days ?? {},
         chewEntries: remote.chewEntries ?? [],
         cookingLeft: remote.cookingLeft ?? 5,
+        exercises: remote.exercises,
+        exerciseControls: remote.exerciseControls,
         claimedRobloxStreaks: remote.claimedRobloxStreaks ?? [],
         robloxBonusBankMin: remote.robloxBonusBankMin ?? 0,
+        robloxBonusEarnedMin: remote.robloxBonusEarnedMin,
         moneyBankRub: remote.moneyBankRub,
+        banksUpdatedAt: remote.banksUpdatedAt,
         claimedStickerMoneyIds: remote.claimedStickerMoneyIds,
         dismissedGiftStickerIds: remote.dismissedGiftStickerIds,
         equippedStickerId: remote.equippedStickerId ?? null,

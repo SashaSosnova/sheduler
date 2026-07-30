@@ -186,13 +186,17 @@ export function ChewDiaryScreen({
       if (result === 'shared') {
         setShareStatus('Отправлено')
       } else if (result === 'downloaded') {
-        setShareStatus('Картинка сохранена — приложи её в сообщении')
+        setShareStatus('Картинка скачана — приложи её в сообщении')
+      } else if (result === 'cancelled') {
+        setShareStatus('')
       }
     } catch {
-      setShareStatus('Не удалось создать картинку. Сделай скриншот таблицы.')
+      setShareStatus(
+        'Не удалось поделиться. Открой «На весь экран» и сделай скриншот.',
+      )
     } finally {
       setShareBusy(false)
-      window.setTimeout(() => setShareStatus(''), 3000)
+      window.setTimeout(() => setShareStatus(''), 4000)
     }
   }
 

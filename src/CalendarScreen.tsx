@@ -3,16 +3,19 @@ import {
   EXTRA_TASK_IDEAS,
   MUST_DO_ITEMS,
   SCREEN_LIMITS,
+  activeExercises,
   chewDurationSec,
+  controlsForDate,
   formatPlayTime,
   formatPlayTimeWithOvertime,
+  markAllExercisesDone,
   normalizeDayLog,
   todayKey,
   uid,
   workoutDurationSec,
 } from './data'
 import { loadParentLabel } from './parentAlerts'
-import { dayStars, isPerfectDay, shiftDayKey } from './progress'
+import { dayStars, isPerfectDay, shiftDayKey, stampPerfectAt } from './progress'
 import {
   ReminderSection,
   TodayTimedReminderBanner,
@@ -121,16 +124,30 @@ function mustDoStatusHint(
   },
 ): string {
   if (id === 'exercise') {
+    if (detail.exerciseDone === 0 && !detail.day.mustDo.exercise) {
+      return 'не сделана'
+    }
+    // Legacy parent checkbox (mustDo only) or parent markAll without a timed session
+    const parentMarked =
+      Boolean(detail.day.mustDo.exercise) &&
+      (detail.exerciseDone === 0 ||
+        (detail.exerciseTotal > 0 &&
+          detail.exerciseDone === detail.exerciseTotal &&
+          detail.workoutSec == null))
+    if (parentMarked && detail.exerciseDone === 0) return 'отметил родитель'
+    if (parentMarked) {
+      return `${detail.exerciseDone} из ${detail.exerciseTotal} · отметил родитель`
+    }
     return `${detail.exerciseDone} из ${detail.exerciseTotal}${
       detail.workoutSec != null
         ? ` · заняла ${formatPlayTime(detail.workoutSec)}`
-        : detail.exerciseDone > 0
-          ? ''
-          : ' · не сделана'
+        : ''
     }`
   }
   if (id === 'chew') {
-    if (!detail.chewFood) return 'не заполнено'
+    if (!detail.chewFood) {
+      return detail.day.mustDo.chew ? 'отмечено родителем' : 'не заполнено'
+    }
     return `${detail.chewFood}${
       detail.chewSec != null
         ? ` · заняло ${formatPlayTime(detail.chewSec)}`
@@ -174,20 +191,39 @@ export function CalendarScreen({
   function patchSelected(partial: Partial<ReturnType<typeof normalizeDayLog>>) {
     if (!onChange || selected > today) return
     const day = normalizeDayLog(selected, data.days[selected])
+    const next = stampPerfectAt(
+      day,
+      normalizeDayLog(selected, { ...day, ...partial }),
+    )
     onChange({
       ...data,
       days: {
         ...data.days,
-        [selected]: { ...day, ...partial },
+        [selected]: next,
       },
     })
   }
 
   function toggleMust(id: MustDoId) {
-    if (!canEditSelected) return
+    if (!canEditSelected || !onChange) return
     const day = normalizeDayLog(selected, data.days[selected])
+    const nextChecked = !day.mustDo[id]
+    if (id === 'exercise' && nextChecked) {
+      const marked = stampPerfectAt(
+        day,
+        markAllExercisesDone(day, data.exercises),
+      )
+      onChange({
+        ...data,
+        days: {
+          ...data.days,
+          [selected]: marked,
+        },
+      })
+      return
+    }
     patchSelected({
-      mustDo: { ...day.mustDo, [id]: !day.mustDo[id] },
+      mustDo: { ...day.mustDo, [id]: nextChecked },
     })
   }
 
@@ -300,11 +336,13 @@ export function CalendarScreen({
     const chewEntry = (data.chewEntries ?? [])
       .filter((e) => e.date === selected)
       .sort((a, b) => b.createdAt - a.createdAt)[0]
-    const exerciseTotal = data.exercises.length
-    const exerciseDone = data.exercises.filter((e) =>
+    const active = activeExercises(data.exercises)
+    const exerciseTotal = active.length
+    const exerciseDone = active.filter((e) =>
       Boolean(day.exercisesDone[e.id]),
     ).length
     const extraDone = day.extraTasks.filter((t) => t.done).length
+    const dayControls = controlsForDate(data.exerciseControls, selected)
     return {
       day,
       stars: dayStars(day),
@@ -318,6 +356,7 @@ export function CalendarScreen({
       robloxOvertime: day.screens.roblox.overtimeSec ?? 0,
       robloxBonusMin: day.robloxBonusMin ?? 0,
       extraDone,
+      dayControls,
     }
   }, [data, selected])
 
@@ -478,6 +517,25 @@ export function CalendarScreen({
             </div>
           ))
         )}
+
+        {detail.dayControls.length > 0 ? (
+          <div className="calendar-detail-block">
+            <h3>Контроль (видео)</h3>
+            <ul className="calendar-exercise-list">
+              {detail.dayControls.map((c) => {
+                const name =
+                  data.exercises.find((e) => e.id === c.exerciseId)?.name ??
+                  c.exerciseId
+                return (
+                  <li key={c.id} className={c.filmed ? 'done' : ''}>
+                    {c.filmed ? '✓' : '·'} {name}
+                    {c.filmed ? ' · снято' : ' · снять на видео'}
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        ) : null}
 
         <div className="calendar-detail-block">
           <h3>Roblox</h3>

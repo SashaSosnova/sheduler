@@ -1,6 +1,7 @@
 import {
   MUST_DO_ITEMS,
   SCREEN_LIMITS,
+  activeExercises,
   chewDurationSec,
   flushScreenOvertime,
   normalizeDayLog,
@@ -125,8 +126,8 @@ export type Sticker = {
   /** Secret: chew entry with all bites above 50 */
   needSecretChewMax?: boolean
   /**
-   * Secret: total Roblox bonus minutes from other achievements
-   * (sum of unlocked stickers’ robloxExtraMin) reaches this value.
+   * Secret: total Roblox bonus minutes earned (bank lifetime / streak
+   * payouts / unlocked stickers’ robloxExtraMin) reaches this value.
    */
   needSecretRobloxBonusMin?: number
   /** Secret: workout finished before this local hour */
@@ -159,7 +160,10 @@ export type StickerProgress = {
   secretNoRoblox: boolean
   /** Workout before 10:00 and perfect day closed before 20:00 */
   secretDayRhythm: boolean
-  /** Sum of robloxExtraMin from unlocked reward stickers */
+  /**
+   * Roblox bonus minutes toward «Белый Кролик»:
+   * max(sticker rewards, claimed streak payouts, lifetime bank credits).
+   */
   achievementRobloxMin: number
 }
 
@@ -848,15 +852,45 @@ export function isTomSawyerInFinishedBooks(books: FinishedBook[]): boolean {
   return books.some((b) => b.title.trim().toLowerCase() === target)
 }
 
+/** Minutes already paid out from streak milestones (durable even after spending). */
+export function claimedStreakRobloxMinutes(
+  claimedRobloxStreaks: number[] | undefined,
+): number {
+  const claimed = new Set(claimedRobloxStreaks ?? [])
+  return ROBLOX_STREAK_REWARDS.filter((r) => claimed.has(r.streak)).reduce(
+    (sum, r) => sum + r.minutes,
+    0,
+  )
+}
+
+/**
+ * Seed / floor for lifetime earned minutes from what we already know
+ * (bank balance + claimed streak payouts). Spending never lowers this.
+ */
+export function resolveRobloxBonusEarnedMin(data: AppData): number {
+  const stored =
+    typeof data.robloxBonusEarnedMin === 'number' &&
+    Number.isFinite(data.robloxBonusEarnedMin)
+      ? Math.max(0, Math.floor(data.robloxBonusEarnedMin))
+      : 0
+  const bank =
+    typeof data.robloxBonusBankMin === 'number' &&
+    Number.isFinite(data.robloxBonusBankMin)
+      ? Math.max(0, Math.floor(data.robloxBonusBankMin))
+      : 0
+  return Math.max(stored, bank, claimedStreakRobloxMinutes(data.claimedRobloxStreaks))
+}
+
 export function stickerProgressFromData(data: AppData): StickerProgress {
   const streak = currentStreak(data.days)
   const parentNow = countParentTasksDone(data.days)
   const finishedBooks = data.finishedBooks ?? []
+  const exercises = activeExercises(data.exercises)
   const progress: StickerProgress = {
     perfectTotal: countPerfectDays(data.days),
     streak,
     bestStreak: Math.max(data.bestStreak ?? 0, streak),
-    qualityWorkouts: countQualityWorkouts(data.days, data.exercises),
+    qualityWorkouts: countQualityWorkouts(data.days, exercises),
     exerciseDays: countExerciseDays(data.days),
     chewDays: countChewDiaryDays(data.chewEntries ?? []),
     chewMax: hasChewMaxEntry(data.chewEntries ?? [], 50),
@@ -864,23 +898,34 @@ export function stickerProgressFromData(data: AppData): StickerProgress {
     booksFinished: finishedBooks.length,
     tomSawyerFinished: isTomSawyerInFinishedBooks(finishedBooks),
     ownTasks: countOwnTasksDone(data.days),
-    secretShortcut: hasShortcutWorkout(data.days, data.exercises),
+    secretShortcut: hasShortcutWorkout(data.days, exercises),
     secretNoRoblox: hasNoRobloxPerfectDay(data.days),
     secretDayRhythm: hasDayRhythmSecret(data.days, 10, 20),
     achievementRobloxMin: 0,
   }
-  progress.achievementRobloxMin = totalAchievementRobloxMinutes(progress)
+  progress.achievementRobloxMin = totalAchievementRobloxMinutes(progress, data)
   return progress
 }
 
-/** Roblox bonus minutes granted by already-unlocked stickers (excludes bonus-min secrets). */
-export function totalAchievementRobloxMinutes(progress: StickerProgress): number {
-  return STICKERS.filter(
+/**
+ * Roblox bonus minutes toward the White Rabbit secret.
+ * Takes the best of: unlocked sticker rewards, claimed streak payouts,
+ * and lifetime bank credits (so «час в копилке» matches the hint).
+ */
+export function totalAchievementRobloxMinutes(
+  progress: StickerProgress,
+  data?: AppData,
+): number {
+  const fromStickers = STICKERS.filter(
     (s) =>
       s.robloxExtraMin != null &&
       s.needSecretRobloxBonusMin == null &&
       isStickerUnlocked(s, progress),
   ).reduce((sum, s) => sum + (s.robloxExtraMin ?? 0), 0)
+  if (!data) return fromStickers
+  const fromClaimed = claimedStreakRobloxMinutes(data.claimedRobloxStreaks)
+  const fromEarned = resolveRobloxBonusEarnedMin(data)
+  return Math.max(fromStickers, fromClaimed, fromEarned)
 }
 
 export function isSecretSticker(sticker: Sticker): boolean {
@@ -939,7 +984,7 @@ export function stickerUnlockHint(
     return 'Когда ни один укус не слабее полусотни'
   }
   if (sticker.needSecretRobloxBonusMin != null) {
-    return 'Когда на часах увидишь целый накопленный час'
+    return 'Когда в копилке бонусов накопится целый час'
   }
   if (
     sticker.needSecretEarlyPerfectHour != null ||
@@ -1027,7 +1072,7 @@ export function stickerOpenedHint(sticker: Sticker): string {
     return 'Открыто: все укусы в записи больше 50'
   }
   if (sticker.needSecretRobloxBonusMin != null) {
-    return `Открыто: суммарно больше ${sticker.needSecretRobloxBonusMin} мин Roblox с ачивок`
+    return `Открыто: накопил ${sticker.needSecretRobloxBonusMin}+ мин бонусов Roblox`
   }
   if (
     sticker.needSecretEarlyPerfectHour != null ||
@@ -1400,10 +1445,12 @@ export function applyPendingRobloxStreakRewards(
     return data
   }
 
+  const earnedFloor = resolveRobloxBonusEarnedMin(data)
   const next: AppData = {
     ...data,
     claimedRobloxStreaks: data.claimedRobloxStreaks ?? [],
     robloxBonusBankMin: data.robloxBonusBankMin ?? 0,
+    robloxBonusEarnedMin: earnedFloor,
     bestStreak,
   }
 
@@ -1419,6 +1466,7 @@ export function applyPendingRobloxStreakRewards(
       (a, b) => a - b,
     ),
     robloxBonusBankMin: (next.robloxBonusBankMin ?? 0) + bonusMin,
+    robloxBonusEarnedMin: earnedFloor + bonusMin,
   }
 }
 
@@ -1426,9 +1474,11 @@ export function applyPendingRobloxStreakRewards(
 export function giftRobloxBankMinutes(data: AppData, minutes: number): AppData {
   const add = Math.max(0, Math.floor(minutes))
   if (add <= 0) return data
+  const earned = resolveRobloxBonusEarnedMin(data)
   return {
     ...data,
     robloxBonusBankMin: Math.max(0, Math.floor(data.robloxBonusBankMin ?? 0)) + add,
+    robloxBonusEarnedMin: earned + add,
   }
 }
 
@@ -1514,14 +1564,14 @@ export function buildDayHistory(
   for (const key of Object.keys(data.days)) dates.add(key)
   for (const entry of data.chewEntries ?? []) dates.add(entry.date)
 
-  const exerciseTotal = data.exercises.length
+  const exercises = activeExercises(data.exercises)
+  const exerciseTotal = exercises.length
   const items: DayHistoryItem[] = []
 
   for (const date of dates) {
     const day = normalizeDayLog(date, data.days[date])
     const stars = dayStars(day)
-    const exerciseDone = data.exercises.filter((e) => day.exercisesDone[e.id])
-      .length
+    const exerciseDone = exercises.filter((e) => day.exercisesDone[e.id]).length
     const chewEntry = (data.chewEntries ?? [])
       .filter((e) => e.date === date)
       .sort((a, b) => b.createdAt - a.createdAt)[0]

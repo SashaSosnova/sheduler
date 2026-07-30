@@ -6,6 +6,7 @@ import {
   EXTRA_TASK_IDEAS,
   MAIN_MUST_DO,
   MUST_DO_ITEMS,
+  activeExercises,
   chewDurationSec,
   formatPlayTime,
   normalizeDayLog,
@@ -38,8 +39,9 @@ export function TodayScreen({
   const key = todayKey()
   const day = normalizeDayLog(key, data.days[key])
   const doneCount = MUST_DO_ITEMS.filter((i) => day.mustDo[i.id]).length
-  const exerciseDone = data.exercises.filter((e) => day.exercisesDone[e.id]).length
-  const exerciseTotal = data.exercises.length
+  const active = activeExercises(data.exercises)
+  const exerciseDone = active.filter((e) => day.exercisesDone[e.id]).length
+  const exerciseTotal = active.length
   const workoutSec = workoutDurationSec(day)
   const chewToday = (data.chewEntries ?? [])
     .filter((e) => e.date === key)
@@ -126,7 +128,11 @@ export function TodayScreen({
   }
 
   function isParentMarkedOnly(id: MustDoId): boolean {
-    if (id === 'exercise') return Boolean(day.mustDo.exercise) && !exerciseComplete
+    if (id === 'exercise') {
+      if (!day.mustDo.exercise) return false
+      // Parent override: mustDo without child timed session (or no exercises checked)
+      return !exerciseComplete || workoutSec == null
+    }
     if (id === 'chew') return Boolean(day.mustDo.chew) && !chewComplete
     if (id === 'read') return Boolean(day.mustDo.read) && !readComplete
     return false

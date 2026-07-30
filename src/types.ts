@@ -20,6 +20,19 @@ export type Exercise = {
   durationSec: number
   reps: string
   notes: string
+  /** false = hidden from child routine (kept for parent) */
+  enabled?: boolean
+  /** Added by parent in the app (not from built-in DEFAULT_EXERCISES) */
+  custom?: boolean
+}
+
+/** One-shot «контроль» — film this exercise on a given day */
+export type ExerciseControl = {
+  id: string
+  exerciseId: string
+  /** YYYY-MM-DD */
+  date: string
+  filmed: boolean
 }
 
 export type MustDoId =
@@ -132,6 +145,8 @@ export type AppData = {
   exercises: Exercise[]
   days: Record<string, DayLog>
   chewEntries: ChewEntry[]
+  /** Parent-assigned one-shot video controls */
+  exerciseControls: ExerciseControl[]
   cookingLeft: number
   /** Homework set id — bump when replacing the built-in routine */
   routineId: string
@@ -142,6 +157,11 @@ export type AppData = {
    * Claim onto a day via claimRobloxBankMinutes.
    */
   robloxBonusBankMin: number
+  /**
+   * Lifetime Roblox bonus minutes ever credited (streaks + parent gifts).
+   * Never decreases when spending from the bank — used by «Белый Кролик».
+   */
+  robloxBonusEarnedMin: number
   /**
    * Unspent ruble rewards from parent-task achievements.
    * Parent marks as paid out via payoutMoneyBankRub.

@@ -1,3 +1,6 @@
+import { Capacitor } from '@capacitor/core'
+import { Directory, Filesystem } from '@capacitor/filesystem'
+import { Share } from '@capacitor/share'
 import type { ChewEntry } from './types'
 
 function formatDateRu(key: string): string {
@@ -174,12 +177,63 @@ export async function renderChewReportPng(entries: ChewEntry[]): Promise<Blob> {
   })
 }
 
-export async function shareChewReportImage(entries: ChewEntry[]): Promise<'shared' | 'downloaded' | 'cancelled'> {
-  const blob = await renderChewReportPng(entries)
+async function blobToBase64(blob: Blob): Promise<string> {
+  const buffer = await blob.arrayBuffer()
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  const chunk = 0x8000
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
+  }
+  return btoa(binary)
+}
+
+async function shareNativePng(blob: Blob): Promise<'shared' | 'cancelled'> {
+  const base64 = await blobToBase64(blob)
+  const fileName = `dnevnik-zhevaniya-${Date.now()}.png`
+  const written = await Filesystem.writeFile({
+    path: fileName,
+    data: base64,
+    directory: Directory.Cache,
+  })
+  try {
+    await Share.share({
+      title: 'Дневник жевания',
+      files: [written.uri],
+      dialogTitle: 'Поделиться дневником жевания',
+    })
+    return 'shared'
+  } catch (err) {
+    if (err instanceof Error && /cancel|abort/i.test(err.message)) {
+      return 'cancelled'
+    }
+    // Capacitor Share rejects with a plain object on cancel on some versions
+    const message =
+      err && typeof err === 'object' && 'message' in err
+        ? String((err as { message: unknown }).message)
+        : ''
+    if (/cancel|abort/i.test(message)) return 'cancelled'
+    throw err
+  } finally {
+    try {
+      await Filesystem.deleteFile({
+        path: fileName,
+        directory: Directory.Cache,
+      })
+    } catch {
+      /* ignore cleanup errors */
+    }
+  }
+}
+
+async function shareWebPng(
+  blob: Blob,
+): Promise<'shared' | 'downloaded' | 'cancelled'> {
   const file = new File([blob], 'dnevnik-zhevaniya.png', { type: 'image/png' })
 
   const canShareFiles =
-    typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })
+    typeof navigator.canShare === 'function' &&
+    navigator.canShare({ files: [file] })
 
   if (canShareFiles) {
     try {
@@ -200,7 +254,22 @@ export async function shareChewReportImage(entries: ChewEntry[]): Promise<'share
   const a = document.createElement('a')
   a.href = url
   a.download = 'dnevnik-zhevaniya.png'
+  a.rel = 'noopener'
+  document.body.appendChild(a)
   a.click()
+  a.remove()
   window.setTimeout(() => URL.revokeObjectURL(url), 2000)
   return 'downloaded'
+}
+
+export async function shareChewReportImage(
+  entries: ChewEntry[],
+): Promise<'shared' | 'downloaded' | 'cancelled'> {
+  const blob = await renderChewReportPng(entries)
+
+  if (Capacitor.isNativePlatform()) {
+    return shareNativePng(blob)
+  }
+
+  return shareWebPng(blob)
 }
