@@ -4,10 +4,12 @@ import {
   MUST_DO_ITEMS,
   SCREEN_LIMITS,
   activeExercises,
+  applyMustDoFlags,
   chewDurationSec,
   controlsForDate,
   formatPlayTime,
   formatPlayTimeWithOvertime,
+  formatTimeOfDay,
   markAllExercisesDone,
   normalizeDayLog,
   todayKey,
@@ -119,8 +121,10 @@ function mustDoStatusHint(
     exerciseDone: number
     exerciseTotal: number
     workoutSec: number | null
+    workoutFinishedAt: number | null
     chewFood: string | null
     chewSec: number | null
+    chewSavedAt: number | null
   },
 ): string {
   if (id === 'exercise') {
@@ -133,34 +137,56 @@ function mustDoStatusHint(
       (detail.exerciseDone === 0 ||
         (detail.exerciseTotal > 0 &&
           detail.exerciseDone === detail.exerciseTotal &&
-          detail.workoutSec == null))
+          detail.workoutSec == null &&
+          detail.workoutFinishedAt == null))
     if (parentMarked && detail.exerciseDone === 0) return 'отметил родитель'
     if (parentMarked) {
       return `${detail.exerciseDone} из ${detail.exerciseTotal} · отметил родитель`
     }
-    return `${detail.exerciseDone} из ${detail.exerciseTotal}${
-      detail.workoutSec != null
-        ? ` · заняла ${formatPlayTime(detail.workoutSec)}`
-        : ''
-    }`
+    const doneAt =
+      detail.workoutFinishedAt ?? detail.day.mustDoAt?.exercise ?? null
+    const parts = [`${detail.exerciseDone} из ${detail.exerciseTotal}`]
+    if (doneAt != null) {
+      parts.push(`сделана в ${formatTimeOfDay(doneAt)}`)
+    }
+    if (detail.workoutSec != null) {
+      parts.push(`заняла ${formatPlayTime(detail.workoutSec)}`)
+    }
+    return parts.join(' · ')
   }
   if (id === 'chew') {
     if (!detail.chewFood) {
-      return detail.day.mustDo.chew ? 'отмечено родителем' : 'не заполнено'
+      const at = detail.day.mustDoAt?.chew
+      if (detail.day.mustDo.chew) {
+        return at != null
+          ? `отмечено родителем в ${formatTimeOfDay(at)}`
+          : 'отмечено родителем'
+      }
+      return 'не заполнено'
     }
-    return `${detail.chewFood}${
-      detail.chewSec != null
-        ? ` · заняло ${formatPlayTime(detail.chewSec)}`
-        : ''
-    }`
+    const doneAt = detail.chewSavedAt ?? detail.day.mustDoAt?.chew ?? null
+    const parts = [detail.chewFood]
+    if (doneAt != null) {
+      parts.push(`заполнено в ${formatTimeOfDay(doneAt)}`)
+    }
+    if (detail.chewSec != null) {
+      parts.push(`заняло ${formatPlayTime(detail.chewSec)}`)
+    }
+    return parts.join(' · ')
   }
   const done = Boolean(detail.day.mustDo[id])
+  const at = detail.day.mustDoAt?.[id]
+  const atHint = at != null ? ` в ${formatTimeOfDay(at)}` : ''
   if (id === 'create') {
     const note = detail.day.createNote.trim()
-    if (done) return note ? `сделано — ${note}` : 'сделано'
+    if (done) {
+      return note
+        ? `сделано${atHint} — ${note}`
+        : `сделано${atHint}`
+    }
     return note ? `не сделано — ${note}` : 'не сделано'
   }
-  return done ? 'сделано' : 'не сделано'
+  return done ? `сделано${atHint}` : 'не сделано'
 }
 
 export function CalendarScreen({
@@ -222,9 +248,7 @@ export function CalendarScreen({
       })
       return
     }
-    patchSelected({
-      mustDo: { ...day.mustDo, [id]: nextChecked },
-    })
+    patchSelected(applyMustDoFlags(day, { [id]: nextChecked }))
   }
 
   function addExtraTask(text: string) {
@@ -350,8 +374,10 @@ export function CalendarScreen({
       exerciseTotal,
       exerciseDone,
       workoutSec: workoutDurationSec(day),
+      workoutFinishedAt: day.workoutFinishedAt,
       chewFood: chewEntry?.food ?? null,
       chewSec: chewEntry ? chewDurationSec(chewEntry) : null,
+      chewSavedAt: chewEntry?.createdAt ?? null,
       robloxUsed: day.screens.roblox.usedSec,
       robloxOvertime: day.screens.roblox.overtimeSec ?? 0,
       robloxBonusMin: day.robloxBonusMin ?? 0,

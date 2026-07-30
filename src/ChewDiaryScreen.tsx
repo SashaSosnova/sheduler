@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 import { shareChewReportImage } from './chewReportImage'
 import {
   CHEW_FOODS,
+  applyMustDoFlags,
   chewDurationSec,
   formatPlayTime,
   normalizeDayLog,
   todayKey,
   uid,
 } from './data'
-import { stampPerfectAt } from './progress'
+import { shiftDayKey, stampPerfectAt } from './progress'
 import type { AppData, ChewEntry } from './types'
 
 type Props = {
@@ -16,6 +17,8 @@ type Props = {
   onChange: (next: AppData) => void
   readOnly?: boolean
 }
+
+type ReportPeriod = '14' | 'month' | 'all' | 'custom'
 
 const EMPTY_SIDE = (): string[] => ['', '', '', '', '']
 
@@ -26,6 +29,36 @@ function formatDateRu(key: string): string {
     month: '2-digit',
     year: 'numeric',
   })
+}
+
+function monthStartKey(today = todayKey()): string {
+  return `${today.slice(0, 7)}-01`
+}
+
+function reportRange(
+  period: ReportPeriod,
+  customFrom: string,
+  customTo: string,
+  today = todayKey(),
+): { from: string; to: string } | null {
+  if (period === 'all') return null
+  if (period === '14') {
+    return { from: shiftDayKey(today, -13), to: today }
+  }
+  if (period === 'month') {
+    return { from: monthStartKey(today), to: today }
+  }
+  const from = customFrom || customTo || today
+  const to = customTo || customFrom || today
+  return from <= to ? { from, to } : { from: to, to: from }
+}
+
+function filterEntriesByRange(
+  entries: ChewEntry[],
+  range: { from: string; to: string } | null,
+): ChewEntry[] {
+  if (!range) return entries
+  return entries.filter((e) => e.date >= range.from && e.date <= range.to)
 }
 
 function sideText(values: number[]): string {
@@ -56,6 +89,9 @@ export function ChewDiaryScreen({
   const [shareStatus, setShareStatus] = useState('')
   const [reportOpen, setReportOpen] = useState(false)
   const [shareBusy, setShareBusy] = useState(false)
+  const [reportPeriod, setReportPeriod] = useState<ReportPeriod>('14')
+  const [customFrom, setCustomFrom] = useState(() => shiftDayKey(todayKey(), -13))
+  const [customTo, setCustomTo] = useState(() => todayKey())
   /** Wall-clock start of the current fill session (first cell typed) */
   const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null)
 
@@ -77,6 +113,22 @@ export function ChewDiaryScreen({
     }
     return [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : 1))
   }, [data.chewEntries])
+
+  const range = useMemo(
+    () => reportRange(reportPeriod, customFrom, customTo, key),
+    [reportPeriod, customFrom, customTo, key],
+  )
+
+  const reportEntries = useMemo(
+    () => filterEntriesByRange(allEntries, range),
+    [allEntries, range],
+  )
+
+  const rangeLabel = useMemo(() => {
+    if (!range) return 'все дни'
+    if (range.from === range.to) return formatDateRu(range.from)
+    return `${formatDateRu(range.from)} – ${formatDateRu(range.to)}`
+  }, [range])
 
   const showForm = !readOnly && (!todayEntry || editing)
 
@@ -162,7 +214,7 @@ export function ChewDiaryScreen({
       day,
       normalizeDayLog(key, {
         ...day,
-        mustDo: { ...day.mustDo, chew: true },
+        ...applyMustDoFlags(day, { chew: true }, now),
       }),
     )
     onChange({
@@ -178,11 +230,11 @@ export function ChewDiaryScreen({
   }
 
   async function shareReportImage() {
-    if (shareBusy || allEntries.length === 0) return
+    if (shareBusy || reportEntries.length === 0) return
     setShareBusy(true)
     setShareStatus('')
     try {
-      const result = await shareChewReportImage(allEntries)
+      const result = await shareChewReportImage(reportEntries)
       if (result === 'shared') {
         setShareStatus('Отправлено')
       } else if (result === 'downloaded') {
@@ -334,52 +386,119 @@ export function ChewDiaryScreen({
         <section className="card">
           <div className="card-title-row">
             <h2>Сводка для миотерапевта</h2>
-            <span className="pill">{allEntries.length}</span>
+            <span className="pill">
+              {reportEntries.length}
+              {allEntries.length !== reportEntries.length
+                ? `/${allEntries.length}`
+                : ''}
+            </span>
           </div>
           {allEntries.length > 0 ? (
             <>
-              <div className="chew-table-wrap">
-                <table className="chew-table">
-                  <thead>
-                    <tr>
-                      <th>День</th>
-                      <th>Что жевал</th>
-                      <th>Левая</th>
-                      <th>Правая</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {allEntries.map((entry) => (
-                      <tr key={entry.id}>
-                        <td>{formatDateRu(entry.date)}</td>
-                        <td>{entry.food}</td>
-                        <td>{sideText(entry.left)}</td>
-                        <td>{sideText(entry.right)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <p className="hint" style={{ marginTop: 8 }}>
+                Период для таблицы и картинки
+              </p>
+              <div className="chip-row chew-period-chips">
+                {(
+                  [
+                    ['14', '14 дней'],
+                    ['month', 'Этот месяц'],
+                    ['all', 'Все'],
+                    ['custom', 'Свои даты'],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    className={reportPeriod === id ? 'chip active' : 'chip'}
+                    onClick={() => {
+                      setReportPeriod(id)
+                      if (id === 'custom') {
+                        setCustomFrom(shiftDayKey(key, -13))
+                        setCustomTo(key)
+                      }
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
-              <div className="row-gap">
-                <button
-                  type="button"
-                  className="btn primary"
-                  onClick={() => setReportOpen(true)}
-                >
-                  На весь экран
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  disabled={shareBusy}
-                  onClick={() => void shareReportImage()}
-                >
-                  {shareBusy ? 'Готовим…' : 'Поделиться картинкой'}
-                </button>
-              </div>
-              {shareStatus ? <p className="hint">{shareStatus}</p> : null}
+              {reportPeriod === 'custom' ? (
+                <div className="chew-period-custom">
+                  <label className="field">
+                    <span>С</span>
+                    <input
+                      type="date"
+                      value={customFrom}
+                      max={customTo || key}
+                      onChange={(e) => setCustomFrom(e.target.value)}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>По</span>
+                    <input
+                      type="date"
+                      value={customTo}
+                      min={customFrom || undefined}
+                      max={key}
+                      onChange={(e) => setCustomTo(e.target.value)}
+                    />
+                  </label>
+                </div>
+              ) : null}
+              <p className="hint">{rangeLabel}</p>
+              {reportEntries.length > 0 ? (
+                <>
+                  <div className="chew-table-wrap">
+                    <table className="chew-table">
+                      <thead>
+                        <tr>
+                          <th>День</th>
+                          <th>Что жевал</th>
+                          <th>Левая</th>
+                          <th>Правая</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportEntries.map((entry) => (
+                          <tr key={entry.id}>
+                            <td>{formatDateRu(entry.date)}</td>
+                            <td>{entry.food}</td>
+                            <td>{sideText(entry.left)}</td>
+                            <td>{sideText(entry.right)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="row-gap">
+                    <button
+                      type="button"
+                      className="btn primary"
+                      onClick={() => setReportOpen(true)}
+                    >
+                      На весь экран
+                    </button>
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={shareBusy}
+                      onClick={() => void shareReportImage()}
+                    >
+                      {shareBusy ? 'Готовим…' : 'Поделиться картинкой'}
+                    </button>
+                  </div>
+                  {shareStatus ? <p className="hint">{shareStatus}</p> : null}
+                </>
+              ) : (
+                <p className="hint">В этом периоде записей нет</p>
+              )}
             </>
-          ) : null}
+          ) : (
+            <p className="hint" style={{ marginTop: 8 }}>
+              Пока нет записей дневника
+            </p>
+          )}
         </section>
       ) : null}
 
@@ -397,7 +516,7 @@ export function ChewDiaryScreen({
             <button
               type="button"
               className="btn primary"
-              disabled={shareBusy}
+              disabled={shareBusy || reportEntries.length === 0}
               onClick={() => void shareReportImage()}
             >
               {shareBusy ? 'Готовим…' : 'Поделиться'}
@@ -406,8 +525,8 @@ export function ChewDiaryScreen({
           <div className="chew-report-sheet">
             <h2>Дневник жевания</h2>
             <p className="hint">
-              {allEntries.length}{' '}
-              {allEntries.length === 1 ? 'день' : 'дней'} · для миотерапевта
+              {reportEntries.length}{' '}
+              {reportEntries.length === 1 ? 'день' : 'дней'} · {rangeLabel}
             </p>
             <div className="chew-table-wrap chew-report-table">
               <table className="chew-table">
@@ -420,7 +539,7 @@ export function ChewDiaryScreen({
                   </tr>
                 </thead>
                 <tbody>
-                  {allEntries.map((entry) => (
+                  {reportEntries.map((entry) => (
                     <tr key={entry.id}>
                       <td>{formatDateRu(entry.date)}</td>
                       <td>{entry.food}</td>

@@ -510,6 +510,7 @@ export function emptyDayLog(date: string): DayLog {
     date,
     mode: isCookingWeekday(date) ? 'cooking' : 'home',
     mustDo: {},
+    mustDoAt: {},
     exercisesDone: {},
     timersHonored: {},
     workoutStartedAt: null,
@@ -591,6 +592,7 @@ export function normalizeDayLog(date: string, raw?: Partial<DayLog> | null): Day
     ...raw,
     date,
     mustDo: raw.mustDo ?? {},
+    mustDoAt: normalizeMustDoAt(raw.mustDoAt, raw.mustDo ?? {}),
     exercisesDone: raw.exercisesDone ?? {},
     timersHonored: normalizeBoolMap(raw.timersHonored),
     workoutStartedAt: normalizeTimestamp(raw.workoutStartedAt),
@@ -740,8 +742,16 @@ export function mergeDayLog(
   const a = normalizeDayLog(date, local)
   const b = normalizeDayLog(date, remote)
   const mustDo: Partial<Record<MustDoId, boolean>> = {}
+  const mustDoAt: Partial<Record<MustDoId, number>> = {}
   for (const item of MUST_DO_ITEMS) {
-    if (a.mustDo[item.id] || b.mustDo[item.id]) mustDo[item.id] = true
+    const id = item.id
+    if (a.mustDo[id] || b.mustDo[id]) {
+      mustDo[id] = true
+      const times = [a.mustDoAt[id], b.mustDoAt[id]].filter(
+        (n): n is number => typeof n === 'number' && Number.isFinite(n),
+      )
+      if (times.length) mustDoAt[id] = Math.min(...times)
+    }
   }
   const started = [a.workoutStartedAt, b.workoutStartedAt].filter(
     (n): n is number => n != null,
@@ -773,6 +783,7 @@ export function mergeDayLog(
   return normalizeDayLog(date, {
     mode: a.mode !== 'home' ? a.mode : b.mode,
     mustDo,
+    mustDoAt,
     exercisesDone: mergeBoolMaps(a.exercisesDone, b.exercisesDone),
     timersHonored: mergeBoolMaps(a.timersHonored, b.timersHonored),
     workoutStartedAt: started.length ? Math.min(...started) : null,
@@ -823,6 +834,46 @@ function normalizeBoolMap(raw: unknown): Record<string, boolean> {
     if (value) out[key] = true
   }
   return out
+}
+
+function normalizeMustDoAt(
+  raw: unknown,
+  mustDo: Partial<Record<MustDoId, boolean>>,
+): Partial<Record<MustDoId, number>> {
+  const out: Partial<Record<MustDoId, number>> = {}
+  if (raw && typeof raw === 'object') {
+    for (const item of MUST_DO_ITEMS) {
+      const n = (raw as Record<string, unknown>)[item.id]
+      if (typeof n === 'number' && Number.isFinite(n) && mustDo[item.id]) {
+        out[item.id] = Math.floor(n)
+      }
+    }
+  }
+  return out
+}
+
+/**
+ * Apply must-do checkbox changes and keep first-checked timestamps.
+ * Unchecking clears the time; checking again starts a new stamp.
+ */
+export function applyMustDoFlags(
+  day: DayLog,
+  flags: Partial<Record<MustDoId, boolean>>,
+  at = Date.now(),
+): Pick<DayLog, 'mustDo' | 'mustDoAt'> {
+  const mustDo = { ...day.mustDo }
+  const mustDoAt = { ...(day.mustDoAt ?? {}) }
+  for (const item of MUST_DO_ITEMS) {
+    if (flags[item.id] === undefined) continue
+    const checked = Boolean(flags[item.id])
+    mustDo[item.id] = checked
+    if (checked) {
+      if (mustDoAt[item.id] == null) mustDoAt[item.id] = at
+    } else {
+      delete mustDoAt[item.id]
+    }
+  }
+  return { mustDo, mustDoAt }
 }
 
 function normalizeNonNegInt(raw: unknown): number {
@@ -945,33 +996,64 @@ function normalizeExercise(raw: unknown): Exercise | null {
 /**
  * Merge built-in routine with stored overrides:
  * - default text/timers come from code on each load
- * - user `enabled` is preserved
- * - custom exercises are kept
+ * - user `enabled` and list order are preserved
+ * - custom exercises are kept in their stored positions
+ * - new defaults (app update) insert near their neighbors
  */
 export function resolveExercises(stored: unknown): Exercise[] {
   const list = Array.isArray(stored)
     ? stored.map(normalizeExercise).filter((e): e is Exercise => e !== null)
     : []
-  const byId = new Map(list.map((e) => [e.id, e]))
-  const result: Exercise[] = []
-
-  for (const def of DEFAULT_EXERCISES) {
-    const prev = byId.get(def.id)
-    result.push({
+  if (list.length === 0) {
+    return DEFAULT_EXERCISES.map((def) => ({
       ...def,
-      enabled: prev ? prev.enabled !== false : true,
+      enabled: true,
+      custom: false,
+    }))
+  }
+
+  const defaultById = new Map(DEFAULT_EXERCISES.map((e) => [e.id, e]))
+  const result: Exercise[] = []
+  const seen = new Set<string>()
+
+  for (const row of list) {
+    const def = defaultById.get(row.id)
+    if (def) {
+      result.push({
+        ...def,
+        enabled: row.enabled !== false,
+        custom: false,
+      })
+    } else {
+      result.push({
+        ...row,
+        custom: true,
+        enabled: row.enabled !== false,
+      })
+    }
+    seen.add(row.id)
+  }
+
+  for (let i = 0; i < DEFAULT_EXERCISES.length; i++) {
+    const def = DEFAULT_EXERCISES[i]!
+    if (seen.has(def.id)) continue
+    let insertAt = result.length
+    for (let j = i - 1; j >= 0; j--) {
+      const prevId = DEFAULT_EXERCISES[j]!.id
+      const idx = result.findIndex((e) => e.id === prevId)
+      if (idx >= 0) {
+        insertAt = idx + 1
+        break
+      }
+    }
+    result.splice(insertAt, 0, {
+      ...def,
+      enabled: true,
       custom: false,
     })
-    byId.delete(def.id)
+    seen.add(def.id)
   }
 
-  for (const ex of byId.values()) {
-    result.push({
-      ...ex,
-      custom: true,
-      enabled: ex.enabled !== false,
-    })
-  }
   return result
 }
 
@@ -991,7 +1073,37 @@ export function mergeExercises(a: Exercise[], b: Exercise[]): Exercise[] {
       enabled: prev.enabled === false || ex.enabled === false ? false : true,
     })
   }
-  return resolveExercises([...map.values()])
+  // Prefer local (a) order, then append ids only present on the other side
+  const order: string[] = []
+  for (const ex of a) {
+    if (!order.includes(ex.id)) order.push(ex.id)
+  }
+  for (const ex of b) {
+    if (!order.includes(ex.id)) order.push(ex.id)
+  }
+  return resolveExercises(order.map((id) => map.get(id)!).filter(Boolean))
+}
+
+/** Move an exercise to a new index in the routine list. */
+export function moveExerciseInList(
+  exercises: Exercise[],
+  fromIndex: number,
+  toIndex: number,
+): Exercise[] {
+  if (
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= exercises.length ||
+    toIndex >= exercises.length ||
+    fromIndex === toIndex
+  ) {
+    return exercises
+  }
+  const next = [...exercises]
+  const [item] = next.splice(fromIndex, 1)
+  if (!item) return exercises
+  next.splice(toIndex, 0, item)
+  return next
 }
 
 export function normalizeExerciseControls(raw: unknown): ExerciseControl[] {
@@ -1048,10 +1160,11 @@ export function markAllExercisesDone(
   }
   // Do not invent workout timestamps — a parent checkbox is not a timed session
   // (same-ms start/finish would look like a "shortcut" workout for stickers).
+  const flags = applyMustDoFlags(day, { exercise: true })
   return normalizeDayLog(day.date, {
     ...day,
     exercisesDone,
-    mustDo: { ...day.mustDo, exercise: true },
+    ...flags,
   })
 }
 
@@ -1078,6 +1191,15 @@ export function formatDuration(sec: number): string {
   if (m <= 0) return `${s} сек`
   if (s === 0) return `${m} мин`
   return `${m}:${String(s).padStart(2, '0')}`
+}
+
+/** Local clock time from Unix ms, e.g. «14:15». */
+export function formatTimeOfDay(ms: number): string {
+  const d = new Date(ms)
+  if (!Number.isFinite(d.getTime())) return ''
+  const h = String(d.getHours()).padStart(2, '0')
+  const m = String(d.getMinutes()).padStart(2, '0')
+  return `${h}:${m}`
 }
 
 /** How many timed rounds an exercise needs (from reps text like «2 подхода»). */

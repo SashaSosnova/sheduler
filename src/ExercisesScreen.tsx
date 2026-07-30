@@ -1,13 +1,20 @@
-import { useMemo, useState } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import {
   activeExercises,
+  applyMustDoFlags,
   controlForExerciseOnDate,
   controlsForDate,
   exerciseGroupNames,
   formatDuration,
   formatPlayTime,
   groupExercises,
-  markAllExercisesDone,
+  moveExerciseInList,
   normalizeDayLog,
   parseTimerRounds,
   todayKey,
@@ -39,10 +46,6 @@ export function ExercisesScreen({
   const total = routine.length
   const workoutSec = workoutDurationSec(day)
   const groups = useMemo(() => groupExercises(routine), [routine])
-  const allGroups = useMemo(
-    () => groupExercises(data.exercises),
-    [data.exercises],
-  )
 
   const current =
     routine.find((e) => !day.exercisesDone[e.id]) ?? null
@@ -84,10 +87,11 @@ export function ExercisesScreen({
         timersHonored,
         workoutStartedAt,
         workoutFinishedAt,
-        mustDo: {
-          ...day.mustDo,
-          exercise: everyDone,
-        },
+        ...applyMustDoFlags(
+          day,
+          { exercise: everyDone },
+          everyDone ? (workoutFinishedAt ?? now) : now,
+        ),
       }),
     )
     onChange({
@@ -127,7 +131,6 @@ export function ExercisesScreen({
         total={total}
         workoutSec={workoutSec}
         groups={groups}
-        allGroups={allGroups}
         todayControls={todayControls}
       />
     )
@@ -292,7 +295,6 @@ function ParentExerciseScreen({
   total,
   workoutSec,
   groups,
-  allGroups,
   todayControls,
 }: {
   data: AppData
@@ -303,38 +305,32 @@ function ParentExerciseScreen({
   total: number
   workoutSec: number | null
   groups: ReturnType<typeof groupExercises>
-  allGroups: ReturnType<typeof groupExercises>
   todayControls: ExerciseControl[]
 }) {
   const [manageOpen, setManageOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [controlOpen, setControlOpen] = useState(false)
-  const [controlExerciseId, setControlExerciseId] = useState('')
+  const [controlIds, setControlIds] = useState<string[]>([])
   const [controlDate, setControlDate] = useState(dayKey)
   const groupOptions = exerciseGroupNames(data.exercises)
-  const workoutComplete =
-    total > 0 && doneCount === total && Boolean(day.mustDo.exercise)
-
-  function markWholeWorkout() {
-    const marked = stampPerfectAt(
-      day,
-      markAllExercisesDone(day, data.exercises),
-    )
-    onChange({
-      ...data,
-      days: {
-        ...data.days,
-        [dayKey]: marked,
-      },
-    })
-  }
-
+  const active = activeExercises(data.exercises)
+  const controlPickerGroups = useMemo(
+    () => groupExercises(active),
+    [active],
+  )
   function setExerciseEnabled(id: string, enabled: boolean) {
     onChange({
       ...data,
       exercises: data.exercises.map((ex) =>
         ex.id === id ? { ...ex, enabled } : ex,
       ),
+    })
+  }
+
+  function reorderExercises(fromIndex: number, toIndex: number) {
+    onChange({
+      ...data,
+      exercises: moveExerciseInList(data.exercises, fromIndex, toIndex),
     })
   }
 
@@ -352,29 +348,43 @@ function ParentExerciseScreen({
     setAddOpen(false)
   }
 
-  function assignControl() {
-    if (!controlExerciseId || !controlDate) return
-    const exists = (data.exerciseControls ?? []).some(
-      (c) =>
-        c.exerciseId === controlExerciseId &&
-        c.date === controlDate &&
-        !c.filmed,
+  function toggleControlPick(id: string) {
+    setControlIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     )
-    if (exists) {
-      setControlOpen(false)
-      return
+  }
+
+  function assignControls() {
+    if (controlIds.length === 0 || !controlDate) return
+    const existing = data.exerciseControls ?? []
+    const additions: ExerciseControl[] = []
+    for (const exerciseId of controlIds) {
+      const already = existing.some(
+        (c) =>
+          c.exerciseId === exerciseId &&
+          c.date === controlDate &&
+          !c.filmed,
+      )
+      if (already) continue
+      if (additions.some((c) => c.exerciseId === exerciseId)) continue
+      additions.push({
+        id: uid(),
+        exerciseId,
+        date: controlDate,
+        filmed: false,
+      })
     }
-    const item: ExerciseControl = {
-      id: uid(),
-      exerciseId: controlExerciseId,
-      date: controlDate,
-      filmed: false,
+    if (additions.length === 0) {
+      setControlOpen(false)
+      setControlIds([])
+      return
     }
     onChange({
       ...data,
-      exerciseControls: [...(data.exerciseControls ?? []), item],
+      exerciseControls: [...existing, ...additions],
     })
     setControlOpen(false)
+    setControlIds([])
   }
 
   function removeControl(id: string) {
@@ -420,35 +430,14 @@ function ParentExerciseScreen({
       </header>
 
       <section className="card">
-        <button
-          type="button"
-          className="btn primary wide"
-          disabled={workoutComplete}
-          onClick={markWholeWorkout}
-        >
-          {workoutComplete
-            ? 'Зарядка уже отмечена'
-            : 'Отметить всю зарядку за сегодня'}
-        </button>
-        <p className="hint" style={{ marginTop: 8 }}>
-          Если делали с миотерапевтом — можно отметить без прохождения в
-          приложении.
-        </p>
-      </section>
-
-      <section className="card">
         <div className="card-title-row">
           <h2>Контроль (видео)</h2>
           <button
             type="button"
             className="pill muted"
             onClick={() => {
-              const first =
-                activeExercises(data.exercises)[0]?.id ??
-                data.exercises[0]?.id ??
-                ''
-              setControlExerciseId(first)
               setControlDate(dayKey)
+              setControlIds([])
               setControlOpen((v) => !v)
             }}
           >
@@ -516,20 +505,7 @@ function ParentExerciseScreen({
           </ul>
         ) : null}
         {controlOpen ? (
-          <div className="ex-add-form" style={{ marginTop: 12 }}>
-            <label className="field">
-              <span>Упражнение</span>
-              <select
-                value={controlExerciseId}
-                onChange={(e) => setControlExerciseId(e.target.value)}
-              >
-                {activeExercises(data.exercises).map((ex) => (
-                  <option key={ex.id} value={ex.id}>
-                    {ex.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div className="ex-control-form">
             <label className="field">
               <span>Дата съёмки</span>
               <input
@@ -538,14 +514,52 @@ function ParentExerciseScreen({
                 onChange={(e) => setControlDate(e.target.value)}
               />
             </label>
-            <button
-              type="button"
-              className="btn primary"
-              disabled={!controlExerciseId || !controlDate}
-              onClick={assignControl}
-            >
-              Сохранить контроль
-            </button>
+            <p className="hint">Отметь одно или несколько упражнений</p>
+            <div className="ex-control-pick">
+              {controlPickerGroups.map(({ group, items }) => (
+                <div key={group} className="ex-control-pick-group">
+                  <p className="ex-control-pick-title">{group}</p>
+                  <ul className="check-list">
+                    {items.map((ex) => {
+                      const checked = controlIds.includes(ex.id)
+                      return (
+                        <li key={ex.id}>
+                          <label className="check-row">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleControlPick(ex.id)}
+                            />
+                            <span>{ex.name}</span>
+                          </label>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
+            <div className="row-gap" style={{ marginTop: 4 }}>
+              <button
+                type="button"
+                className="btn primary"
+                disabled={controlIds.length === 0 || !controlDate}
+                onClick={assignControls}
+              >
+                {controlIds.length > 1
+                  ? `Назначить контроль (${controlIds.length})`
+                  : 'Назначить контроль'}
+              </button>
+              {controlIds.length > 0 ? (
+                <button
+                  type="button"
+                  className="btn ghost"
+                  onClick={() => setControlIds([])}
+                >
+                  Сбросить выбор
+                </button>
+              ) : null}
+            </div>
           </div>
         ) : null}
       </section>
@@ -599,79 +613,199 @@ function ParentExerciseScreen({
       <section className="card">
         <div className="card-title-row">
           <h2>Состав комплекса</h2>
-          <button
-            type="button"
-            className="pill muted"
-            onClick={() => setManageOpen((v) => !v)}
-          >
-            {manageOpen ? 'Скрыть' : 'Настроить'}
-          </button>
-        </div>
-        <p className="hint">
-          Отключённые упражнения не показываются ребёнку. Можно добавить новые.
-        </p>
-        {manageOpen ? (
-          <>
-            <div className="parent-ex-groups" style={{ marginTop: 12 }}>
-              {allGroups.map(({ group, items }) => (
-                <details key={group} className="parent-ex-group" open>
-                  <summary className="parent-ex-group-head">
-                    <span className="parent-ex-group-title">{group}</span>
-                    <span className="pill muted">
-                      {items.filter((e) => e.enabled !== false).length}/
-                      {items.length}
-                    </span>
-                  </summary>
-                  <ul className="parent-ex-list">
-                    {items.map((ex) => {
-                      const on = ex.enabled !== false
-                      return (
-                        <li
-                          key={ex.id}
-                          className={`parent-ex-row ${on ? '' : 'is-disabled'}`}
-                        >
-                          <label className="parent-ex-item">
-                            <input
-                              type="checkbox"
-                              checked={on}
-                              onChange={() => setExerciseEnabled(ex.id, !on)}
-                            />
-                            <span className="ex-name">
-                              {ex.name}
-                              {ex.custom ? (
-                                <span className="hint"> · своё</span>
-                              ) : null}
-                              {!on ? (
-                                <span className="hint"> · отключено</span>
-                              ) : null}
-                            </span>
-                          </label>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                </details>
-              ))}
-            </div>
+          <div className="ex-manage-head-actions">
             <button
               type="button"
-              className="linkish"
-              style={{ marginTop: 12 }}
-              onClick={() => setAddOpen((v) => !v)}
+              className={addOpen ? 'pill' : 'pill muted'}
+              onClick={() => {
+                setAddOpen((v) => !v)
+                if (!manageOpen) setManageOpen(true)
+              }}
             >
-              {addOpen ? 'Скрыть форму' : 'Добавить упражнение →'}
+              {addOpen ? 'Закрыть' : '+ Добавить'}
             </button>
-            {addOpen ? (
-              <AddExerciseForm
-                groupOptions={groupOptions}
-                onAdd={addExercise}
-                onCancel={() => setAddOpen(false)}
-              />
-            ) : null}
-          </>
+            <button
+              type="button"
+              className="pill muted"
+              onClick={() => setManageOpen((v) => !v)}
+            >
+              {manageOpen ? 'Скрыть' : 'Настроить'}
+            </button>
+          </div>
+        </div>
+        <p className="hint">
+          Зажми строку и перетащи на нужное место. Отключённые не показываются
+          ребёнку.
+        </p>
+        {addOpen ? (
+          <AddExerciseForm
+            groupOptions={groupOptions}
+            onAdd={addExercise}
+            onCancel={() => setAddOpen(false)}
+          />
+        ) : null}
+        {manageOpen ? (
+          <ManageExerciseList
+            exercises={data.exercises}
+            onToggleEnabled={setExerciseEnabled}
+            onReorder={reorderExercises}
+          />
         ) : null}
       </section>
     </div>
+  )
+}
+
+const LONG_PRESS_MS = 380
+
+function ManageExerciseList({
+  exercises,
+  onToggleEnabled,
+  onReorder,
+}: {
+  exercises: Exercise[]
+  onToggleEnabled: (id: string, enabled: boolean) => void
+  onReorder: (fromIndex: number, toIndex: number) => void
+}) {
+  const listRef = useRef<HTMLUListElement>(null)
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const [overIndex, setOverIndex] = useState<number | null>(null)
+  const pressTimer = useRef<number | null>(null)
+  const fromIndexRef = useRef<number | null>(null)
+  const overIndexRef = useRef<number | null>(null)
+  const draggingRef = useRef(false)
+  const onReorderRef = useRef(onReorder)
+  onReorderRef.current = onReorder
+
+  function clearPressTimer() {
+    if (pressTimer.current != null) {
+      window.clearTimeout(pressTimer.current)
+      pressTimer.current = null
+    }
+  }
+
+  function indexFromPoint(clientY: number): number | null {
+    const list = listRef.current
+    if (!list) return null
+    const rows = [...list.querySelectorAll<HTMLElement>('[data-ex-index]')]
+    if (rows.length === 0) return null
+    for (const row of rows) {
+      const rect = row.getBoundingClientRect()
+      if (clientY >= rect.top && clientY <= rect.bottom) {
+        return Number(row.dataset.exIndex)
+      }
+    }
+    const first = rows[0]!.getBoundingClientRect()
+    const last = rows[rows.length - 1]!.getBoundingClientRect()
+    if (clientY < first.top) return 0
+    if (clientY > last.bottom) return rows.length - 1
+    return null
+  }
+
+  function endDrag(commit: boolean) {
+    clearPressTimer()
+    const from = fromIndexRef.current
+    const to = overIndexRef.current
+    draggingRef.current = false
+    fromIndexRef.current = null
+    overIndexRef.current = null
+    setDragIndex(null)
+    setOverIndex(null)
+    if (commit && from != null && to != null && from !== to) {
+      onReorderRef.current(from, to)
+    }
+  }
+
+  useEffect(() => {
+    function onMove(e: PointerEvent) {
+      if (!draggingRef.current) return
+      e.preventDefault()
+      const idx = indexFromPoint(e.clientY)
+      if (idx == null) return
+      overIndexRef.current = idx
+      setOverIndex(idx)
+    }
+    function onUp() {
+      if (draggingRef.current) endDrag(true)
+      else clearPressTimer()
+    }
+    window.addEventListener('pointermove', onMove, { passive: false })
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+      clearPressTimer()
+    }
+  }, [])
+
+  function onRowPointerDown(index: number, e: ReactPointerEvent) {
+    if (
+      (e.target as HTMLElement).closest('input,button,label.ex-manage-toggle')
+    ) {
+      return
+    }
+    clearPressTimer()
+    pressTimer.current = window.setTimeout(() => {
+      draggingRef.current = true
+      fromIndexRef.current = index
+      overIndexRef.current = index
+      setDragIndex(index)
+      setOverIndex(index)
+    }, LONG_PRESS_MS)
+  }
+
+  function onRowPointerUp() {
+    if (!draggingRef.current) clearPressTimer()
+  }
+
+  return (
+    <ul ref={listRef} className="ex-manage-list">
+      {exercises.map((ex, index) => {
+        const on = ex.enabled !== false
+        const isDrag = dragIndex === index
+        const isOver = overIndex === index && dragIndex != null && dragIndex !== index
+        return (
+          <li
+            key={ex.id}
+            data-ex-index={index}
+            className={[
+              'ex-manage-row',
+              on ? '' : 'is-disabled',
+              isDrag ? 'is-dragging' : '',
+              isOver ? 'is-drop-target' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            onPointerDown={(e) => onRowPointerDown(index, e)}
+            onPointerUp={onRowPointerUp}
+            onPointerCancel={onRowPointerUp}
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            <span className="ex-manage-handle" aria-hidden>
+              ⋮⋮
+            </span>
+            <label className="ex-manage-toggle">
+              <input
+                type="checkbox"
+                checked={on}
+                onChange={() => onToggleEnabled(ex.id, !on)}
+              />
+            </label>
+            <span className="ex-manage-body">
+              <span className="ex-manage-name">
+                {ex.name}
+                {ex.custom ? <span className="hint"> · своё</span> : null}
+                {!on ? <span className="hint"> · отключено</span> : null}
+              </span>
+              <span className="ex-manage-group">{ex.group}</span>
+            </span>
+            <span className="ex-manage-pos">{index + 1}</span>
+          </li>
+        )
+      })}
+    </ul>
   )
 }
 

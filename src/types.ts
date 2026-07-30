@@ -104,6 +104,8 @@ export type DayLog = {
   date: string
   mode: DayMode
   mustDo: Partial<Record<MustDoId, boolean>>
+  /** Unix ms when each must-do was first checked (cleared if unchecked) */
+  mustDoAt: Partial<Record<MustDoId, number>>
   exercisesDone: Record<string, boolean>
   /** Timed exercises where the full timer (all rounds) was waited out */
   timersHonored: Record<string, boolean>

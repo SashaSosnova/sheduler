@@ -7,6 +7,7 @@ import {
   MAIN_MUST_DO,
   MUST_DO_ITEMS,
   activeExercises,
+  applyMustDoFlags,
   chewDurationSec,
   formatPlayTime,
   normalizeDayLog,
@@ -95,14 +96,13 @@ export function TodayScreen({
     ) {
       return
     }
-    patchDay({
-      mustDo: {
-        ...day.mustDo,
+    patchDay(
+      applyMustDoFlags(day, {
         exercise: nextExercise,
         chew: nextChew,
         read: nextRead,
-      },
-    })
+      }),
+    )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     exerciseComplete,
@@ -115,9 +115,7 @@ export function TodayScreen({
 
   function toggleMust(id: MustDoId) {
     if (APP_LOCKED_MUST_DO.includes(id)) return
-    patchDay({
-      mustDo: { ...day.mustDo, [id]: !day.mustDo[id] },
-    })
+    patchDay(applyMustDoFlags(day, { [id]: !day.mustDo[id] }))
   }
 
   function isMustChecked(id: MustDoId): boolean {
@@ -300,7 +298,7 @@ export function TodayScreen({
                             onClick={() => {
                               patchDay({
                                 createNote: idea,
-                                mustDo: { ...day.mustDo, create: true },
+                                ...applyMustDoFlags(day, { create: true }),
                               })
                               setCreateOpen(false)
                             }}
@@ -321,10 +319,9 @@ export function TodayScreen({
                             const v = e.target.value
                             patchDay({
                               createNote: v,
-                              mustDo: {
-                                ...day.mustDo,
+                              ...applyMustDoFlags(day, {
                                 create: Boolean(v.trim()),
-                              },
+                              }),
                             })
                           }}
                           onBlur={() => {
