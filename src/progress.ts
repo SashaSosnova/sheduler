@@ -521,12 +521,12 @@ export const LEVEL_RANKS: LevelRank[] = [
   { id: 'wings', level: 6, image: './stickers/levels/wings.png?v=2' },
   { id: 'dark', level: 7, image: './stickers/levels/dark.png?v=2' },
   { id: 'legend', level: 8, image: './stickers/levels/legend.png?v=2' },
-  { id: 'gojo', level: 9, image: './stickers/levels/gojo.png?v=1' },
-  { id: 'demon', level: 10, image: './stickers/levels/demon.png?v=1' },
-  { id: 'shadow', level: 11, image: './stickers/levels/shadow.png?v=1' },
-  { id: 'cyber', level: 12, image: './stickers/levels/cyber.png?v=1' },
-  { id: 'overlord', level: 13, image: './stickers/levels/overlord.png?v=1' },
-  { id: 'phantom', level: 14, image: './stickers/levels/phantom.png?v=1' },
+  { id: 'gojo', level: 9, image: './stickers/levels/gojo.png?v=2' },
+  { id: 'demon', level: 10, image: './stickers/levels/demon.png?v=2' },
+  { id: 'shadow', level: 11, image: './stickers/levels/shadow.png?v=2' },
+  { id: 'cyber', level: 12, image: './stickers/levels/cyber.png?v=2' },
+  { id: 'overlord', level: 13, image: './stickers/levels/overlord.png?v=2' },
+  { id: 'phantom', level: 14, image: './stickers/levels/phantom.png?v=2' },
 ]
 
 /** Skin shown for a player level (clamps to max rank). */
