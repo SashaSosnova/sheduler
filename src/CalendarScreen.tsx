@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   EXTRA_TASK_IDEAS,
+  MED_SLOT_ITEMS,
   MUST_DO_ITEMS,
   SCREEN_LIMITS,
   activeExercises,
+  applyMedSlotFlags,
   applyMustDoFlags,
   chewDurationSec,
   controlsForDate,
@@ -22,7 +24,7 @@ import {
   ReminderSection,
   TodayTimedReminderBanner,
 } from './ReminderSection'
-import type { AppData, MustDoId } from './types'
+import type { AppData, MedSlotId, MustDoId } from './types'
 
 type Props = {
   data: AppData
@@ -249,6 +251,12 @@ export function CalendarScreen({
       return
     }
     patchSelected(applyMustDoFlags(day, { [id]: nextChecked }))
+  }
+
+  function toggleMedSlot(id: MedSlotId) {
+    if (!canEditSelected || !onChange) return
+    const day = normalizeDayLog(selected, data.days[selected])
+    patchSelected(applyMedSlotFlags(day, { [id]: !day.medSlots[id] }))
   }
 
   function addExtraTask(text: string) {
@@ -543,6 +551,50 @@ export function CalendarScreen({
             </div>
           ))
         )}
+
+        <div className="calendar-detail-block">
+          <h3>Таблетки</h3>
+          {markingForChild && canEditSelected ? (
+            <ul className="check-list">
+              {MED_SLOT_ITEMS.map((item) => {
+                const at = detail.day.medSlotsAt[item.id]
+                return (
+                  <li key={item.id}>
+                    <label className="check-row">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(detail.day.medSlots[item.id])}
+                        onChange={() => toggleMedSlot(item.id)}
+                      />
+                      <span>
+                        {item.label}
+                        {at != null ? (
+                          <span className="hint">
+                            {' '}
+                            — в {formatTimeOfDay(at)}
+                          </span>
+                        ) : (
+                          <span className="hint"> — не отмечено</span>
+                        )}
+                      </span>
+                    </label>
+                  </li>
+                )
+              })}
+            </ul>
+          ) : (
+            <p className="hint">
+              {MED_SLOT_ITEMS.map((item) => {
+                const done = Boolean(detail.day.medSlots[item.id])
+                const at = detail.day.medSlotsAt[item.id]
+                if (!done) return `${item.label} —`
+                return at != null
+                  ? `${item.label} ✓ ${formatTimeOfDay(at)}`
+                  : `${item.label} ✓`
+              }).join(' · ')}
+            </p>
+          )}
+        </div>
 
         {detail.dayControls.length > 0 ? (
           <div className="calendar-detail-block">

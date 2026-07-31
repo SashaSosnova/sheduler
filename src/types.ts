@@ -43,6 +43,9 @@ export type MustDoId =
   | 'wash-am'
   | 'wash-pm'
 
+/** Pill intake slots — separate from must-do / perfect-day stars */
+export type MedSlotId = 'morning' | 'day' | 'evening'
+
 export type ScreenKind = 'roblox'
 
 export type ScreenSlot = {
@@ -106,6 +109,10 @@ export type DayLog = {
   mustDo: Partial<Record<MustDoId, boolean>>
   /** Unix ms when each must-do was first checked (cleared if unchecked) */
   mustDoAt: Partial<Record<MustDoId, number>>
+  /** Pill tracker: morning / day / evening */
+  medSlots: Partial<Record<MedSlotId, boolean>>
+  /** Unix ms when each med slot was first checked (cleared if unchecked) */
+  medSlotsAt: Partial<Record<MedSlotId, number>>
   exercisesDone: Record<string, boolean>
   /** Timed exercises where the full timer (all rounds) was waited out */
   timersHonored: Record<string, boolean>

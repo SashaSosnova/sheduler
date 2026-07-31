@@ -6,6 +6,7 @@ import type {
   DayReminder,
   Exercise,
   ExerciseControl,
+  MedSlotId,
   MustDoId,
   ScreenSlot,
 } from './types'
@@ -18,6 +19,12 @@ export const MUST_DO_ITEMS: { id: MustDoId; label: string }[] = [
   { id: 'chew', label: 'Заполнить дневник жевания' },
   { id: 'read', label: 'Почитать книгу' },
   { id: 'create', label: 'Заняться творчеством' },
+]
+
+export const MED_SLOT_ITEMS: { id: MedSlotId; label: string }[] = [
+  { id: 'morning', label: 'Утро' },
+  { id: 'day', label: 'День' },
+  { id: 'evening', label: 'Вечер' },
 ]
 
 export const CHEW_FOODS = ['Морковь', 'Яблоко'] as const
@@ -511,6 +518,8 @@ export function emptyDayLog(date: string): DayLog {
     mode: isCookingWeekday(date) ? 'cooking' : 'home',
     mustDo: {},
     mustDoAt: {},
+    medSlots: {},
+    medSlotsAt: {},
     exercisesDone: {},
     timersHonored: {},
     workoutStartedAt: null,
@@ -593,6 +602,8 @@ export function normalizeDayLog(date: string, raw?: Partial<DayLog> | null): Day
     date,
     mustDo: raw.mustDo ?? {},
     mustDoAt: normalizeMustDoAt(raw.mustDoAt, raw.mustDo ?? {}),
+    medSlots: normalizeMedSlots(raw.medSlots),
+    medSlotsAt: normalizeMedSlotsAt(raw.medSlotsAt, normalizeMedSlots(raw.medSlots)),
     exercisesDone: raw.exercisesDone ?? {},
     timersHonored: normalizeBoolMap(raw.timersHonored),
     workoutStartedAt: normalizeTimestamp(raw.workoutStartedAt),
@@ -753,6 +764,18 @@ export function mergeDayLog(
       if (times.length) mustDoAt[id] = Math.min(...times)
     }
   }
+  const medSlots: Partial<Record<MedSlotId, boolean>> = {}
+  const medSlotsAt: Partial<Record<MedSlotId, number>> = {}
+  for (const item of MED_SLOT_ITEMS) {
+    const id = item.id
+    if (a.medSlots[id] || b.medSlots[id]) {
+      medSlots[id] = true
+      const times = [a.medSlotsAt[id], b.medSlotsAt[id]].filter(
+        (n): n is number => typeof n === 'number' && Number.isFinite(n),
+      )
+      if (times.length) medSlotsAt[id] = Math.min(...times)
+    }
+  }
   const started = [a.workoutStartedAt, b.workoutStartedAt].filter(
     (n): n is number => n != null,
   )
@@ -784,6 +807,8 @@ export function mergeDayLog(
     mode: a.mode !== 'home' ? a.mode : b.mode,
     mustDo,
     mustDoAt,
+    medSlots,
+    medSlotsAt,
     exercisesDone: mergeBoolMaps(a.exercisesDone, b.exercisesDone),
     timersHonored: mergeBoolMaps(a.timersHonored, b.timersHonored),
     workoutStartedAt: started.length ? Math.min(...started) : null,
@@ -874,6 +899,57 @@ export function applyMustDoFlags(
     }
   }
   return { mustDo, mustDoAt }
+}
+
+function normalizeMedSlots(
+  raw: unknown,
+): Partial<Record<MedSlotId, boolean>> {
+  const out: Partial<Record<MedSlotId, boolean>> = {}
+  if (!raw || typeof raw !== 'object') return out
+  for (const item of MED_SLOT_ITEMS) {
+    if ((raw as Record<string, unknown>)[item.id]) out[item.id] = true
+  }
+  return out
+}
+
+function normalizeMedSlotsAt(
+  raw: unknown,
+  medSlots: Partial<Record<MedSlotId, boolean>>,
+): Partial<Record<MedSlotId, number>> {
+  const out: Partial<Record<MedSlotId, number>> = {}
+  if (raw && typeof raw === 'object') {
+    for (const item of MED_SLOT_ITEMS) {
+      const n = (raw as Record<string, unknown>)[item.id]
+      if (typeof n === 'number' && Number.isFinite(n) && medSlots[item.id]) {
+        out[item.id] = Math.floor(n)
+      }
+    }
+  }
+  return out
+}
+
+/**
+ * Apply pill-slot checkbox changes and keep first-checked timestamps.
+ * Unchecking clears the time; checking again starts a new stamp.
+ */
+export function applyMedSlotFlags(
+  day: DayLog,
+  flags: Partial<Record<MedSlotId, boolean>>,
+  at = Date.now(),
+): Pick<DayLog, 'medSlots' | 'medSlotsAt'> {
+  const medSlots = { ...day.medSlots }
+  const medSlotsAt = { ...(day.medSlotsAt ?? {}) }
+  for (const item of MED_SLOT_ITEMS) {
+    if (flags[item.id] === undefined) continue
+    const checked = Boolean(flags[item.id])
+    medSlots[item.id] = checked
+    if (checked) {
+      if (medSlotsAt[item.id] == null) medSlotsAt[item.id] = at
+    } else {
+      delete medSlotsAt[item.id]
+    }
+  }
+  return { medSlots, medSlotsAt }
 }
 
 function normalizeNonNegInt(raw: unknown): number {
@@ -1061,6 +1137,11 @@ export function resolveExercises(stored: unknown): Exercise[] {
   return result
 }
 
+/**
+ * Merge exercise catalogs from local (a) and remote/cloud (b).
+ * Field values merge; disable wins. Order follows remote (b) so parent
+ * add/reorder reaches the child — local-only ids append at the end.
+ */
 export function mergeExercises(a: Exercise[], b: Exercise[]): Exercise[] {
   const map = new Map<string, Exercise>()
   for (const ex of [...a, ...b]) {
@@ -1077,12 +1158,12 @@ export function mergeExercises(a: Exercise[], b: Exercise[]): Exercise[] {
       enabled: prev.enabled === false || ex.enabled === false ? false : true,
     })
   }
-  // Prefer local (a) order, then append ids only present on the other side
+  // Prefer remote (b) order, then append ids only present locally
   const order: string[] = []
-  for (const ex of a) {
+  for (const ex of b) {
     if (!order.includes(ex.id)) order.push(ex.id)
   }
-  for (const ex of b) {
+  for (const ex of a) {
     if (!order.includes(ex.id)) order.push(ex.id)
   }
   return resolveExercises(order.map((id) => map.get(id)!).filter(Boolean))

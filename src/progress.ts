@@ -501,14 +501,16 @@ export const STICKERS: Sticker[] = [
 /** Roblox avatar skin for the level card (separate from achievement stickers). */
 export type LevelRank = {
   id: string
-  /** Min player level for this skin (1…8) */
+  /** Min player level for this skin (1…14) */
   level: number
   image: string
 }
 
 /**
- * Cumulative Roblox avatar: each level adds gear on top of the previous look.
- * Levels above 8 keep the legend skin.
+ * Roblox avatar skins by level.
+ * Levels 1–8 build up gear on the classic noob look.
+ * Levels 9–14 are prestige skins (distinct characters).
+ * Levels above 14 keep the phantom skin.
  */
 export const LEVEL_RANKS: LevelRank[] = [
   { id: 'nub', level: 1, image: './stickers/levels/nub.png?v=2' },
@@ -519,6 +521,12 @@ export const LEVEL_RANKS: LevelRank[] = [
   { id: 'wings', level: 6, image: './stickers/levels/wings.png?v=2' },
   { id: 'dark', level: 7, image: './stickers/levels/dark.png?v=2' },
   { id: 'legend', level: 8, image: './stickers/levels/legend.png?v=2' },
+  { id: 'gojo', level: 9, image: './stickers/levels/gojo.png?v=1' },
+  { id: 'demon', level: 10, image: './stickers/levels/demon.png?v=1' },
+  { id: 'shadow', level: 11, image: './stickers/levels/shadow.png?v=1' },
+  { id: 'cyber', level: 12, image: './stickers/levels/cyber.png?v=1' },
+  { id: 'overlord', level: 13, image: './stickers/levels/overlord.png?v=1' },
+  { id: 'phantom', level: 14, image: './stickers/levels/phantom.png?v=1' },
 ]
 
 /** Skin shown for a player level (clamps to max rank). */

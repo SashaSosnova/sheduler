@@ -319,6 +319,7 @@ function applyCloud(prev: AppData, payload: CloudPayload): AppData {
   )
   const localBanksAt = normalizeNonNegInt(prev.banksUpdatedAt)
   const preferRemoteBanks = remoteBanksAt >= localBanksAt
+  // Remote order wins (parent add/reorder); see mergeExercises.
   const exercises = mergeExercises(
     prev.exercises ?? [],
     resolveExercises(payload.exercises ?? prev.exercises),

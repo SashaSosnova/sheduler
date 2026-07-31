@@ -5,11 +5,14 @@ import {
   CREATE_IDEAS,
   EXTRA_TASK_IDEAS,
   MAIN_MUST_DO,
+  MED_SLOT_ITEMS,
   MUST_DO_ITEMS,
   activeExercises,
+  applyMedSlotFlags,
   applyMustDoFlags,
   chewDurationSec,
   formatPlayTime,
+  formatTimeOfDay,
   normalizeDayLog,
   todayKey,
   uid,
@@ -22,7 +25,7 @@ import {
 } from './ReminderSection'
 import { playDing } from './sound'
 import { useTomSawyerReadToday } from './tomSawyerSync'
-import type { AppData, MustDoId } from './types'
+import type { AppData, MedSlotId, MustDoId } from './types'
 
 type Props = {
   data: AppData
@@ -40,6 +43,7 @@ export function TodayScreen({
   const key = todayKey()
   const day = normalizeDayLog(key, data.days[key])
   const doneCount = MUST_DO_ITEMS.filter((i) => day.mustDo[i.id]).length
+  const medDoneCount = MED_SLOT_ITEMS.filter((i) => day.medSlots[i.id]).length
   const active = activeExercises(data.exercises)
   const exerciseDone = active.filter((e) => day.exercisesDone[e.id]).length
   const exerciseTotal = active.length
@@ -116,6 +120,10 @@ export function TodayScreen({
   function toggleMust(id: MustDoId) {
     if (APP_LOCKED_MUST_DO.includes(id)) return
     patchDay(applyMustDoFlags(day, { [id]: !day.mustDo[id] }))
+  }
+
+  function toggleMedSlot(id: MedSlotId) {
+    patchDay(applyMedSlotFlags(day, { [id]: !day.medSlots[id] }))
   }
 
   function isMustChecked(id: MustDoId): boolean {
@@ -335,6 +343,37 @@ export function TodayScreen({
                 </div>
               ) : null}
             </li>
+            )
+          })}
+        </ul>
+      </section>
+
+      <section className="card">
+        <div className="card-title-row">
+          <h2>Таблетки</h2>
+          <span className={medDoneCount === MED_SLOT_ITEMS.length ? 'pill' : 'pill muted'}>
+            {medDoneCount}/{MED_SLOT_ITEMS.length}
+          </span>
+        </div>
+        <ul className="check-list">
+          {MED_SLOT_ITEMS.map((item) => {
+            const at = day.medSlotsAt[item.id]
+            return (
+              <li key={item.id}>
+                <label className="check-row">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(day.medSlots[item.id])}
+                    onChange={() => toggleMedSlot(item.id)}
+                  />
+                  <span>
+                    {item.label}
+                    {at != null ? (
+                      <span className="hint"> · в {formatTimeOfDay(at)}</span>
+                    ) : null}
+                  </span>
+                </label>
+              </li>
             )
           })}
         </ul>

@@ -303,6 +303,8 @@ function ParentExerciseScreen({
 }) {
   const [addOpen, setAddOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  /** New exercise kept local until first Save (with order). */
+  const [draftExercise, setDraftExercise] = useState<Exercise | null>(null)
   const [controlOpen, setControlOpen] = useState(false)
   const [controlIds, setControlIds] = useState<string[]>([])
   const [controlDate, setControlDate] = useState(dayKey)
@@ -316,25 +318,41 @@ function ParentExerciseScreen({
     () => groupExercises(active),
     [active],
   )
-  const editingExercise = editingId
-    ? (data.exercises.find((e) => e.id === editingId) ?? null)
-    : null
-  const editingIndex = editingId
-    ? data.exercises.findIndex((e) => e.id === editingId)
-    : -1
+  const editingExercise =
+    draftExercise && draftExercise.id === editingId
+      ? draftExercise
+      : editingId
+        ? (data.exercises.find((e) => e.id === editingId) ?? null)
+        : null
+  const editingIndex = draftExercise && draftExercise.id === editingId
+    ? data.exercises.length
+    : editingId
+      ? data.exercises.findIndex((e) => e.id === editingId)
+      : -1
+  const editingTotal =
+    draftExercise && draftExercise.id === editingId
+      ? data.exercises.length + 1
+      : data.exercises.length
 
   function saveExercise(next: Exercise, orderPos: number) {
-    const withEdits = data.exercises.map((ex) =>
-      ex.id === next.id ? next : ex,
-    )
+    const base =
+      draftExercise && draftExercise.id === next.id
+        ? [...data.exercises, next]
+        : data.exercises.map((ex) => (ex.id === next.id ? next : ex))
     onChange({
       ...data,
-      exercises: moveExerciseToPosition(withEdits, next.id, orderPos),
+      exercises: moveExerciseToPosition(base, next.id, orderPos),
     })
+    setDraftExercise(null)
     setEditingId(null)
   }
 
   function deleteExercise(id: string) {
+    if (draftExercise?.id === id) {
+      setDraftExercise(null)
+      setEditingId(null)
+      return
+    }
     const ex = data.exercises.find((e) => e.id === id)
     if (!ex?.custom) return
     onChange({
@@ -354,10 +372,8 @@ function ParentExerciseScreen({
       custom: true,
       enabled: true,
     }
-    onChange({
-      ...data,
-      exercises: [...data.exercises, next],
-    })
+    // Don't sync yet — wait for Save with order position.
+    setDraftExercise(next)
     setAddOpen(false)
     setEditingId(next.id)
   }
@@ -632,6 +648,7 @@ function ParentExerciseScreen({
             className={addOpen ? 'pill' : 'pill muted'}
             onClick={() => {
               setEditingId(null)
+              setDraftExercise(null)
               setAddOpen((v) => !v)
             }}
           >
@@ -654,7 +671,7 @@ function ParentExerciseScreen({
             key={editingExercise.id}
             exercise={editingExercise}
             index={editingIndex}
-            total={data.exercises.length}
+            total={editingTotal}
             groupOptions={groupOptions}
             onSave={saveExercise}
             onDelete={
@@ -662,7 +679,10 @@ function ParentExerciseScreen({
                 ? () => deleteExercise(editingExercise.id)
                 : undefined
             }
-            onClose={() => setEditingId(null)}
+            onClose={() => {
+              setDraftExercise(null)
+              setEditingId(null)
+            }}
           />
         ) : (
           <div className="parent-ex-groups" style={{ marginTop: 12 }}>
