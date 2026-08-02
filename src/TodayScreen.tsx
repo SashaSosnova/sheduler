@@ -10,7 +10,6 @@ import {
   applyMustDoFlags,
   chewDurationSec,
   formatPlayTime,
-  formatTimeOfDay,
   normalizeDayLog,
   todayKey,
   uid,
