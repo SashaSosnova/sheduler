@@ -159,6 +159,8 @@ function App() {
         {tab === 'settings' ? (
           <SettingsScreen
             role={role}
+            data={data}
+            onChange={setData}
             family={family}
             firebaseReady={firebaseReady}
             notificationsEnabled={notifications.enabled}

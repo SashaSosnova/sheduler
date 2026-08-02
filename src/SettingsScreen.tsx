@@ -1,13 +1,21 @@
+import { useState } from 'react'
+import {
+  MED_SLOT_ITEMS,
+  medicationLabel,
+  uid,
+} from './data'
 import {
   REMINDERS,
   formatReminderTime,
 } from './notifications'
 import { FamilySyncCard } from './FamilySyncCard'
 import type { FamilyStatus } from './familySync'
-import type { UserRole } from './types'
+import type { AppData, MedSlotId, Medication, UserRole } from './types'
 
 type Props = {
   role: UserRole
+  data: AppData
+  onChange: (next: AppData) => void
   family: FamilyStatus
   firebaseReady: boolean
   notificationsEnabled: boolean
@@ -38,6 +46,8 @@ type Props = {
 
 export function SettingsScreen({
   role,
+  data,
+  onChange,
   family,
   firebaseReady,
   notificationsEnabled,
@@ -65,6 +75,50 @@ export function SettingsScreen({
   onChangeRole,
   onGoHome,
 }: Props) {
+  const medications = data.medications ?? []
+  const [medName, setMedName] = useState('')
+  const [medDose, setMedDose] = useState('')
+  const [medSlots, setMedSlots] = useState<MedSlotId[]>([
+    'morning',
+    'day',
+    'evening',
+  ])
+
+  function patchMedications(next: Medication[]) {
+    onChange({
+      ...data,
+      medications: next,
+      medicationUpdatedAt: Date.now(),
+    })
+  }
+
+  function addMedication() {
+    const name = medName.trim()
+    if (!name || medSlots.length === 0) return
+    patchMedications([
+      ...medications,
+      {
+        id: uid(),
+        name,
+        dose: medDose.trim(),
+        slots: [...medSlots],
+      },
+    ])
+    setMedName('')
+    setMedDose('')
+    setMedSlots(['morning', 'day', 'evening'])
+  }
+
+  function removeMedication(id: string) {
+    patchMedications(medications.filter((m) => m.id !== id))
+  }
+
+  function toggleMedSlot(slot: MedSlotId) {
+    setMedSlots((prev) =>
+      prev.includes(slot) ? prev.filter((s) => s !== slot) : [...prev, slot],
+    )
+  }
+
   return (
     <div className="screen">
       <header className="screen-head">
@@ -111,6 +165,90 @@ export function SettingsScreen({
 
       {role === 'parent' ? (
         <>
+          <section className="card">
+            <h2>Таблетки</h2>
+            <p className="hint">
+              Препарат, когда давать и сколько. На днях остаются только чипы и
+              отметки приёма.
+            </p>
+            {medications.length > 0 ? (
+              <ul className="med-schedule-list" style={{ marginTop: 10 }}>
+                {medications.map((med) => (
+                  <li key={med.id} className="med-schedule-item">
+                    <div className="med-schedule-item-main">
+                      <strong>{medicationLabel(med)}</strong>
+                      <span className="hint">
+                        {' '}
+                        —{' '}
+                        {MED_SLOT_ITEMS.filter((s) => med.slots.includes(s.id))
+                          .map((s) => s.label.toLowerCase())
+                          .join('/')}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      aria-label={`Удалить ${med.name}`}
+                      onClick={() => removeMedication(med.id)}
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="hint" style={{ marginTop: 8 }}>
+                Пока пусто — добавь первый препарат.
+              </p>
+            )}
+            <div className="med-add-row" style={{ marginTop: 12 }}>
+              <label className="field">
+                <span>Препарат</span>
+                <input
+                  value={medName}
+                  placeholder="Магний B6"
+                  onChange={(e) => setMedName(e.target.value)}
+                />
+              </label>
+              <label className="field med-add-dose">
+                <span>Сколько</span>
+                <input
+                  value={medDose}
+                  placeholder="1 таб"
+                  onChange={(e) => setMedDose(e.target.value)}
+                />
+              </label>
+            </div>
+            <p className="hint" style={{ marginTop: 10, marginBottom: 0 }}>
+              Когда принимать
+            </p>
+            <div className="med-slot-toggles" role="group" aria-label="Когда принимать">
+              {MED_SLOT_ITEMS.map((slot) => {
+                const on = medSlots.includes(slot.id)
+                return (
+                  <button
+                    key={slot.id}
+                    type="button"
+                    className={`med-slot-chip${on ? ' is-on' : ''}`}
+                    aria-pressed={on}
+                    onClick={() => toggleMedSlot(slot.id)}
+                  >
+                    {slot.label}
+                  </button>
+                )
+              })}
+            </div>
+            <button
+              type="button"
+              className="btn primary"
+              style={{ marginTop: 10 }}
+              disabled={!medName.trim() || medSlots.length === 0}
+              onClick={addMedication}
+            >
+              Добавить препарат
+            </button>
+          </section>
+
           <section className="card">
             <h2>Подпись в заданиях</h2>
             <label className="field">

@@ -46,6 +46,16 @@ export type MustDoId =
 /** Pill intake slots — separate from must-do / perfect-day stars */
 export type MedSlotId = 'morning' | 'day' | 'evening'
 
+/** Parent-configured medication schedule (which slots to take it) */
+export type Medication = {
+  id: string
+  name: string
+  /** Dose / amount, e.g. «1 таб», «5 мл» */
+  dose: string
+  /** Times of day this drug should be taken */
+  slots: MedSlotId[]
+}
+
 export type ScreenKind = 'roblox'
 
 export type ScreenSlot = {
@@ -103,6 +113,13 @@ export type DayReminder = {
   fromParentAs?: string
 }
 
+/** One continuous workout approach; gaps between sessions are not counted */
+export type WorkoutSession = {
+  startedAt: number
+  /** null while the approach is still open */
+  endedAt: number | null
+}
+
 export type DayLog = {
   date: string
   mode: DayMode
@@ -120,6 +137,13 @@ export type DayLog = {
   workoutStartedAt: number | null
   /** Unix ms when the full routine was completed */
   workoutFinishedAt: number | null
+  /** Active workout approaches (clean time = sum of session lengths) */
+  workoutSessions: WorkoutSession[]
+  /**
+   * Star granted without full routine (e.g. no капа).
+   * Cleared when every active exercise is done.
+   */
+  exercisePartial: boolean
   /** Unix ms when the day first became perfect (all must-dos); cleared if broken */
   perfectAt: number | null
   note: string
@@ -171,6 +195,16 @@ export type AppData = {
    * Never decreases when spending from the bank — used by «Белый Кролик».
    */
   robloxBonusEarnedMin: number
+  /** Parent policy: false = Roblox blocked for the child */
+  robloxEnabled: boolean
+  /** Parent base daily Roblox limit in minutes (bonuses add on top) */
+  robloxLimitMin: number
+  /** Unix ms when robloxEnabled / robloxLimitMin last changed — last-write-wins */
+  robloxSettingsUpdatedAt: number
+  /** Parent-configured medications and which slots they belong to */
+  medications: Medication[]
+  /** Unix ms when medications list last changed — last-write-wins */
+  medicationUpdatedAt: number
   /**
    * Unspent ruble rewards from parent-task achievements.
    * Parent marks as paid out via payoutMoneyBankRub.

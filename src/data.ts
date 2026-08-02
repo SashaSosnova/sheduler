@@ -7,8 +7,10 @@ import type {
   Exercise,
   ExerciseControl,
   MedSlotId,
+  Medication,
   MustDoId,
   ScreenSlot,
+  WorkoutSession,
 } from './types'
 
 export const ROUTINE_ID = 'daniil-hw-28-v5'
@@ -26,6 +28,64 @@ export const MED_SLOT_ITEMS: { id: MedSlotId; label: string }[] = [
   { id: 'day', label: 'День' },
   { id: 'evening', label: 'Вечер' },
 ]
+
+const MED_SLOT_IDS = new Set<MedSlotId>(
+  MED_SLOT_ITEMS.map((item) => item.id),
+)
+
+export function normalizeMedications(raw: unknown): Medication[] {
+  if (!Array.isArray(raw)) return []
+  const out: Medication[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const row = item as Partial<Medication>
+    const name = typeof row.name === 'string' ? row.name.trim() : ''
+    if (!name) continue
+    const dose = typeof row.dose === 'string' ? row.dose.trim() : ''
+    const slots = Array.isArray(row.slots)
+      ? row.slots.filter(
+          (s): s is MedSlotId =>
+            typeof s === 'string' && MED_SLOT_IDS.has(s as MedSlotId),
+        )
+      : []
+    if (slots.length === 0) continue
+    out.push({
+      id: typeof row.id === 'string' && row.id ? row.id : uid(),
+      name,
+      dose,
+      slots: [...new Set(slots)],
+    })
+  }
+  return out
+}
+
+/** Legacy single medicationName → one med for all slots. */
+export function migrateLegacyMedicationName(raw: unknown): Medication[] {
+  if (typeof raw !== 'string') return []
+  const name = raw.trim()
+  if (!name) return []
+  return [
+    {
+      id: uid(),
+      name,
+      dose: '',
+      slots: MED_SLOT_ITEMS.map((item) => item.id),
+    },
+  ]
+}
+
+export function medicationsForSlot(
+  medications: Medication[] | undefined,
+  slot: MedSlotId,
+): Medication[] {
+  return (medications ?? []).filter((m) => m.slots.includes(slot))
+}
+
+/** Chip / list label: «Магний B6 · 1 таб» */
+export function medicationLabel(med: Medication): string {
+  const dose = med.dose.trim()
+  return dose ? `${med.name} · ${dose}` : med.name
+}
 
 export const CHEW_FOODS = ['Морковь', 'Яблоко'] as const
 
@@ -52,6 +112,25 @@ export const EXTRA_TASK_IDEAS: string[] = [
 export const SCREEN_LIMITS = {
   roblox: { label: 'Roblox', seconds: 40 * 60 },
 } as const
+
+/** Default / max parent-configurable base Roblox minutes per day */
+export const DEFAULT_ROBLOX_LIMIT_MIN = 40
+export const ROBLOX_LIMIT_MIN_MAX = 120
+export const ROBLOX_LIMIT_PRESETS = [15, 20, 30, 40] as const
+
+export function normalizeRobloxLimitMin(raw: unknown): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) {
+    return DEFAULT_ROBLOX_LIMIT_MIN
+  }
+  return Math.min(
+    ROBLOX_LIMIT_MIN_MAX,
+    Math.max(1, Math.floor(raw)),
+  )
+}
+
+export function isRobloxEnabled(data: { robloxEnabled?: boolean }): boolean {
+  return data.robloxEnabled !== false
+}
 
 /** Must-do items that should look “main” in the checklist */
 export const MAIN_MUST_DO: MustDoId[] = ['exercise', 'chew']
@@ -524,6 +603,8 @@ export function emptyDayLog(date: string): DayLog {
     timersHonored: {},
     workoutStartedAt: null,
     workoutFinishedAt: null,
+    workoutSessions: [],
+    exercisePartial: false,
     perfectAt: null,
     note: '',
     outing: 'none',
@@ -608,6 +689,8 @@ export function normalizeDayLog(date: string, raw?: Partial<DayLog> | null): Day
     timersHonored: normalizeBoolMap(raw.timersHonored),
     workoutStartedAt: normalizeTimestamp(raw.workoutStartedAt),
     workoutFinishedAt: normalizeTimestamp(raw.workoutFinishedAt),
+    workoutSessions: normalizeWorkoutSessions(raw.workoutSessions),
+    exercisePartial: Boolean(raw.exercisePartial),
     perfectAt: normalizeTimestamp(raw.perfectAt),
     createNote: raw.createNote ?? '',
     extraTasks: normalizeExtraTasks(raw.extraTasks).filter(
@@ -813,6 +896,10 @@ export function mergeDayLog(
     timersHonored: mergeBoolMaps(a.timersHonored, b.timersHonored),
     workoutStartedAt: started.length ? Math.min(...started) : null,
     workoutFinishedAt: finished.length ? Math.max(...finished) : null,
+    workoutSessions: mergeWorkoutSessions(a.workoutSessions, b.workoutSessions),
+    exercisePartial:
+      Boolean(a.exercisePartial || b.exercisePartial) &&
+      finished.length === 0,
     perfectAt: mergedPerfect,
     note: a.note.trim() ? a.note : b.note,
     outing: a.outing.trim() ? a.outing : b.outing,
@@ -961,10 +1048,147 @@ function normalizeTimestamp(raw: unknown): number | null {
   return typeof raw === 'number' && Number.isFinite(raw) ? raw : null
 }
 
-/** Elapsed workout seconds from first check to full completion, if finished. */
-export function workoutDurationSec(day: DayLog): number | null {
+function normalizeWorkoutSessions(raw: unknown): WorkoutSession[] {
+  if (!Array.isArray(raw)) return []
+  const out: WorkoutSession[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const row = item as Partial<WorkoutSession>
+    const startedAt = normalizeTimestamp(row.startedAt)
+    if (startedAt == null) continue
+    const endedAt = normalizeTimestamp(row.endedAt)
+    out.push({
+      startedAt,
+      endedAt:
+        endedAt != null && endedAt >= startedAt ? endedAt : null,
+    })
+  }
+  return out.sort((a, b) => a.startedAt - b.startedAt)
+}
+
+function mergeWorkoutSessions(
+  a: WorkoutSession[],
+  b: WorkoutSession[],
+): WorkoutSession[] {
+  const map = new Map<number, WorkoutSession>()
+  for (const s of [...a, ...b]) {
+    const prev = map.get(s.startedAt)
+    if (!prev) {
+      map.set(s.startedAt, s)
+      continue
+    }
+    if (prev.endedAt == null || s.endedAt == null) {
+      map.set(s.startedAt, { startedAt: s.startedAt, endedAt: null })
+    } else {
+      map.set(s.startedAt, {
+        startedAt: s.startedAt,
+        endedAt: Math.max(prev.endedAt, s.endedAt),
+      })
+    }
+  }
+  return [...map.values()].sort((x, y) => x.startedAt - y.startedAt)
+}
+
+export function ensureOpenWorkoutSession(
+  sessions: WorkoutSession[],
+  now: number,
+): WorkoutSession[] {
+  if (sessions.some((s) => s.endedAt == null)) return sessions
+  return [...sessions, { startedAt: now, endedAt: null }]
+}
+
+export function closeOpenWorkoutSession(
+  sessions: WorkoutSession[],
+  now: number,
+): WorkoutSession[] {
+  return sessions
+    .map((s) => (s.endedAt == null ? { ...s, endedAt: now } : s))
+    .filter((s) => s.endedAt == null || s.endedAt > s.startedAt)
+}
+
+/** Things to prepare before a block (display order). */
+export const EXERCISE_GEAR_LABELS = [
+  'Капа',
+  'Вода',
+  'Ватные диски',
+] as const
+
+export type ExerciseGear = (typeof EXERCISE_GEAR_LABELS)[number]
+
+function exerciseTextBlob(ex: Exercise): string {
+  return `${ex.group} ${ex.name} ${ex.notes}`.toLowerCase()
+}
+
+/** Gear required for one exercise (from group / name / notes). */
+export function exerciseGearNeeds(ex: Exercise): ExerciseGear[] {
+  const blob = exerciseTextBlob(ex)
+  const out: ExerciseGear[] = []
+  if (
+    blob.includes('трейнер') ||
+    blob.includes('капа') ||
+    blob.includes('капы') ||
+    blob.includes('капу')
+  ) {
+    out.push('Капа')
+  }
+  if (
+    blob.includes('вода') ||
+    blob.includes('воду') ||
+    blob.includes('водой') ||
+    blob.includes('воды')
+  ) {
+    out.push('Вода')
+  }
+  if (blob.includes('ватн')) {
+    out.push('Ватные диски')
+  }
+  return out
+}
+
+/** Unique gear for a block, stable order. */
+export function groupGearNeeds(
+  group: string,
+  items: Exercise[],
+): ExerciseGear[] {
+  const found = new Set<ExerciseGear>()
+  if (group.toLowerCase().includes('трейнер')) found.add('Капа')
+  for (const ex of items) {
+    for (const g of exerciseGearNeeds(ex)) found.add(g)
+  }
+  return EXERCISE_GEAR_LABELS.filter((label) => found.has(label))
+}
+
+/** Exercise needs капа / трейнер (group, name, or notes). */
+export function exerciseNeedsTrainer(ex: Exercise): boolean {
+  return exerciseGearNeeds(ex).includes('Капа')
+}
+
+export function groupNeedsTrainer(group: string, items: Exercise[]): boolean {
+  return groupGearNeeds(group, items).includes('Капа')
+}
+
+/**
+ * Clean workout seconds: sum of session lengths (gaps excluded).
+ * Open session counts until `now`. Legacy days without sessions use wall-clock.
+ */
+export function workoutDurationSec(
+  day: DayLog,
+  now = Date.now(),
+): number | null {
+  const sessions = day.workoutSessions ?? []
+  if (sessions.length > 0) {
+    let totalMs = 0
+    for (const s of sessions) {
+      const end = s.endedAt ?? now
+      totalMs += Math.max(0, end - s.startedAt)
+    }
+    return Math.max(0, Math.floor(totalMs / 1000))
+  }
   if (day.workoutStartedAt == null || day.workoutFinishedAt == null) return null
-  return Math.max(0, Math.floor((day.workoutFinishedAt - day.workoutStartedAt) / 1000))
+  return Math.max(
+    0,
+    Math.floor((day.workoutFinishedAt - day.workoutStartedAt) / 1000),
+  )
 }
 
 /** Elapsed chew seconds from first filled cell to save, if tracked. */
@@ -1030,6 +1254,11 @@ export function defaultAppData(): AppData {
     claimedRobloxStreaks: [],
     robloxBonusBankMin: 0,
     robloxBonusEarnedMin: 0,
+    robloxEnabled: true,
+    robloxLimitMin: DEFAULT_ROBLOX_LIMIT_MIN,
+    robloxSettingsUpdatedAt: 0,
+    medications: [],
+    medicationUpdatedAt: 0,
     moneyBankRub: 0,
     banksUpdatedAt: 0,
     claimedStickerMoneyIds: [],
@@ -1264,6 +1493,28 @@ export function markAllExercisesDone(
   return normalizeDayLog(day.date, {
     ...day,
     exercisesDone,
+    exercisePartial: false,
+    ...flags,
+  })
+}
+
+/** Parent: grant exercise star without full routine (keeps child's exercisesDone). */
+export function markExercisesPartialCredit(day: DayLog): DayLog {
+  const flags = applyMustDoFlags(day, { exercise: true })
+  return normalizeDayLog(day.date, {
+    ...day,
+    exercisePartial: true,
+    workoutFinishedAt: null,
+    ...flags,
+  })
+}
+
+/** Parent: clear exercise star / partial credit (does not wipe exercisesDone). */
+export function clearExercisesCredit(day: DayLog): DayLog {
+  const flags = applyMustDoFlags(day, { exercise: false })
+  return normalizeDayLog(day.date, {
+    ...day,
+    exercisePartial: false,
     ...flags,
   })
 }

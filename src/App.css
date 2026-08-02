@@ -574,6 +574,134 @@
   color: var(--muted);
 }
 
+.parent-roblox-limit.is-disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.med-schedule-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.med-schedule-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+
+.med-schedule-item-main {
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.med-add-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.med-add-row .field {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.med-add-row .med-add-dose {
+  flex: 0 0 96px;
+}
+
+.med-slot-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.med-slot-chip {
+  border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+  background: #fff;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 650;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.med-slot-chip.is-on {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.med-slot-chip:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.med-day-list {
+  gap: 8px;
+}
+
+.check-row.med-check-row {
+  align-items: flex-start;
+}
+
+.med-check-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.med-check-title {
+  font-size: 1rem;
+  line-height: 1.3;
+}
+
+.med-check-readonly {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.med-slot-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.check-row .med-chip,
+.med-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
 .parent-roblox-bank {
   margin: 10px 0 12px;
   padding: 10px 12px;
@@ -1561,6 +1689,150 @@
 
 .ex-wizard-screen {
   gap: 14px;
+}
+
+.ex-wizard-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ex-wizard-nav-meta {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.ex-block-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ex-block-picker-hint {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.ex-block-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ex-block-card {
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 16px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+  background: color-mix(in srgb, var(--card, #fff) 92%, var(--accent) 8%);
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.ex-block-card:hover:not(:disabled),
+.ex-block-card:focus-visible:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  outline: none;
+}
+
+.ex-block-card.is-complete,
+.ex-block-card:disabled {
+  cursor: default;
+  opacity: 1;
+  background: #e8f5ee;
+  border-color: #b9dcc8;
+  text-decoration: none;
+}
+
+.ex-block-card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ex-block-card-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.ex-block-card.is-complete .ex-block-card-title {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.ex-block-card-meta {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.ex-block-card.is-complete .ex-block-card-meta {
+  color: #1f7a4d;
+  font-weight: 700;
+}
+
+.ex-block-done-check {
+  flex-shrink: 0;
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  min-height: 100%;
+  border-radius: 14px;
+  background: #1f7a4d;
+  color: #fff;
+  font-size: 1.55rem;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.ex-block-gear {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.ex-block-gear-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.btn.muted-btn {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink);
+  border: 1px solid color-mix(in srgb, var(--ink) 12%, transparent);
+}
+
+.btn.muted-btn:hover,
+.btn.muted-btn:focus-visible {
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
 }
 
 .ex-wizard-progress {

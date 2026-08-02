@@ -2,6 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ROUTINE_ID,
   defaultAppData,
+  isRobloxEnabled,
+  migrateLegacyMedicationName,
+  normalizeMedications,
+  normalizeRobloxLimitMin,
   mergeChewEntries,
   mergeDaysMaps,
   mergeExerciseControls,
@@ -51,6 +55,13 @@ type StoredData = {
   claimedRobloxStreaks?: number[]
   robloxBonusBankMin?: number
   robloxBonusEarnedMin?: number
+  robloxEnabled?: boolean
+  robloxLimitMin?: number
+  robloxSettingsUpdatedAt?: number
+  medications?: unknown
+  /** @deprecated migrated into medications */
+  medicationName?: string
+  medicationUpdatedAt?: number
   moneyBankRub?: number
   banksUpdatedAt?: number
   claimedStickerMoneyIds?: string[]
@@ -83,6 +94,28 @@ function normalizeEquippedStickerId(raw: unknown): string | null {
   if (typeof raw !== 'string') return null
   const id = raw.trim()
   return id.length > 0 ? id : null
+}
+
+function resolveMedications(
+  medications: unknown,
+  legacyName?: unknown,
+): ReturnType<typeof normalizeMedications> {
+  const list = normalizeMedications(medications)
+  if (list.length > 0) return list
+  return migrateLegacyMedicationName(legacyName)
+}
+
+function medicationsSignature(
+  list: ReturnType<typeof normalizeMedications>,
+): string {
+  return JSON.stringify(
+    list.map((m) => ({
+      id: m.id,
+      name: m.name,
+      dose: m.dose,
+      slots: [...m.slots].sort(),
+    })),
+  )
 }
 
 function normalizeStreakInts(raw: unknown): number[] {
@@ -127,6 +160,18 @@ function hydrateAppData(
         robloxBonusBankMin: normalizeNonNegInt(partial.robloxBonusBankMin),
         robloxBonusEarnedMin: normalizeNonNegInt(partial.robloxBonusEarnedMin),
       } as AppData),
+      robloxEnabled: partial.robloxEnabled !== false,
+      robloxLimitMin: normalizeRobloxLimitMin(
+        partial.robloxLimitMin ?? base.robloxLimitMin,
+      ),
+      robloxSettingsUpdatedAt: normalizeNonNegInt(
+        partial.robloxSettingsUpdatedAt,
+      ),
+      medications: resolveMedications(
+        partial.medications,
+        (partial as { medicationName?: string }).medicationName,
+      ),
+      medicationUpdatedAt: normalizeNonNegInt(partial.medicationUpdatedAt),
       moneyBankRub: normalizeNonNegInt(partial.moneyBankRub),
       banksUpdatedAt: normalizeNonNegInt(partial.banksUpdatedAt),
       claimedStickerMoneyIds: normalizeStringIds(partial.claimedStickerMoneyIds),
@@ -211,6 +256,16 @@ function load(): AppData {
       claimedRobloxStreaks,
       robloxBonusBankMin: normalizeNonNegInt(parsed.robloxBonusBankMin),
       robloxBonusEarnedMin: normalizeNonNegInt(parsed.robloxBonusEarnedMin),
+      robloxEnabled: parsed.robloxEnabled !== false,
+      robloxLimitMin: normalizeRobloxLimitMin(parsed.robloxLimitMin),
+      robloxSettingsUpdatedAt: normalizeNonNegInt(
+        parsed.robloxSettingsUpdatedAt,
+      ),
+      medications: resolveMedications(
+        parsed.medications,
+        parsed.medicationName,
+      ),
+      medicationUpdatedAt: normalizeNonNegInt(parsed.medicationUpdatedAt),
       moneyBankRub: normalizeNonNegInt(parsed.moneyBankRub),
       banksUpdatedAt: normalizeNonNegInt(parsed.banksUpdatedAt),
       claimedStickerMoneyIds,
@@ -319,6 +374,15 @@ function applyCloud(prev: AppData, payload: CloudPayload): AppData {
   )
   const localBanksAt = normalizeNonNegInt(prev.banksUpdatedAt)
   const preferRemoteBanks = remoteBanksAt >= localBanksAt
+  const remoteRobloxSettingsAt = normalizeNonNegInt(
+    payload.robloxSettingsUpdatedAt,
+  )
+  const localRobloxSettingsAt = normalizeNonNegInt(prev.robloxSettingsUpdatedAt)
+  const preferRemoteRobloxSettings =
+    remoteRobloxSettingsAt >= localRobloxSettingsAt
+  const remoteMedAt = normalizeNonNegInt(payload.medicationUpdatedAt)
+  const localMedAt = normalizeNonNegInt(prev.medicationUpdatedAt)
+  const preferRemoteMed = remoteMedAt >= localMedAt
   // Remote order wins (parent add/reorder); see mergeExercises.
   const exercises = mergeExercises(
     prev.exercises ?? [],
@@ -343,6 +407,22 @@ function applyCloud(prev: AppData, payload: CloudPayload): AppData {
       normalizeNonNegInt(prev.robloxBonusEarnedMin),
       normalizeNonNegInt(payload.robloxBonusEarnedMin),
     ),
+    robloxEnabled: preferRemoteRobloxSettings
+      ? payload.robloxEnabled !== false
+      : isRobloxEnabled(prev),
+    robloxLimitMin: preferRemoteRobloxSettings
+      ? normalizeRobloxLimitMin(
+          payload.robloxLimitMin ?? prev.robloxLimitMin,
+        )
+      : normalizeRobloxLimitMin(prev.robloxLimitMin),
+    robloxSettingsUpdatedAt: Math.max(
+      remoteRobloxSettingsAt,
+      localRobloxSettingsAt,
+    ),
+    medications: preferRemoteMed
+      ? resolveMedications(payload.medications, payload.medicationName)
+      : resolveMedications(prev.medications, undefined),
+    medicationUpdatedAt: Math.max(remoteMedAt, localMedAt),
     moneyBankRub: preferRemoteBanks
       ? normalizeNonNegInt(payload.moneyBankRub ?? prev.moneyBankRub)
       : normalizeNonNegInt(prev.moneyBankRub),
@@ -414,6 +494,16 @@ function replaceFromCloud(payload: CloudPayload): AppData {
     claimedRobloxStreaks: payload.claimedRobloxStreaks ?? [],
     robloxBonusBankMin: payload.robloxBonusBankMin ?? 0,
     robloxBonusEarnedMin: normalizeNonNegInt(payload.robloxBonusEarnedMin),
+    robloxEnabled: payload.robloxEnabled !== false,
+    robloxLimitMin: normalizeRobloxLimitMin(payload.robloxLimitMin),
+    robloxSettingsUpdatedAt: normalizeNonNegInt(
+      payload.robloxSettingsUpdatedAt,
+    ),
+    medications: resolveMedications(
+      payload.medications,
+      payload.medicationName,
+    ),
+    medicationUpdatedAt: normalizeNonNegInt(payload.medicationUpdatedAt),
     moneyBankRub: payload.moneyBankRub ?? 0,
     banksUpdatedAt: normalizeNonNegInt(
       payload.banksUpdatedAt ?? payload.updatedAt,
@@ -473,6 +563,11 @@ export function useAppData() {
       claimedRobloxStreaks: data.claimedRobloxStreaks ?? [],
       robloxBonusBankMin: data.robloxBonusBankMin ?? 0,
       robloxBonusEarnedMin: data.robloxBonusEarnedMin ?? 0,
+      robloxEnabled: data.robloxEnabled !== false,
+      robloxLimitMin: normalizeRobloxLimitMin(data.robloxLimitMin),
+      robloxSettingsUpdatedAt: data.robloxSettingsUpdatedAt ?? 0,
+      medications: data.medications ?? [],
+      medicationUpdatedAt: data.medicationUpdatedAt ?? 0,
       moneyBankRub: data.moneyBankRub ?? 0,
       banksUpdatedAt: data.banksUpdatedAt ?? 0,
       claimedStickerMoneyIds: data.claimedStickerMoneyIds ?? [],
@@ -521,10 +616,34 @@ export function useAppData() {
             normalizeNonNegInt(prev.robloxBonusBankMin) ||
           normalizeNonNegInt(next.moneyBankRub) !==
             normalizeNonNegInt(prev.moneyBankRub)
-        const withBanks = banksChanged
+        const robloxSettingsChanged =
+          isRobloxEnabled(next) !== isRobloxEnabled(prev) ||
+          normalizeRobloxLimitMin(next.robloxLimitMin) !==
+            normalizeRobloxLimitMin(prev.robloxLimitMin)
+        let withMeta = banksChanged
           ? { ...next, banksUpdatedAt: Date.now() }
           : next
-        const normalized = hydrateAppData(withBanks)
+        if (
+          robloxSettingsChanged &&
+          normalizeNonNegInt(withMeta.robloxSettingsUpdatedAt) ===
+            normalizeNonNegInt(prev.robloxSettingsUpdatedAt)
+        ) {
+          withMeta = { ...withMeta, robloxSettingsUpdatedAt: Date.now() }
+        }
+        const medsNext = resolveMedications(withMeta.medications, undefined)
+        const medsPrev = resolveMedications(prev.medications, undefined)
+        if (
+          medicationsSignature(medsNext) !== medicationsSignature(medsPrev) &&
+          normalizeNonNegInt(withMeta.medicationUpdatedAt) ===
+            normalizeNonNegInt(prev.medicationUpdatedAt)
+        ) {
+          withMeta = {
+            ...withMeta,
+            medications: medsNext,
+            medicationUpdatedAt: Date.now(),
+          }
+        }
+        const normalized = hydrateAppData(withMeta)
         schedulePush(normalized)
         return normalized
       })

@@ -10,6 +10,7 @@ import {
   setDoc,
   type Unsubscribe,
 } from 'firebase/firestore'
+import { DEFAULT_ROBLOX_LIMIT_MIN } from './data'
 import type {
   AppData,
   ChewEntry,
@@ -33,6 +34,14 @@ export type CloudPayload = {
   claimedRobloxStreaks?: number[]
   robloxBonusBankMin?: number
   robloxBonusEarnedMin?: number
+  robloxEnabled?: boolean
+  robloxLimitMin?: number
+  /** When parent Roblox policy last changed — pick newer side on merge */
+  robloxSettingsUpdatedAt?: number
+  medications?: AppData['medications']
+  /** @deprecated migrated into medications */
+  medicationName?: string
+  medicationUpdatedAt?: number
   moneyBankRub?: number
   /** When bank balances last changed — pick newer side on merge */
   banksUpdatedAt?: number
@@ -120,6 +129,11 @@ export function toCloudPayload(data: AppData, updatedAt = Date.now()): CloudPayl
     claimedRobloxStreaks: data.claimedRobloxStreaks ?? [],
     robloxBonusBankMin: data.robloxBonusBankMin ?? 0,
     robloxBonusEarnedMin: data.robloxBonusEarnedMin ?? 0,
+    robloxEnabled: data.robloxEnabled !== false,
+    robloxLimitMin: data.robloxLimitMin ?? DEFAULT_ROBLOX_LIMIT_MIN,
+    robloxSettingsUpdatedAt: data.robloxSettingsUpdatedAt ?? 0,
+    medications: data.medications ?? [],
+    medicationUpdatedAt: data.medicationUpdatedAt ?? 0,
     moneyBankRub: data.moneyBankRub ?? 0,
     banksUpdatedAt: data.banksUpdatedAt ?? 0,
     claimedStickerMoneyIds: data.claimedStickerMoneyIds ?? [],
@@ -178,6 +192,12 @@ export async function joinFamily(rawCode: string): Promise<CloudPayload> {
     claimedRobloxStreaks: remote.claimedRobloxStreaks ?? [],
     robloxBonusBankMin: remote.robloxBonusBankMin ?? 0,
     robloxBonusEarnedMin: remote.robloxBonusEarnedMin,
+    robloxEnabled: remote.robloxEnabled,
+    robloxLimitMin: remote.robloxLimitMin,
+    robloxSettingsUpdatedAt: remote.robloxSettingsUpdatedAt,
+    medications: remote.medications,
+    medicationName: remote.medicationName,
+    medicationUpdatedAt: remote.medicationUpdatedAt,
     moneyBankRub: remote.moneyBankRub,
     // Keep undefined when absent so clients can seed legacy families.
     claimedStickerMoneyIds: remote.claimedStickerMoneyIds,
@@ -228,6 +248,12 @@ export function subscribeFamily(
         claimedRobloxStreaks: remote.claimedRobloxStreaks ?? [],
         robloxBonusBankMin: remote.robloxBonusBankMin ?? 0,
         robloxBonusEarnedMin: remote.robloxBonusEarnedMin,
+        robloxEnabled: remote.robloxEnabled,
+        robloxLimitMin: remote.robloxLimitMin,
+        robloxSettingsUpdatedAt: remote.robloxSettingsUpdatedAt,
+        medications: remote.medications,
+        medicationName: remote.medicationName,
+        medicationUpdatedAt: remote.medicationUpdatedAt,
         moneyBankRub: remote.moneyBankRub,
         banksUpdatedAt: remote.banksUpdatedAt,
         claimedStickerMoneyIds: remote.claimedStickerMoneyIds,

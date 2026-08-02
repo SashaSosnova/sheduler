@@ -3,7 +3,6 @@ import {
   EXTRA_TASK_IDEAS,
   MED_SLOT_ITEMS,
   MUST_DO_ITEMS,
-  SCREEN_LIMITS,
   activeExercises,
   applyMedSlotFlags,
   applyMustDoFlags,
@@ -12,8 +11,14 @@ import {
   formatPlayTime,
   formatPlayTimeWithOvertime,
   formatTimeOfDay,
+  clearExercisesCredit,
+  isRobloxEnabled,
   markAllExercisesDone,
+  markExercisesPartialCredit,
+  medicationLabel,
+  medicationsForSlot,
   normalizeDayLog,
+  normalizeRobloxLimitMin,
   todayKey,
   uid,
   workoutDurationSec,
@@ -136,6 +141,7 @@ function mustDoStatusHint(
     // Legacy parent checkbox (mustDo only) or parent markAll without a timed session
     const parentMarked =
       Boolean(detail.day.mustDo.exercise) &&
+      !detail.day.exercisePartial &&
       (detail.exerciseDone === 0 ||
         (detail.exerciseTotal > 0 &&
           detail.exerciseDone === detail.exerciseTotal &&
@@ -144,6 +150,21 @@ function mustDoStatusHint(
     if (parentMarked && detail.exerciseDone === 0) return 'отметил родитель'
     if (parentMarked) {
       return `${detail.exerciseDone} из ${detail.exerciseTotal} · отметил родитель`
+    }
+    if (
+      detail.day.exercisePartial &&
+      detail.exerciseDone < detail.exerciseTotal
+    ) {
+      const parts = [
+        `частично ${detail.exerciseDone} из ${detail.exerciseTotal}`,
+        'отметил родитель',
+      ]
+      const at = detail.day.mustDoAt?.exercise
+      if (at != null) parts.push(`зачёт в ${formatTimeOfDay(at)}`)
+      if (detail.workoutSec != null) {
+        parts.push(`заняла ${formatPlayTime(detail.workoutSec)}`)
+      }
+      return parts.join(' · ')
     }
     const doneAt =
       detail.workoutFinishedAt ?? detail.day.mustDoAt?.exercise ?? null
@@ -211,6 +232,7 @@ export function CalendarScreen({
   const canEditSelected = Boolean(
     canEditMustDo && onChange && selected <= today,
   )
+  const medications = data.medications ?? []
 
   useEffect(() => {
     setMarkingForChild(false)
@@ -250,7 +272,37 @@ export function CalendarScreen({
       })
       return
     }
+    if (id === 'exercise' && !nextChecked) {
+      const cleared = stampPerfectAt(day, clearExercisesCredit(day))
+      onChange({
+        ...data,
+        days: {
+          ...data.days,
+          [selected]: cleared,
+        },
+      })
+      return
+    }
     patchSelected(applyMustDoFlags(day, { [id]: nextChecked }))
+  }
+
+  function toggleExercisePartial() {
+    if (!canEditSelected || !onChange) return
+    const day = normalizeDayLog(selected, data.days[selected])
+    const active = activeExercises(data.exercises)
+    const everyDone =
+      active.length > 0 && active.every((e) => day.exercisesDone[e.id])
+    if (everyDone) return
+    const next = day.exercisePartial
+      ? clearExercisesCredit(day)
+      : markExercisesPartialCredit(day)
+    onChange({
+      ...data,
+      days: {
+        ...data.days,
+        [selected]: stampPerfectAt(day, next),
+      },
+    })
   }
 
   function toggleMedSlot(id: MedSlotId) {
@@ -540,6 +592,24 @@ export function CalendarScreen({
                     </span>
                   </span>
                 </label>
+                {item.id === 'exercise' &&
+                detail.exerciseTotal > 0 &&
+                detail.exerciseDone < detail.exerciseTotal ? (
+                  <label className="check-row" style={{ marginTop: 6 }}>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(detail.day.exercisePartial)}
+                      onChange={toggleExercisePartial}
+                    />
+                    <span>
+                      Частичный зачёт
+                      <span className="hint">
+                        {' '}
+                        — звезда без полного комплекса
+                      </span>
+                    </span>
+                  </label>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -554,45 +624,68 @@ export function CalendarScreen({
 
         <div className="calendar-detail-block">
           <h3>Таблетки</h3>
-          {markingForChild && canEditSelected ? (
-            <ul className="check-list">
+          {medications.length === 0 ? (
+            <p className="hint" style={{ marginTop: 8 }}>
+              Расписание препаратов настраивается в «Ещё».
+            </p>
+          ) : (
+            <ul className="check-list med-day-list" style={{ marginTop: 10 }}>
               {MED_SLOT_ITEMS.map((item) => {
+                const slotMeds = medicationsForSlot(medications, item.id)
+                if (slotMeds.length === 0) return null
                 const at = detail.day.medSlotsAt[item.id]
+                const checked = Boolean(detail.day.medSlots[item.id])
+                const chips = (
+                  <span
+                    className="med-slot-chips"
+                    aria-label={`Препараты: ${item.label}`}
+                  >
+                    {slotMeds.map((med) => (
+                      <span key={med.id} className="med-chip">
+                        {medicationLabel(med)}
+                      </span>
+                    ))}
+                  </span>
+                )
                 return (
                   <li key={item.id}>
-                    <label className="check-row">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(detail.day.medSlots[item.id])}
-                        onChange={() => toggleMedSlot(item.id)}
-                      />
-                      <span>
-                        {item.label}
-                        {at != null ? (
-                          <span className="hint">
-                            {' '}
-                            — в {formatTimeOfDay(at)}
+                    {canEditSelected ? (
+                      <label className="check-row med-check-row">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleMedSlot(item.id)}
+                        />
+                        <span className="med-check-body">
+                          <span className="med-check-title">
+                            {item.label}
+                            {at != null ? (
+                              <span className="hint">
+                                {' '}
+                                — в {formatTimeOfDay(at)}
+                              </span>
+                            ) : null}
                           </span>
-                        ) : (
-                          <span className="hint"> — не отмечено</span>
-                        )}
-                      </span>
-                    </label>
+                          {chips}
+                        </span>
+                      </label>
+                    ) : (
+                      <div className="med-check-row med-check-readonly">
+                        <p className="hint" style={{ margin: 0 }}>
+                          {item.label}
+                          {checked
+                            ? at != null
+                              ? ` ✓ ${formatTimeOfDay(at)}`
+                              : ' ✓'
+                            : ' —'}
+                        </p>
+                        {chips}
+                      </div>
+                    )}
                   </li>
                 )
               })}
             </ul>
-          ) : (
-            <p className="hint">
-              {MED_SLOT_ITEMS.map((item) => {
-                const done = Boolean(detail.day.medSlots[item.id])
-                const at = detail.day.medSlotsAt[item.id]
-                if (!done) return `${item.label} —`
-                return at != null
-                  ? `${item.label} ✓ ${formatTimeOfDay(at)}`
-                  : `${item.label} ✓`
-              }).join(' · ')}
-            </p>
           )}
         </div>
 
@@ -618,15 +711,17 @@ export function CalendarScreen({
         <div className="calendar-detail-block">
           <h3>Roblox</h3>
           <p className="hint">
-            {detail.robloxUsed > 0 || detail.robloxOvertime > 0
-              ? `Сыграно ${formatPlayTimeWithOvertime(
-                  detail.robloxUsed,
-                  detail.robloxOvertime,
-                )} из ${Math.round(
-                  (SCREEN_LIMITS.roblox.seconds + detail.robloxBonusMin * 60) /
-                    60,
-                )} мин`
-              : 'Не запускал'}
+            {!isRobloxEnabled(data) && selected === today
+              ? 'Сейчас запрещён родителем'
+              : detail.robloxUsed > 0 || detail.robloxOvertime > 0
+                ? `Сыграно ${formatPlayTimeWithOvertime(
+                    detail.robloxUsed,
+                    detail.robloxOvertime,
+                  )} из ${
+                    normalizeRobloxLimitMin(data.robloxLimitMin) +
+                    detail.robloxBonusMin
+                  } мин`
+                : 'Не запускал'}
             {detail.robloxBonusMin > 0
               ? ` · бонус +${detail.robloxBonusMin} мин`
               : ''}

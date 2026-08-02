@@ -1,8 +1,10 @@
 import { useEffect } from 'react'
 import {
-  SCREEN_LIMITS,
+  flushScreenOvertime,
   formatPlayTime,
+  isRobloxEnabled,
   normalizeDayLog,
+  normalizeRobloxLimitMin,
   todayKey,
 } from './data'
 import {
@@ -22,7 +24,9 @@ type Props = {
 export function RobloxScreen({ data, onChange }: Props) {
   const key = todayKey()
   const day = normalizeDayLog(key, data.days[key])
-  const robloxLimit = robloxLimitSeconds(data.days, key)
+  const allowed = isRobloxEnabled(data)
+  const robloxLimit = robloxLimitSeconds(data, key)
+  const baseMin = normalizeRobloxLimitMin(data.robloxLimitMin)
   const robloxBonusMin = robloxBonusMinutes(data.days, key)
   const robloxBankMin = Math.max(0, Math.floor(data.robloxBonusBankMin ?? 0))
   const robloxSlot = day.screens.roblox
@@ -43,10 +47,12 @@ export function RobloxScreen({ data, onChange }: Props) {
   }
 
   function claimBank(minutes: number) {
+    if (!allowed) return
     onChange(claimRobloxBankMinutes(data, minutes, key))
   }
 
   function setSlot(slot: ScreenSlot) {
+    if (!allowed) return
     patchDay({
       screens: {
         ...day.screens,
@@ -55,12 +61,50 @@ export function RobloxScreen({ data, onChange }: Props) {
     })
   }
 
-  // Sync unused Roblox slot to today's limit (base + achievement bonuses)
+  // Parent banned Roblox while a session was running — stop and keep usedSec.
   useEffect(() => {
+    if (allowed) return
+    if (robloxSlot.endsAt == null && robloxSlot.overtimeStartedAt == null) {
+      return
+    }
+    const now = Date.now()
+    let next = flushScreenOvertime(robloxSlot, now)
+    if (robloxSlot.endsAt != null && !robloxSlot.finished) {
+      const left = Math.max(0, Math.ceil((robloxSlot.endsAt - now) / 1000))
+      const played = Math.max(0, robloxSlot.remainingSec - left)
+      next = {
+        ...next,
+        endsAt: null,
+        remainingSec: left,
+        finished: false,
+        usedSec: robloxSlot.usedSec + played,
+        overtimeStartedAt: null,
+      }
+    } else {
+      next = {
+        ...next,
+        endsAt: null,
+        overtimeStartedAt: null,
+      }
+    }
+    patchDay({
+      screens: {
+        ...day.screens,
+        roblox: next,
+      },
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allowed, robloxSlot.endsAt, robloxSlot.overtimeStartedAt])
+
+  // Sync unused Roblox slot to today's limit (base + bonuses)
+  useEffect(() => {
+    if (!allowed) return
     if (robloxSlot.finished || robloxSlot.endsAt || robloxSlot.usedSec > 0) return
     if (robloxSlot.remainingSec === robloxLimit) return
-    const base = SCREEN_LIMITS.roblox.seconds
-    if (robloxSlot.remainingSec < base) return
+    const baseSec = baseMin * 60
+    if (robloxSlot.remainingSec < baseSec && robloxSlot.remainingSec !== 0) {
+      return
+    }
     patchDay({
       screens: {
         ...day.screens,
@@ -69,7 +113,9 @@ export function RobloxScreen({ data, onChange }: Props) {
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    allowed,
     robloxLimit,
+    baseMin,
     robloxSlot.remainingSec,
     robloxSlot.finished,
     robloxSlot.endsAt,
@@ -78,8 +124,13 @@ export function RobloxScreen({ data, onChange }: Props) {
 
   const usedSec = robloxSlot.usedSec
   const subParts: string[] = []
-  if (robloxBonusMin > 0) subParts.push(`из копилки +${robloxBonusMin}`)
-  if (usedSec > 0) subParts.push(`сыграно ${formatPlayTime(usedSec)}`)
+  if (!allowed) {
+    subParts.push('сейчас нельзя')
+  } else {
+    subParts.push(`лимит ${Math.round(robloxLimit / 60)} мин`)
+    if (robloxBonusMin > 0) subParts.push(`из копилки +${robloxBonusMin}`)
+    if (usedSec > 0) subParts.push(`сыграно ${formatPlayTime(usedSec)}`)
+  }
 
   return (
     <div className="screen">
@@ -93,17 +144,27 @@ export function RobloxScreen({ data, onChange }: Props) {
         ) : null}
       </header>
 
-      <ScreenLimitCard
-        kind="roblox"
-        slot={robloxSlot}
-        limitSeconds={robloxLimit}
-        bonusNote={
-          robloxBonusMin > 0
-            ? `Сегодня из копилки: +${robloxBonusMin} мин`
-            : undefined
-        }
-        onChange={setSlot}
-      />
+      {!allowed ? (
+        <section className="card">
+          <h2>Пока нельзя</h2>
+          <p className="hint" style={{ marginTop: 8 }}>
+            Родители временно запретили Roblox. Можно заниматься за компьютером
+            другими делами — просто без этой игры.
+          </p>
+        </section>
+      ) : (
+        <ScreenLimitCard
+          kind="roblox"
+          slot={robloxSlot}
+          limitSeconds={robloxLimit}
+          bonusNote={
+            robloxBonusMin > 0
+              ? `Сегодня из копилки: +${robloxBonusMin} мин`
+              : undefined
+          }
+          onChange={setSlot}
+        />
+      )}
 
       <section className="card">
         <div className="card-title-row">
@@ -112,7 +173,11 @@ export function RobloxScreen({ data, onChange }: Props) {
             {robloxBankMin} мин
           </span>
         </div>
-        {robloxBankMin > 0 ? (
+        {!allowed ? (
+          <p className="hint" style={{ marginTop: 8 }}>
+            Пока игра запрещена, минуты из копилки потратить нельзя.
+          </p>
+        ) : robloxBankMin > 0 ? (
           <div className="roblox-bank-actions">
             {bankClaimOptions.map((n) => (
               <button

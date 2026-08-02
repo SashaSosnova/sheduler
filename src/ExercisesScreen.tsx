@@ -1,13 +1,18 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   activeExercises,
   applyMustDoFlags,
+  clearExercisesCredit,
+  closeOpenWorkoutSession,
   controlForExerciseOnDate,
   controlsForDate,
+  ensureOpenWorkoutSession,
   exerciseGroupNames,
   formatDuration,
   formatPlayTime,
   groupExercises,
+  groupGearNeeds,
+  markExercisesPartialCredit,
   moveExerciseToPosition,
   normalizeDayLog,
   parseTimerRounds,
@@ -18,7 +23,7 @@ import {
 import { stampPerfectAt } from './progress'
 import { playDing } from './sound'
 import { Timer } from './Timer'
-import type { AppData, Exercise, ExerciseControl } from './types'
+import type { AppData, Exercise, ExerciseControl, WorkoutSession } from './types'
 
 type Props = {
   data: AppData
@@ -40,53 +45,32 @@ export function ExercisesScreen({
   const total = routine.length
   const workoutSec = workoutDurationSec(day)
   const groups = useMemo(() => groupExercises(routine), [routine])
-
-  const current =
-    routine.find((e) => !day.exercisesDone[e.id]) ?? null
-  const currentIndex = current
-    ? routine.findIndex((e) => e.id === current.id)
-    : -1
-  const allDone = total > 0 && current == null
+  const allDone = total > 0 && doneCount === total
   const todayControls = controlsForDate(data.exerciseControls, key)
 
-  function patchDayExercises(
-    exercisesDone: Record<string, boolean>,
-    timersHonored: Record<string, boolean>,
-  ) {
-    const now = Date.now()
-    const everyDone =
-      routine.length > 0 && routine.every((e) => exercisesDone[e.id])
-    const anyDone = routine.some((e) => exercisesDone[e.id])
+  const [activeGroup, setActiveGroup] = useState<string | null>(null)
+  const [skippedInPass, setSkippedInPass] = useState<Set<string>>(
+    () => new Set(),
+  )
 
-    let workoutStartedAt = day.workoutStartedAt
-    let workoutFinishedAt = day.workoutFinishedAt
+  const groupItems = useMemo(() => {
+    if (!activeGroup) return []
+    return groups.find((g) => g.group === activeGroup)?.items ?? []
+  }, [activeGroup, groups])
 
-    if (!anyDone) {
-      workoutStartedAt = null
-      workoutFinishedAt = null
-    } else {
-      if (workoutStartedAt == null) workoutStartedAt = now
-      workoutFinishedAt = everyDone ? (workoutFinishedAt ?? now) : null
-    }
+  const groupPending = groupItems.filter((e) => !day.exercisesDone[e.id])
+  const current =
+    groupPending.find((e) => !skippedInPass.has(e.id)) ?? null
+  const currentIndexInGroup = current
+    ? groupItems.findIndex((e) => e.id === current.id)
+    : -1
+  const groupDoneCount = groupItems.filter((e) => day.exercisesDone[e.id])
+    .length
 
-    if (everyDone && day.workoutFinishedAt == null) {
-      playDing()
-    }
-
+  function commitDay(partial: Partial<typeof day>) {
     const next = stampPerfectAt(
       day,
-      normalizeDayLog(key, {
-        ...day,
-        exercisesDone,
-        timersHonored,
-        workoutStartedAt,
-        workoutFinishedAt,
-        ...applyMustDoFlags(
-          day,
-          { exercise: everyDone },
-          everyDone ? (workoutFinishedAt ?? now) : now,
-        ),
-      }),
+      normalizeDayLog(key, { ...day, ...partial }),
     )
     onChange({
       ...data,
@@ -97,12 +81,131 @@ export function ExercisesScreen({
     })
   }
 
+  // Wizard state is not persisted — close a dangling approach on enter/picker.
+  useEffect(() => {
+    if (readOnly || activeGroup) return
+    const sessions = day.workoutSessions ?? []
+    if (!sessions.some((s) => s.endedAt == null)) return
+    commitDay({
+      workoutSessions: closeOpenWorkoutSession(sessions, Date.now()),
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readOnly, activeGroup, key])
+
+  function patchDayExercises(
+    exercisesDone: Record<string, boolean>,
+    timersHonored: Record<string, boolean>,
+    opts?: { closeSession?: boolean },
+  ) {
+    const now = Date.now()
+    const everyDone =
+      routine.length > 0 && routine.every((e) => exercisesDone[e.id])
+    const anyDone = routine.some((e) => exercisesDone[e.id])
+
+    let workoutStartedAt = day.workoutStartedAt
+    let workoutFinishedAt = day.workoutFinishedAt
+    let workoutSessions: WorkoutSession[] = day.workoutSessions ?? []
+    let exercisePartial = day.exercisePartial
+
+    if (!anyDone) {
+      workoutStartedAt = null
+      workoutFinishedAt = null
+      workoutSessions = []
+      exercisePartial = false
+    } else {
+      if (workoutStartedAt == null) workoutStartedAt = now
+      workoutSessions = ensureOpenWorkoutSession(workoutSessions, now)
+      if (opts?.closeSession || everyDone) {
+        workoutSessions = closeOpenWorkoutSession(workoutSessions, now)
+      }
+      if (everyDone) {
+        workoutFinishedAt = workoutFinishedAt ?? now
+        exercisePartial = false
+      } else {
+        workoutFinishedAt = null
+      }
+    }
+
+    if (everyDone && day.workoutFinishedAt == null) {
+      playDing()
+    }
+
+    const keepPartialStar = exercisePartial && anyDone && !everyDone
+    commitDay({
+      exercisesDone,
+      timersHonored,
+      workoutStartedAt,
+      workoutFinishedAt,
+      workoutSessions,
+      exercisePartial,
+      ...applyMustDoFlags(
+        day,
+        { exercise: everyDone || keepPartialStar },
+        everyDone ? (workoutFinishedAt ?? now) : now,
+      ),
+    })
+  }
+
   function markDone(ex: Exercise, withTimer: boolean) {
     if (readOnly) return
     const exercisesDone = { ...day.exercisesDone, [ex.id]: true }
     const timersHonored = { ...day.timersHonored }
     if (withTimer) timersHonored[ex.id] = true
-    patchDayExercises(exercisesDone, timersHonored)
+
+    const everyDone =
+      routine.length > 0 && routine.every((e) => exercisesDone[e.id])
+    const groupFullyDone = groupItems.every((e) => exercisesDone[e.id])
+    const remainingInPass = groupItems.filter(
+      (e) =>
+        !exercisesDone[e.id] &&
+        !skippedInPass.has(e.id) &&
+        e.id !== ex.id,
+    )
+
+    patchDayExercises(exercisesDone, timersHonored, {
+      closeSession: everyDone || groupFullyDone || remainingInPass.length === 0,
+    })
+
+    if (everyDone || groupFullyDone || remainingInPass.length === 0) {
+      setActiveGroup(null)
+      setSkippedInPass(new Set())
+    }
+  }
+
+  function skipCurrent() {
+    if (!current) return
+    const nextSkipped = new Set(skippedInPass)
+    nextSkipped.add(current.id)
+    const remaining = groupItems.filter(
+      (e) => !day.exercisesDone[e.id] && !nextSkipped.has(e.id),
+    )
+    if (remaining.length === 0) {
+      const now = Date.now()
+      commitDay({
+        workoutSessions: closeOpenWorkoutSession(
+          day.workoutSessions ?? [],
+          now,
+        ),
+      })
+      setActiveGroup(null)
+      setSkippedInPass(new Set())
+      return
+    }
+    setSkippedInPass(nextSkipped)
+  }
+
+  function backToBlocks() {
+    const now = Date.now()
+    commitDay({
+      workoutSessions: closeOpenWorkoutSession(day.workoutSessions ?? [], now),
+    })
+    setActiveGroup(null)
+    setSkippedInPass(new Set())
+  }
+
+  function openGroup(group: string) {
+    setActiveGroup(group)
+    setSkippedInPass(new Set())
   }
 
   function markControlFilmed(controlId: string) {
@@ -133,6 +236,11 @@ export function ExercisesScreen({
   const currentControl = current
     ? controlForExerciseOnDate(data.exerciseControls, key, current.id)
     : undefined
+  const showTime =
+    workoutSec != null &&
+    (allDone ||
+      day.exercisePartial ||
+      (day.workoutSessions?.length ?? 0) > 0)
 
   return (
     <div className="screen ex-wizard-screen">
@@ -144,11 +252,15 @@ export function ExercisesScreen({
         <p className="sub">
           {allDone
             ? `Готово · ${total} из ${total}`
-            : `${doneCount} из ${total}`}
+            : day.exercisePartial
+              ? `Частично · ${doneCount} из ${total}`
+              : `${doneCount} из ${total}`}
         </p>
-        {workoutSec != null ? (
+        {showTime ? (
           <p className="sub workout-time">
-            Сегодня зарядка заняла {formatPlayTime(workoutSec)}
+            {allDone || day.exercisePartial
+              ? `Сегодня зарядка заняла ${formatPlayTime(workoutSec!)}`
+              : `Чистое время · ${formatPlayTime(workoutSec!)}`}
           </p>
         ) : null}
         {todayControls.some((c) => !c.filmed) ? (
@@ -179,22 +291,98 @@ export function ExercisesScreen({
             Все {total} упражнений отмечены. Можно отдыхать.
           </p>
         </div>
-      ) : current ? (
-        <WizardStep
-          key={current.id}
-          exercise={current}
-          step={currentIndex + 1}
-          total={total}
-          control={currentControl}
-          onDone={() => markDone(current, false)}
-          onTimerDone={() => markDone(current, true)}
-          onControlFilmed={
-            currentControl && !currentControl.filmed
-              ? () => markControlFilmed(currentControl.id)
-              : undefined
-          }
+      ) : activeGroup && current ? (
+        <>
+          <div className="ex-wizard-nav">
+            <button type="button" className="linkish" onClick={backToBlocks}>
+              ← К блокам
+            </button>
+            <span className="ex-wizard-nav-meta">
+              {groupDoneCount} из {groupItems.length} в блоке
+            </span>
+          </div>
+          <WizardStep
+            key={current.id}
+            exercise={current}
+            step={currentIndexInGroup + 1}
+            total={groupItems.length}
+            control={currentControl}
+            onDone={() => markDone(current, false)}
+            onTimerDone={() => markDone(current, true)}
+            onSkip={skipCurrent}
+            onControlFilmed={
+              currentControl && !currentControl.filmed
+                ? () => markControlFilmed(currentControl.id)
+                : undefined
+            }
+          />
+        </>
+      ) : (
+        <BlockPicker
+          groups={groups}
+          exercisesDone={day.exercisesDone}
+          onPick={openGroup}
         />
-      ) : null}
+      )}
+    </div>
+  )
+}
+
+function BlockPicker({
+  groups,
+  exercisesDone,
+  onPick,
+}: {
+  groups: ReturnType<typeof groupExercises>
+  exercisesDone: Record<string, boolean>
+  onPick: (group: string) => void
+}) {
+  return (
+    <div className="ex-block-picker">
+      <p className="ex-block-picker-hint">
+        Выбери блок — можно в любом порядке. Паузы между блоками в время не
+        входят.
+      </p>
+      <ul className="ex-block-list">
+        {groups.map(({ group, items }) => {
+          const done = items.filter((e) => exercisesDone[e.id]).length
+          const complete = done === items.length && items.length > 0
+          const gear = groupGearNeeds(group, items)
+          return (
+            <li key={group}>
+              <button
+                type="button"
+                className={`ex-block-card${complete ? ' is-complete' : ''}`}
+                onClick={() => onPick(group)}
+                disabled={complete}
+              >
+                <span className="ex-block-card-body">
+                  <span className="ex-block-card-title">{group}</span>
+                  <span className="ex-block-card-meta">
+                    {complete
+                      ? 'Готово'
+                      : `${done} из ${items.length}`}
+                  </span>
+                  {!complete && gear.length > 0 ? (
+                    <span className="ex-block-gear" aria-label="Понадобится">
+                      {gear.map((label) => (
+                        <span key={label} className="ex-block-gear-chip">
+                          {label}
+                        </span>
+                      ))}
+                    </span>
+                  ) : null}
+                </span>
+                {complete ? (
+                  <span className="ex-block-done-check" aria-hidden>
+                    ✓
+                  </span>
+                ) : null}
+              </button>
+            </li>
+          )
+        })}
+      </ul>
     </div>
   )
 }
@@ -206,6 +394,7 @@ function WizardStep({
   control,
   onDone,
   onTimerDone,
+  onSkip,
   onControlFilmed,
 }: {
   exercise: Exercise
@@ -214,6 +403,7 @@ function WizardStep({
   control?: ExerciseControl
   onDone: () => void
   onTimerDone: () => void
+  onSkip?: () => void
   onControlFilmed?: () => void
 }) {
   const note = exercise.notes.trim()
@@ -276,6 +466,11 @@ function WizardStep({
           Сделано
         </button>
       )}
+      {onSkip ? (
+        <button type="button" className="btn wide muted-btn" onClick={onSkip}>
+          Пропустить
+        </button>
+      ) : null}
     </div>
   )
 }
@@ -446,18 +641,51 @@ function ParentExerciseScreen({
         <h1>Зарядка</h1>
         <p className="sub">
           Сегодня {doneCount} из {total}
-          {day.mustDo.exercise &&
-          (doneCount === 0 ||
-            (total > 0 && doneCount === total && workoutSec == null))
-            ? ' · отметил родитель'
-            : ''}
+          {day.exercisePartial && doneCount < total
+            ? ' · частично'
+            : day.mustDo.exercise &&
+                (doneCount === 0 ||
+                  (total > 0 && doneCount === total && workoutSec == null))
+              ? ' · отметил родитель'
+              : ''}
         </p>
-        {workoutSec != null ? (
+        {workoutSec != null &&
+        (doneCount === total ||
+          day.exercisePartial ||
+          (day.workoutSessions?.length ?? 0) > 0) ? (
           <p className="sub workout-time">
             Сегодня зарядка заняла {formatPlayTime(workoutSec)}
           </p>
         ) : null}
       </header>
+
+      {total > 0 && doneCount < total ? (
+        <section className="card">
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={Boolean(day.exercisePartial && day.mustDo.exercise)}
+              onChange={() => {
+                const next =
+                  day.exercisePartial && day.mustDo.exercise
+                    ? clearExercisesCredit(day)
+                    : markExercisesPartialCredit(day)
+                onChange({
+                  ...data,
+                  days: { ...data.days, [dayKey]: stampPerfectAt(day, next) },
+                })
+              }}
+            />
+            <span>
+              Частичный зачёт
+              <span className="hint">
+                {' '}
+                — звезда за зарядку без полного комплекса
+              </span>
+            </span>
+          </label>
+        </section>
+      ) : null}
 
       <section className="card">
         <div className="card-title-row">

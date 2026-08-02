@@ -1,6 +1,7 @@
 import {
   MUST_DO_ITEMS,
-  SCREEN_LIMITS,
+  isRobloxEnabled,
+  normalizeRobloxLimitMin,
   activeExercises,
   chewDurationSec,
   flushScreenOvertime,
@@ -1329,12 +1330,39 @@ export function robloxBonusMinutes(
   return typeof n === 'number' && Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0
 }
 
-/** Today's Roblox limit including one-day streak bonus */
+/** Today's Roblox limit: parent base (+ bank bonuses), or 0 if blocked. */
 export function robloxLimitSeconds(
-  days: Record<string, DayLog>,
+  data: AppData,
   today = todayKey(),
 ): number {
-  return SCREEN_LIMITS.roblox.seconds + robloxBonusMinutes(days, today) * 60
+  if (!isRobloxEnabled(data)) return 0
+  const baseMin = normalizeRobloxLimitMin(data.robloxLimitMin)
+  return baseMin * 60 + robloxBonusMinutes(data.days, today) * 60
+}
+
+/** Parent: update Roblox allow/limit policy (bumps sync timestamp). */
+export function patchRobloxSettings(
+  data: AppData,
+  patch: { enabled?: boolean; limitMin?: number },
+): AppData {
+  const nextEnabled =
+    patch.enabled !== undefined ? Boolean(patch.enabled) : isRobloxEnabled(data)
+  const nextLimit =
+    patch.limitMin !== undefined
+      ? normalizeRobloxLimitMin(patch.limitMin)
+      : normalizeRobloxLimitMin(data.robloxLimitMin)
+  if (
+    nextEnabled === isRobloxEnabled(data) &&
+    nextLimit === normalizeRobloxLimitMin(data.robloxLimitMin)
+  ) {
+    return data
+  }
+  return {
+    ...data,
+    robloxEnabled: nextEnabled,
+    robloxLimitMin: nextLimit,
+    robloxSettingsUpdatedAt: Date.now(),
+  }
 }
 
 /** Tip day of the current streak (today if perfect, else yesterday). */
@@ -1499,6 +1527,7 @@ export function claimRobloxBankMinutes(
   minutes: number,
   today = todayKey(),
 ): AppData {
+  if (!isRobloxEnabled(data)) return data
   const bank = Math.max(0, Math.floor(data.robloxBonusBankMin ?? 0))
   const claim = Math.min(bank, Math.max(0, Math.floor(minutes)))
   if (claim <= 0) return data

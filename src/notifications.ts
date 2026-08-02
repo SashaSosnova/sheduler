@@ -4,13 +4,7 @@ import { LocalNotifications } from '@capacitor/local-notifications'
 const ENABLED_KEY = 'vacation-notifications-enabled'
 const CHANNEL_ID = 'daily-reminders'
 
-export type ReminderId =
-  | 'wash-am'
-  | 'exercise'
-  | 'chew'
-  | 'med-morning'
-  | 'med-day'
-  | 'med-evening'
+export type ReminderId = 'wash-am' | 'exercise' | 'chew'
 
 export type ReminderDef = {
   id: ReminderId
@@ -21,10 +15,10 @@ export type ReminderDef = {
   body: string
 }
 
-/** Old notification ids to cancel after schedule changes */
-const LEGACY_NOTIFICATION_IDS = [1004]
+/** Old notification ids to cancel after schedule changes (incl. removed med reminders) */
+const LEGACY_NOTIFICATION_IDS = [1004, 1005, 1006, 1007]
 
-/** Daily reminder times (local device time) */
+/** Daily reminder times (local device time) — child only; meds are parent-tracked */
 export const REMINDERS: ReminderDef[] = [
   {
     id: 'wash-am',
@@ -35,14 +29,6 @@ export const REMINDERS: ReminderDef[] = [
     body: 'Не забудь почистить зубы.',
   },
   {
-    id: 'med-morning',
-    notificationId: 1005,
-    hour: 8,
-    minute: 30,
-    title: 'Таблетки — утро',
-    body: 'Не забудь выпить утренние таблетки.',
-  },
-  {
     id: 'exercise',
     notificationId: 1002,
     hour: 9,
@@ -51,28 +37,12 @@ export const REMINDERS: ReminderDef[] = [
     body: 'Пора сделать комплекс упражнений.',
   },
   {
-    id: 'med-day',
-    notificationId: 1006,
-    hour: 14,
-    minute: 0,
-    title: 'Таблетки — день',
-    body: 'Не забудь выпить дневные таблетки.',
-  },
-  {
     id: 'chew',
     notificationId: 1003,
     hour: 15,
     minute: 0,
     title: 'Заполнить дневник жевания',
     body: 'Не забудь заполнить жевание после обеда.',
-  },
-  {
-    id: 'med-evening',
-    notificationId: 1007,
-    hour: 20,
-    minute: 0,
-    title: 'Таблетки — вечер',
-    body: 'Не забудь выпить вечерние таблетки.',
   },
 ]
 
@@ -104,7 +74,7 @@ async function ensureChannel(): Promise<void> {
     await LocalNotifications.createChannel({
       id: CHANNEL_ID,
       name: 'Напоминания на день',
-      description: 'Зубы, зарядка, таблетки и дневник жевания',
+      description: 'Зубы, зарядка и дневник жевания',
       importance: 5,
       visibility: 1,
       vibration: true,
