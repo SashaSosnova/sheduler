@@ -1498,6 +1498,10 @@
   background: var(--bg-deep);
 }
 
+.sticker-detail-hint {
+  white-space: pre-line;
+}
+
 .sticker-detail--inline {
   grid-column: 1 / -1;
   margin: 0;

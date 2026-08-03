@@ -131,9 +131,15 @@ export type Sticker = {
    * payouts / unlocked stickers’ robloxExtraMin) reaches this value.
    */
   needSecretRobloxBonusMin?: number
-  /** Secret: workout finished before this local hour */
+  /**
+   * Secret: workout finished before this local hour.
+   * With needSecretPerfectByHour → full day-rhythm (both required).
+   */
   needSecretEarlyPerfectHour?: number
-  /** Secret: day became perfect before this local hour */
+  /**
+   * Secret: day became perfect before this local hour.
+   * Alone → only early perfect day; with needSecretEarlyPerfectHour → both.
+   */
   needSecretPerfectByHour?: number
   robloxExtraMin?: number
   /** Rubles credited to moneyBankRub when this sticker unlocks */
@@ -159,6 +165,8 @@ export type StickerProgress = {
   ownTasks: number
   secretShortcut: boolean
   secretNoRoblox: boolean
+  /** Perfect day closed before 20:00 (same calendar day) */
+  secretPerfectByHour: boolean
   /** Workout before 10:00 and perfect day closed before 20:00 */
   secretDayRhythm: boolean
   /**
@@ -384,11 +392,20 @@ export const STICKERS: Sticker[] = [
   {
     id: 'feat-secret-day-rhythm',
     kind: 'art',
-    needSecretEarlyPerfectHour: 10,
     needSecretPerfectByHour: 20,
     image: './stickers/mahito.png',
     label: 'Махито',
     quote: 'Души так легко менять',
+    detail: 'Магическая битва',
+  },
+  {
+    id: 'feat-secret-day-early',
+    kind: 'art',
+    needSecretEarlyPerfectHour: 10,
+    needSecretPerfectByHour: 20,
+    image: './stickers/nanami.png',
+    label: 'Нанами',
+    quote: 'Сверхурочные — это проклятие',
     detail: 'Магическая битва',
   },
   {
@@ -744,8 +761,8 @@ export function hasChewMaxEntry(
     (entry) =>
       entry.left.length > 0 &&
       entry.right.length > 0 &&
-      entry.left.every((n) => n > threshold) &&
-      entry.right.every((n) => n > threshold),
+      entry.left.every((n) => n >= threshold) &&
+      entry.right.every((n) => n >= threshold),
   )
 }
 
@@ -767,6 +784,27 @@ export function stampPerfectAt(
   return { ...next, perfectAt: Date.now() }
 }
 
+/** Perfect day closed before `perfectBeforeHour` (local clock, same day). */
+export function isPerfectByHourSecret(
+  day: DayLog,
+  perfectBeforeHour = 20,
+): boolean {
+  if (!isPerfectDay(day)) return false
+  if (day.perfectAt == null) return false
+  const perfect = new Date(day.perfectAt)
+  if (todayKey(perfect) !== day.date) return false
+  return perfect.getHours() < perfectBeforeHour
+}
+
+export function hasPerfectByHourSecret(
+  days: Record<string, DayLog>,
+  perfectBeforeHour = 20,
+): boolean {
+  return Object.values(days).some((day) =>
+    isPerfectByHourSecret(day, perfectBeforeHour),
+  )
+}
+
 /**
  * Workout finished before `workoutBeforeHour`, perfect day closed before
  * `perfectBeforeHour` (local clock, same calendar day).
@@ -776,17 +814,11 @@ export function isDayRhythmSecret(
   workoutBeforeHour = 10,
   perfectBeforeHour = 20,
 ): boolean {
-  if (!isPerfectDay(day)) return false
-  if (day.workoutFinishedAt == null || day.perfectAt == null) return false
+  if (!isPerfectByHourSecret(day, perfectBeforeHour)) return false
+  if (day.workoutFinishedAt == null) return false
   const workout = new Date(day.workoutFinishedAt)
-  const perfect = new Date(day.perfectAt)
-  if (todayKey(workout) !== day.date || todayKey(perfect) !== day.date) {
-    return false
-  }
-  return (
-    workout.getHours() < workoutBeforeHour &&
-    perfect.getHours() < perfectBeforeHour
-  )
+  if (todayKey(workout) !== day.date) return false
+  return workout.getHours() < workoutBeforeHour
 }
 
 export function hasDayRhythmSecret(
@@ -909,6 +941,7 @@ export function stickerProgressFromData(data: AppData): StickerProgress {
     ownTasks: countOwnTasksDone(data.days),
     secretShortcut: hasShortcutWorkout(data.days, exercises),
     secretNoRoblox: hasNoRobloxPerfectDay(data.days),
+    secretPerfectByHour: hasPerfectByHourSecret(data.days, 20),
     secretDayRhythm: hasDayRhythmSecret(data.days, 10, 20),
     achievementRobloxMin: 0,
   }
@@ -996,10 +1029,22 @@ export function stickerUnlockHint(
     return 'Когда в копилке бонусов накопится целый час'
   }
   if (
+    sticker.needSecretEarlyPerfectHour != null &&
+    sticker.needSecretPerfectByHour != null
+  ) {
+    // Rhyme: teeth + workout before 10:00, perfect day before 20:00
+    return [
+      'Рот разомни, щётку бери,',
+      'Успеешь до десяти — ачивка внутри.',
+      'К вечеру все дела собери,',
+      'Пока двадцать не пробило — смотри!',
+    ].join('\n')
+  }
+  if (
     sticker.needSecretEarlyPerfectHour != null ||
     sticker.needSecretPerfectByHour != null
   ) {
-    // 10 = still one digit on a 24h clock; 20 = «два десятка»
+    // Veiled Mahito-era wording (perfect-by-hour only)
     return 'Пока утро на часах ещё однозначное — и день закрыт до двух десятков'
   }
   if (isSecretSticker(sticker)) return 'Секретный способ получения'
@@ -1078,18 +1123,24 @@ export function stickerOpenedHint(sticker: Sticker): string {
     return 'Открыто: идеальный день без Roblox'
   }
   if (sticker.needSecretChewMax) {
-    return 'Открыто: все укусы в записи больше 50'
+    return 'Открыто: все укусы в записи 50 или больше'
   }
   if (sticker.needSecretRobloxBonusMin != null) {
     return `Открыто: накопил ${sticker.needSecretRobloxBonusMin}+ мин бонусов Roblox`
   }
   if (
-    sticker.needSecretEarlyPerfectHour != null ||
+    sticker.needSecretEarlyPerfectHour != null &&
     sticker.needSecretPerfectByHour != null
   ) {
-    const w = sticker.needSecretEarlyPerfectHour ?? 10
-    const p = sticker.needSecretPerfectByHour ?? 20
+    const w = sticker.needSecretEarlyPerfectHour
+    const p = sticker.needSecretPerfectByHour
     return `Открыто: зарядка до ${w}:00 и все дела минимума до ${p}:00`
+  }
+  if (sticker.needSecretPerfectByHour != null) {
+    return `Открыто: все дела минимума до ${sticker.needSecretPerfectByHour}:00`
+  }
+  if (sticker.needSecretEarlyPerfectHour != null) {
+    return `Открыто: зарядка до ${sticker.needSecretEarlyPerfectHour}:00`
   }
   if (sticker.needQualityWorkouts != null) {
     const n = sticker.needQualityWorkouts
@@ -1192,10 +1243,15 @@ export function isStickerUnlocked(
   const secretRobloxBonusOk =
     sticker.needSecretRobloxBonusMin == null ||
     progress.achievementRobloxMin >= sticker.needSecretRobloxBonusMin
-  const secretDayRhythmOk =
-    (sticker.needSecretEarlyPerfectHour == null &&
-      sticker.needSecretPerfectByHour == null) ||
-    progress.secretDayRhythm
+  const needEarlyWorkout = sticker.needSecretEarlyPerfectHour != null
+  const needPerfectByHour = sticker.needSecretPerfectByHour != null
+  const secretTimeOk =
+    (!needEarlyWorkout && !needPerfectByHour) ||
+    (needEarlyWorkout && needPerfectByHour
+      ? progress.secretDayRhythm
+      : needPerfectByHour
+        ? progress.secretPerfectByHour
+        : progress.secretDayRhythm)
   return (
     perfectOk &&
     streakOk &&
@@ -1211,7 +1267,7 @@ export function isStickerUnlocked(
     secretNoRobloxOk &&
     secretChewMaxOk &&
     secretRobloxBonusOk &&
-    secretDayRhythmOk
+    secretTimeOk
   )
 }
 

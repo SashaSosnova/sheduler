@@ -372,7 +372,7 @@ function StickerDetailCard({
           ) : null}
         </div>
       </div>
-      <p className="hint">
+      <p className="hint sticker-detail-hint">
         {open
           ? stickerOpenedHint(sticker)
           : stickerUnlockHint(sticker, progress)}
