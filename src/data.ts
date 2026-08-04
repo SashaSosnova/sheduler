@@ -1,6 +1,7 @@
 import type {
   AppData,
   ChewEntry,
+  CreateKind,
   DayExtraTask,
   DayLog,
   DayReminder,
@@ -10,6 +11,8 @@ import type {
   Medication,
   MustDoId,
   ScreenSlot,
+  StudioSprintState,
+  StudioSprintStatus,
   WorkoutSession,
 } from './types'
 
@@ -92,12 +95,116 @@ export const CHEW_FOODS = ['Морковь', 'Яблоко'] as const
 export const CREATE_IDEAS = [
   'Рисовать',
   'Лепить',
-  'Паззл или Лего',
+  'Пазл',
+  'Лего',
   'Поделка / оригами',
   'Комикс',
   'Музыка',
   'Что-то смастерить',
 ]
+
+/** Chip label → creative achievement track */
+export const CREATE_KIND_BY_IDEA: Record<string, CreateKind> = {
+  Пазл: 'puzzle',
+  Лего: 'lego',
+}
+
+export const CREATE_PIECE_MAX = 4
+export const CREATE_PIECE_OPTIONS = [1, 2, 3, 4] as const
+
+export function createKindFromNote(note: string): CreateKind | null {
+  const key = note.trim()
+  return CREATE_KIND_BY_IDEA[key] ?? null
+}
+
+export function isCreatePieceIdea(idea: string): boolean {
+  return idea === 'Пазл' || idea === 'Лего'
+}
+
+export function normalizeCreatePieces(raw: unknown): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return 0
+  return Math.max(0, Math.min(CREATE_PIECE_MAX, Math.floor(raw)))
+}
+
+export function ruShtuki(n: number): string {
+  const n10 = n % 10
+  const n100 = n % 100
+  if (n10 === 1 && n100 !== 11) return 'штука'
+  if (n10 >= 2 && n10 <= 4 && (n100 < 10 || n100 >= 20)) return 'штуки'
+  return 'штук'
+}
+
+export function formatCreatePieceLabel(
+  kind: CreateKind,
+  n: number,
+): string {
+  const name = kind === 'puzzle' ? 'Пазл' : 'Лего'
+  return `${name}: ${n} ${ruShtuki(n)}`
+}
+
+export function createKindsFromPieces(
+  puzzlePieces: number,
+  legoPieces: number,
+): CreateKind[] {
+  const out: CreateKind[] = []
+  if (puzzlePieces > 0) out.push('puzzle')
+  if (legoPieces > 0) out.push('lego')
+  return out
+}
+
+export function toggleCreateIdea(ideas: string[], idea: string): string[] {
+  const key = idea.trim()
+  if (!key || isCreatePieceIdea(key)) return ideas
+  return ideas.includes(key)
+    ? ideas.filter((x) => x !== key)
+    : [...ideas, key]
+}
+
+export function normalizeCreateIdeas(
+  raw: unknown,
+  createNote = '',
+): string[] {
+  const out: string[] = []
+  const add = (idea: string) => {
+    const key = idea.trim()
+    if (!key || out.includes(key) || isCreatePieceIdea(key)) return
+    if (!CREATE_IDEAS.includes(key)) return
+    out.push(key)
+  }
+  if (Array.isArray(raw)) {
+    for (const item of raw) {
+      if (typeof item === 'string') add(item)
+    }
+  }
+  const note = createNote.trim()
+  if (note && CREATE_IDEAS.includes(note)) add(note)
+  if (note.includes('·')) {
+    for (const part of note.split('·')) add(part)
+  }
+  return out
+}
+
+export function normalizeCreateKinds(
+  puzzlePieces: number,
+  legoPieces: number,
+  rawKinds?: unknown,
+  legacyKind?: unknown,
+  createNote = '',
+): CreateKind[] {
+  const out = createKindsFromPieces(puzzlePieces, legoPieces)
+  const add = (k: CreateKind) => {
+    if (!out.includes(k)) out.push(k)
+  }
+  if (Array.isArray(rawKinds)) {
+    for (const item of rawKinds) {
+      if (item === 'puzzle' || item === 'lego') add(item)
+    }
+  }
+  if (legacyKind === 'puzzle' || legacyKind === 'lego') add(legacyKind)
+  const fromNote = createKindFromNote(createNote)
+  if (fromNote) add(fromNote)
+  return out
+}
 
 /** Quick-add chips for one-off chores (parent or child) */
 export const EXTRA_TASK_IDEAS: string[] = [
@@ -613,6 +720,10 @@ export function emptyDayLog(date: string): DayLog {
     reminders: [],
     deletedReminderIds: [],
     createNote: '',
+    createIdeas: [],
+    puzzlePieces: 0,
+    legoPieces: 0,
+    createKinds: [],
     robloxBonusMin: 0,
     screens: {
       roblox: emptyScreenSlot(SCREEN_LIMITS.roblox.seconds),
@@ -670,6 +781,25 @@ function normalizeReminders(raw: unknown): DayReminder[] {
     .filter((t): t is DayReminder => t !== null)
 }
 
+function resolveDayCreatePieces(
+  raw: Partial<DayLog>,
+  kind: CreateKind,
+): number {
+  const field = kind === 'puzzle' ? raw.puzzlePieces : raw.legoPieces
+  const n = normalizeCreatePieces(field)
+  if (n > 0) return n
+  const label = kind === 'puzzle' ? 'Пазл' : 'Лего'
+  const ideas = Array.isArray(raw.createIdeas) ? raw.createIdeas : []
+  const note = (raw.createNote ?? '').trim()
+  const had =
+    ideas.includes(label) ||
+    note === label ||
+    note.includes(label) ||
+    (Array.isArray(raw.createKinds) && raw.createKinds.includes(kind)) ||
+    (raw as { createKind?: unknown }).createKind === kind
+  return had ? 1 : 0
+}
+
 export function normalizeDayLog(date: string, raw?: Partial<DayLog> | null): DayLog {
   const base = emptyDayLog(date)
   if (!raw) return base
@@ -677,6 +807,23 @@ export function normalizeDayLog(date: string, raw?: Partial<DayLog> | null): Day
   const deletedReminderIds = normalizeDeletedIds(raw.deletedReminderIds)
   const deletedTasks = new Set(deletedExtraTaskIds)
   const deletedReminders = new Set(deletedReminderIds)
+  const puzzlePieces = resolveDayCreatePieces(raw, 'puzzle')
+  const legoPieces = resolveDayCreatePieces(raw, 'lego')
+  const noteRaw = (raw.createNote ?? '').trim()
+  let createNote = ''
+  if (noteRaw && !CREATE_IDEAS.includes(noteRaw) && !CREATE_KIND_BY_IDEA[noteRaw]) {
+    if (noteRaw.includes('·')) {
+      createNote = noteRaw
+        .split('·')
+        .map((p) => p.trim())
+        .filter(
+          (p) => p && !CREATE_IDEAS.includes(p) && !CREATE_KIND_BY_IDEA[p],
+        )
+        .join(' · ')
+    } else {
+      createNote = noteRaw
+    }
+  }
   return {
     ...base,
     ...raw,
@@ -692,7 +839,11 @@ export function normalizeDayLog(date: string, raw?: Partial<DayLog> | null): Day
     workoutSessions: normalizeWorkoutSessions(raw.workoutSessions),
     exercisePartial: Boolean(raw.exercisePartial),
     perfectAt: normalizeTimestamp(raw.perfectAt),
-    createNote: raw.createNote ?? '',
+    createNote,
+    createIdeas: normalizeCreateIdeas(raw.createIdeas, raw.createNote ?? ''),
+    puzzlePieces,
+    legoPieces,
+    createKinds: createKindsFromPieces(puzzlePieces, legoPieces),
     extraTasks: normalizeExtraTasks(raw.extraTasks).filter(
       (t) => !deletedTasks.has(t.id),
     ),
@@ -908,11 +1059,87 @@ export function mergeDayLog(
     reminders: reminders.reminders,
     deletedReminderIds: reminders.deletedIds,
     createNote: a.createNote.trim() ? a.createNote : b.createNote,
+    createIdeas: (() => {
+      const merged: string[] = []
+      for (const idea of [...a.createIdeas, ...b.createIdeas]) {
+        if (!merged.includes(idea)) merged.push(idea)
+      }
+      return merged
+    })(),
+    puzzlePieces: Math.max(a.puzzlePieces, b.puzzlePieces),
+    legoPieces: Math.max(a.legoPieces, b.legoPieces),
+    createKinds: createKindsFromPieces(
+      Math.max(a.puzzlePieces, b.puzzlePieces),
+      Math.max(a.legoPieces, b.legoPieces),
+    ),
     robloxBonusMin: Math.max(a.robloxBonusMin, b.robloxBonusMin),
     screens: {
       roblox: mergeScreenSlots(a.screens.roblox, b.screens.roblox),
     },
   })
+}
+
+const STUDIO_SPRINT_STATUSES = new Set<StudioSprintStatus>([
+  'todo',
+  'submitted',
+  'needs_work',
+  'approved',
+])
+
+export function normalizeStudioSprintState(
+  raw: unknown,
+): StudioSprintState | null {
+  if (!raw || typeof raw !== 'object') return null
+  const row = raw as Partial<StudioSprintState>
+  const status = row.status
+  if (typeof status !== 'string' || !STUDIO_SPRINT_STATUSES.has(status as StudioSprintStatus)) {
+    return null
+  }
+  const updatedAt =
+    typeof row.updatedAt === 'number' && Number.isFinite(row.updatedAt)
+      ? Math.max(0, Math.floor(row.updatedAt))
+      : 0
+  const childNote =
+    typeof row.childNote === 'string' ? row.childNote.trim() : ''
+  const parentNote =
+    typeof row.parentNote === 'string' ? row.parentNote.trim() : ''
+  return {
+    status: status as StudioSprintStatus,
+    updatedAt,
+    ...(childNote ? { childNote } : {}),
+    ...(parentNote ? { parentNote } : {}),
+  }
+}
+
+export function normalizeStudioSprintStates(
+  raw: unknown,
+): Record<string, StudioSprintState> {
+  if (!raw || typeof raw !== 'object') return {}
+  const out: Record<string, StudioSprintState> = {}
+  for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
+    const key = id.trim()
+    if (!key) continue
+    const state = normalizeStudioSprintState(value)
+    if (state) out[key] = state
+  }
+  return out
+}
+
+/** Per-sprint last-write-wins by updatedAt. */
+export function mergeStudioSprintStates(
+  local: Record<string, StudioSprintState> | undefined,
+  remote: Record<string, StudioSprintState> | undefined,
+): Record<string, StudioSprintState> {
+  const a = normalizeStudioSprintStates(local)
+  const b = normalizeStudioSprintStates(remote)
+  const out: Record<string, StudioSprintState> = { ...a }
+  for (const [id, remoteState] of Object.entries(b)) {
+    const localState = out[id]
+    if (!localState || remoteState.updatedAt >= localState.updatedAt) {
+      out[id] = remoteState
+    }
+  }
+  return out
 }
 
 export function mergeDaysMaps(
@@ -1268,6 +1495,9 @@ export function defaultAppData(): AppData {
     bestParentTasks: 0,
     readingBooks: [],
     finishedBooks: [],
+    studioSprintStates: {},
+    puzzleCount: 0,
+    legoCount: 0,
   }
 }
 

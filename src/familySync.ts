@@ -19,6 +19,7 @@ import type {
   ExerciseControl,
   FinishedBook,
   ReadingBook,
+  StudioSprintState,
 } from './types'
 import { getFirebaseAuth, getFirebaseDb, isFirebaseConfigured } from './firebase'
 
@@ -54,6 +55,9 @@ export type CloudPayload = {
   currentBook?: string
   readingBooks?: ReadingBook[]
   finishedBooks?: FinishedBook[]
+  studioSprintStates?: Record<string, StudioSprintState>
+  puzzleCount?: number
+  legoCount?: number
   updatedAt: number
 }
 
@@ -143,6 +147,9 @@ export function toCloudPayload(data: AppData, updatedAt = Date.now()): CloudPayl
     bestParentTasks: data.bestParentTasks ?? 0,
     readingBooks: data.readingBooks ?? [],
     finishedBooks: data.finishedBooks ?? [],
+    studioSprintStates: data.studioSprintStates ?? {},
+    puzzleCount: data.puzzleCount ?? 0,
+    legoCount: data.legoCount ?? 0,
     updatedAt,
   }
 }
@@ -208,6 +215,9 @@ export async function joinFamily(rawCode: string): Promise<CloudPayload> {
     readingBooks: remote.readingBooks,
     currentBook: remote.currentBook,
     finishedBooks: remote.finishedBooks ?? [],
+    studioSprintStates: remote.studioSprintStates ?? {},
+    puzzleCount: remote.puzzleCount ?? 0,
+    legoCount: remote.legoCount ?? 0,
     updatedAt: remote.updatedAt ?? Date.now(),
   }
 }

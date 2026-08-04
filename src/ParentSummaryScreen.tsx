@@ -19,6 +19,7 @@ import {
   robloxLimitSeconds,
   stampPerfectAt,
 } from './progress'
+import { StudioProjectCard } from './StudioProjectCard'
 import type { AppData } from './types'
 
 const PARENT_BANK_GIFTS = [5, 10, 15, 30] as const
@@ -271,6 +272,8 @@ export function ParentSummaryScreen({ data, onChange }: Props) {
           </div>
         ) : null}
       </section>
+
+      <StudioProjectCard data={data} onChange={onChange} mode="parent" />
 
       <section className="card piggy-bank-card">
         <div className="card-title-row">

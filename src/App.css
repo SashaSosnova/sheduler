@@ -2445,6 +2445,56 @@ span.ex-timer-chip {
   color: var(--warm);
 }
 
+.create-chip-grid .create-cart-chip {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px;
+  padding: 4px;
+  min-height: 40px;
+  cursor: default;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.create-cart-label {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.create-cart-step {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  margin: 0;
+  border-radius: 6px;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.create-cart-step:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 .create-box {
   padding: 0 12px 8px;
 }
@@ -3052,6 +3102,313 @@ span.ex-timer-chip {
 
 .timer-run .timer-digits {
   color: var(--warm);
+}
+
+.roblox-pane-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--bg-deep);
+  border: 1px solid var(--line);
+}
+
+.roblox-pane-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.92rem;
+  padding: 10px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.roblox-pane-btn.active {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+.studio-hero {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.studio-cover {
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  background: var(--bg-deep);
+}
+
+.studio-hero-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.studio-hero-text h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  line-height: 1.25;
+}
+
+.studio-pitch {
+  margin-top: 10px;
+}
+
+.studio-brief-fold {
+  margin-top: 4px;
+}
+
+.studio-brief-body {
+  margin-top: 4px;
+}
+
+.studio-sprint-details {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.studio-brief {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--warm-soft);
+  border: 1px solid color-mix(in srgb, var(--warm) 25%, var(--line));
+}
+
+.studio-brief-mechanic {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+}
+
+.studio-brief-visual {
+  background: color-mix(in srgb, var(--bg-deep) 55%, var(--surface));
+  border-color: var(--line);
+}
+
+.studio-fixed-rules {
+  margin: 8px 0 0;
+  padding-left: 1.2em;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.92rem;
+}
+
+.studio-mood {
+  margin-top: 14px;
+}
+
+.studio-mood-grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.studio-mood-item {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.studio-mood-item img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-deep);
+}
+
+.studio-mood-item figcaption {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.3;
+}
+
+.studio-sprint-list {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.studio-sprint {
+  padding: 12px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface) 70%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+}
+
+.studio-sprint-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.studio-desc {
+  margin: 0;
+  padding-left: 1.15em;
+  color: var(--ink);
+  font-size: 0.92rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.studio-puzzles {
+  margin-top: 10px;
+}
+
+.studio-visual-guide {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-deep) 45%, var(--surface));
+  border: 1px solid var(--line);
+}
+
+.studio-helpers {
+  margin-top: 10px;
+}
+
+.studio-guide-grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.studio-guide-grid-steps {
+  margin-top: 8px;
+}
+
+.studio-guide-item {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.studio-guide-item img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-deep);
+}
+
+.studio-guide-item figcaption {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.3;
+}
+
+@media (min-width: 520px) {
+  .studio-guide-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .studio-guide-grid-steps {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.studio-puzzle-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.studio-puzzle-item {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line));
+}
+
+.studio-puzzle-title {
+  margin: 0;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.studio-puzzle-item .hint {
+  margin: 4px 0 0;
+}
+
+.studio-note {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg) 85%, var(--surface));
+}
+
+.studio-note-parent {
+  border-left: 3px solid var(--warm);
+}
+
+.studio-note .eyebrow {
+  margin-bottom: 4px;
+}
+
+.studio-note p {
+  margin: 0;
+}
+
+.studio-actions {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.studio-actions textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 72px;
+}
+
+.studio-review-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.studio-btn-rework {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.studio-btn-rework.active {
+  filter: brightness(0.92);
+}
+
+.studio-btn-ok {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: #fff;
 }
 
 @media (min-width: 700px) {

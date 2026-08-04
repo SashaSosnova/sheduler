@@ -10,7 +10,9 @@ import {
   mergeDaysMaps,
   mergeExerciseControls,
   mergeExercises,
+  mergeStudioSprintStates,
   normalizeExerciseControls,
+  normalizeStudioSprintStates,
   resolveExercises,
 } from './data'
 import {
@@ -33,6 +35,8 @@ import {
   currentStreak,
   normalizeFinishedBooks,
   resolveReadingBooks,
+  resolveLegoCount,
+  resolvePuzzleCount,
   resolveRobloxBonusEarnedMin,
   seedClaimedStickerMoneyIds,
   seedDismissedGiftStickerIds,
@@ -43,6 +47,7 @@ import type {
   DayLog,
   FinishedBook,
   ReadingBook,
+  StudioSprintState,
 } from './types'
 
 const STORAGE_KEY = 'vacation-planner-v2'
@@ -73,6 +78,9 @@ type StoredData = {
   currentBook?: string
   readingBooks?: ReadingBook[]
   finishedBooks?: FinishedBook[]
+  studioSprintStates?: Record<string, StudioSprintState>
+  puzzleCount?: number
+  legoCount?: number
   exercises?: unknown
   exerciseControls?: unknown
 }
@@ -186,6 +194,19 @@ function hydrateAppData(
       bestParentTasks,
       readingBooks: resolveReadingBooks(partial.readingBooks, partial.currentBook),
       finishedBooks: normalizeFinishedBooks(partial.finishedBooks),
+      studioSprintStates: normalizeStudioSprintStates(partial.studioSprintStates),
+      puzzleCount: resolvePuzzleCount({
+        ...base,
+        ...partial,
+        days: partial.days ?? base.days,
+        puzzleCount: normalizeNonNegInt(partial.puzzleCount),
+      } as AppData),
+      legoCount: resolveLegoCount({
+        ...base,
+        ...partial,
+        days: partial.days ?? base.days,
+        legoCount: normalizeNonNegInt(partial.legoCount),
+      } as AppData),
     }),
   )
 }
@@ -275,6 +296,9 @@ function load(): AppData {
       bestParentTasks,
       readingBooks,
       finishedBooks,
+      studioSprintStates: normalizeStudioSprintStates(parsed.studioSprintStates),
+      puzzleCount: normalizeNonNegInt(parsed.puzzleCount),
+      legoCount: normalizeNonNegInt(parsed.legoCount),
     })
   } catch {
     return defaultAppData()
@@ -437,6 +461,18 @@ function applyCloud(prev: AppData, payload: CloudPayload): AppData {
     bestParentTasks,
     readingBooks,
     finishedBooks,
+    studioSprintStates: mergeStudioSprintStates(
+      prev.studioSprintStates,
+      payload.studioSprintStates,
+    ),
+    puzzleCount: Math.max(
+      resolvePuzzleCount(prev),
+      normalizeNonNegInt(payload.puzzleCount),
+    ),
+    legoCount: Math.max(
+      resolveLegoCount(prev),
+      normalizeNonNegInt(payload.legoCount),
+    ),
   })
 }
 
@@ -530,6 +566,9 @@ function replaceFromCloud(payload: CloudPayload): AppData {
     bestParentTasks,
     readingBooks,
     finishedBooks,
+    studioSprintStates: normalizeStudioSprintStates(payload.studioSprintStates),
+    puzzleCount: normalizeNonNegInt(payload.puzzleCount),
+    legoCount: normalizeNonNegInt(payload.legoCount),
   })
 }
 
@@ -577,6 +616,9 @@ export function useAppData() {
       bestParentTasks: data.bestParentTasks ?? 0,
       readingBooks: data.readingBooks ?? [],
       finishedBooks: data.finishedBooks ?? [],
+      studioSprintStates: data.studioSprintStates ?? {},
+      puzzleCount: data.puzzleCount ?? 0,
+      legoCount: data.legoCount ?? 0,
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore))
   }, [data])

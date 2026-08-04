@@ -3,6 +3,7 @@ import {
   EXTRA_TASK_IDEAS,
   MED_SLOT_ITEMS,
   MUST_DO_ITEMS,
+  formatCreatePieceLabel,
   activeExercises,
   applyMedSlotFlags,
   applyMustDoFlags,
@@ -201,7 +202,18 @@ function mustDoStatusHint(
   const at = detail.day.mustDoAt?.[id]
   const atHint = at != null ? ` в ${formatTimeOfDay(at)}` : ''
   if (id === 'create') {
-    const note = detail.day.createNote.trim()
+    const note = [
+      detail.day.puzzlePieces > 0
+        ? formatCreatePieceLabel('puzzle', detail.day.puzzlePieces)
+        : null,
+      detail.day.legoPieces > 0
+        ? formatCreatePieceLabel('lego', detail.day.legoPieces)
+        : null,
+      ...(detail.day.createIdeas ?? []),
+      detail.day.createNote.trim(),
+    ]
+      .filter(Boolean)
+      .join(' · ')
     if (done) {
       return note
         ? `сделано${atHint} — ${note}`

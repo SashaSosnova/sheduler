@@ -156,11 +156,38 @@ export type DayLog = {
   reminders: DayReminder[]
   /** Ids removed on any device — merge must not resurrect them */
   deletedReminderIds: string[]
-  /** What creative thing they did */
+  /** Free-text creative note («своё»), not a chip label */
   createNote: string
+  /** Selected creative chips for the day (multi-select, not must-do; no Пазл/Лего) */
+  createIdeas: string[]
+  /** Puzzles completed today (0 = not selected, 1–4) */
+  puzzlePieces: number
+  /** Lego sets completed today (0 = not selected, 1–4) */
+  legoPieces: number
+  /** Derived: puzzle/lego tracks active today */
+  createKinds: CreateKind[]
   screens: Record<ScreenKind, ScreenSlot>
   /** One-day Roblox bonus minutes claimed for this date (not permanent) */
   robloxBonusMin: number
+}
+
+/** Creative achievement tracks (must-do create + matching chip) */
+export type CreateKind = 'puzzle' | 'lego'
+
+export type StudioSprintStatus =
+  | 'todo'
+  | 'submitted'
+  | 'needs_work'
+  | 'approved'
+
+export type StudioSprintState = {
+  status: StudioSprintStatus
+  /** Short note from child when submitting */
+  childNote?: string
+  /** Parent advice when sending back for revision */
+  parentNote?: string
+  /** Unix ms — last-write-wins on family sync */
+  updatedAt: number
 }
 
 export type ReadingBook = {
@@ -232,4 +259,13 @@ export type AppData = {
   readingBooks: ReadingBook[]
   /** Books marked finished (parent or Tom Sawyer sync) */
   finishedBooks: FinishedBook[]
+  /**
+   * Progress for Roblox Studio game sprints (catalog ids → state).
+   * Per-sprint updatedAt is last-write-wins on merge.
+   */
+  studioSprintStates: Record<string, StudioSprintState>
+  /** Lifetime completed puzzles (pieces, not days) */
+  puzzleCount: number
+  /** Lifetime completed Lego sets (pieces, not days) */
+  legoCount: number
 }

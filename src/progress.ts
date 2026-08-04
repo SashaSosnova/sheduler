@@ -6,13 +6,16 @@ import {
   chewDurationSec,
   flushScreenOvertime,
   normalizeDayLog,
+  normalizeStudioSprintStates,
   parseTimerRounds,
   todayKey,
   workoutDurationSec,
 } from './data'
+import { studioSprintIds } from './studioProject'
 import type {
   AppData,
   ChewEntry,
+  CreateKind,
   DayLog,
   Exercise,
   FinishedBook,
@@ -141,6 +144,12 @@ export type Sticker = {
    * Alone → only early perfect day; with needSecretEarlyPerfectHour → both.
    */
   needSecretPerfectByHour?: number
+  /** Completed puzzles (pieces, not days) */
+  needPuzzles?: number
+  /** Completed Lego sets (pieces, not days) */
+  needLegos?: number
+  /** All Roblox Studio sprints parent-approved */
+  needStudioAllApproved?: boolean
   robloxExtraMin?: number
   /** Rubles credited to moneyBankRub when this sticker unlocks */
   moneyRub?: number
@@ -174,6 +183,9 @@ export type StickerProgress = {
    * max(sticker rewards, claimed streak payouts, lifetime bank credits).
    */
   achievementRobloxMin: number
+  puzzles: number
+  legos: number
+  studioAllApproved: boolean
 }
 
 /**
@@ -514,6 +526,69 @@ export const STICKERS: Sticker[] = [
     quote: 'Мы опаздываем!',
     detail: 'Devil May Cry',
   },
+  {
+    id: 'feat-puzzle-1',
+    kind: 'art',
+    needPuzzles: 1,
+    image: './stickers/oei.png',
+    label: 'Оэй',
+    quote: 'Сначала линия — потом картина',
+    detail: 'Miss Hokusai',
+  },
+  {
+    id: 'feat-lego-1',
+    kind: 'art',
+    needLegos: 1,
+    image: './stickers/chrome.png',
+    label: 'Хром',
+    quote: 'Это же наука… кубиками!',
+    detail: 'Dr. Stone',
+  },
+  {
+    id: 'feat-puzzle-3',
+    kind: 'art',
+    needPuzzles: 3,
+    image: './stickers/kuninao.png',
+    label: 'Кунинао',
+    quote: 'Ещё один мазок — и сойдётся',
+    detail: 'Miss Hokusai',
+  },
+  {
+    id: 'feat-lego-3',
+    kind: 'art',
+    needLegos: 3,
+    image: './stickers/kaseki.png',
+    label: 'Касэки',
+    quote: 'Хорошая работа руками!',
+    detail: 'Dr. Stone',
+  },
+  {
+    id: 'feat-puzzle-7',
+    kind: 'art',
+    needPuzzles: 7,
+    image: './stickers/hokusai.png',
+    label: 'Хокусай',
+    quote: 'Большая волна из маленьких кусочков',
+    detail: 'Miss Hokusai',
+  },
+  {
+    id: 'feat-lego-7',
+    kind: 'art',
+    needLegos: 7,
+    image: './stickers/senku.png',
+    label: 'Сенку',
+    quote: 'Десять миллиардов процентов собрано!',
+    detail: 'Dr. Stone',
+  },
+  {
+    id: 'feat-studio-ship',
+    kind: 'roblox',
+    needStudioAllApproved: true,
+    image: './stickers/okabe.png',
+    label: 'Окабэ',
+    quote: 'Эл Психоконгроо!',
+    detail: 'Steins;Gate',
+  },
 ]
 
 /** Roblox avatar skin for the level card (separate from achievement stickers). */
@@ -649,6 +724,71 @@ function streakRank(n: number): string {
   if (n <= 14) return 'Герой идеальных дней A-класса'
   if (n <= 21) return 'Герой идеальных дней S-класса'
   return 'Легенда идеальных дней'
+}
+
+/** Puzzle pieces ladder (1 → 3 → 7): Oei → Kuninao → Hokusai. */
+function puzzlesRank(n: number): string {
+  if (n <= 1) return 'Ученик мастерской'
+  if (n <= 3) return 'Художник галереи'
+  return 'Мастер картины'
+}
+
+/** Lego sets ladder (1 → 3 → 7): Chrome → Kaseki → Senku. */
+function legosRank(n: number): string {
+  if (n <= 1) return 'Ученик мастерской кубиков'
+  if (n <= 3) return 'Ремесленник кубиков'
+  return 'Гений строительства'
+}
+
+function ruPuzzles(n: number): string {
+  const n10 = n % 10
+  const n100 = n % 100
+  if (n10 === 1 && n100 !== 11) return 'пазл'
+  if (n10 >= 2 && n10 <= 4 && (n100 < 10 || n100 >= 20)) return 'пазла'
+  return 'пазлов'
+}
+
+function ruLegos(n: number): string {
+  const n10 = n % 10
+  const n100 = n % 100
+  if (n10 === 1 && n100 !== 11) return 'набор Лего'
+  if (n10 >= 2 && n10 <= 4 && (n100 < 10 || n100 >= 20)) return 'набора Лего'
+  return 'наборов Лего'
+}
+
+/**
+ * Sum piece counts across days for sticker ladders.
+ * Only days where must-do «творчество» is checked count — selecting
+ * quantity alone does not unlock achievements.
+ */
+export function sumCreatePieces(
+  days: Record<string, DayLog>,
+  kind: CreateKind,
+): number {
+  let sum = 0
+  for (const raw of Object.values(days)) {
+    const day = normalizeDayLog(raw.date, raw)
+    if (!day.mustDo.create) continue
+    sum += kind === 'puzzle' ? day.puzzlePieces : day.legoPieces
+  }
+  return sum
+}
+
+export function resolvePuzzleCount(data: AppData): number {
+  return sumCreatePieces(data.days ?? {}, 'puzzle')
+}
+
+export function resolveLegoCount(data: AppData): number {
+  return sumCreatePieces(data.days ?? {}, 'lego')
+}
+
+export function isStudioProjectComplete(
+  studioSprintStates: AppData['studioSprintStates'] | undefined,
+): boolean {
+  const states = normalizeStudioSprintStates(studioSprintStates)
+  const ids = studioSprintIds()
+  if (ids.length === 0) return false
+  return ids.every((id) => states[id]?.status === 'approved')
 }
 
 /** Assumed length for exercises without a timer (middle of 20–30 sec). */
@@ -944,6 +1084,9 @@ export function stickerProgressFromData(data: AppData): StickerProgress {
     secretPerfectByHour: hasPerfectByHourSecret(data.days, 20),
     secretDayRhythm: hasDayRhythmSecret(data.days, 10, 20),
     achievementRobloxMin: 0,
+    puzzles: resolvePuzzleCount(data),
+    legos: resolveLegoCount(data),
+    studioAllApproved: isStudioProjectComplete(data.studioSprintStates),
   }
   progress.achievementRobloxMin = totalAchievementRobloxMinutes(progress, data)
   return progress
@@ -1006,6 +1149,13 @@ export function stickerNeedText(sticker: Sticker): string {
   if (sticker.needBooksFinished != null) {
     return booksRank(sticker.needBooksFinished)
   }
+  if (sticker.needPuzzles != null) {
+    return puzzlesRank(sticker.needPuzzles)
+  }
+  if (sticker.needLegos != null) {
+    return legosRank(sticker.needLegos)
+  }
+  if (sticker.needStudioAllApproved) return 'Создатель миров'
   if (sticker.needStreak != null) {
     return streakRank(sticker.needStreak)
   }
@@ -1093,6 +1243,23 @@ export function stickerUnlockHint(
       : ''
     return `Дочитать ${n} ${ruBooks(n)}${frac}`
   }
+  if (sticker.needPuzzles != null) {
+    const n = sticker.needPuzzles
+    const frac = progress
+      ? ` (${progressFraction(progress.puzzles, n)})`
+      : ''
+    return `Собрать ${n} ${ruPuzzles(n)}${frac}`
+  }
+  if (sticker.needLegos != null) {
+    const n = sticker.needLegos
+    const frac = progress
+      ? ` (${progressFraction(progress.legos, n)})`
+      : ''
+    return `Собрать ${n} ${ruLegos(n)}${frac}`
+  }
+  if (sticker.needStudioAllApproved) {
+    return 'Сдать все спринты игры в Roblox Studio (родитель принял)'
+  }
   if (sticker.needStreak != null) {
     const n = sticker.needStreak
     const streakNow = progress
@@ -1170,6 +1337,17 @@ export function stickerOpenedHint(sticker: Sticker): string {
     const n = sticker.needBooksFinished
     return `Открыто: ранг «${booksRank(n)}» — ${n} ${ruBooks(n)}`
   }
+  if (sticker.needPuzzles != null) {
+    const n = sticker.needPuzzles
+    return `Открыто: ранг «${puzzlesRank(n)}» — ${n} ${ruPuzzles(n)} 🍫`
+  }
+  if (sticker.needLegos != null) {
+    const n = sticker.needLegos
+    return `Открыто: ранг «${legosRank(n)}» — ${n} ${ruLegos(n)} 🍫`
+  }
+  if (sticker.needStudioAllApproved) {
+    return 'Открыто: все спринты Studio приняты родителем'
+  }
   if (sticker.needStreak != null) {
     const n = sticker.needStreak
     return `Открыто: ранг «${streakRank(n)}» — ${n} идеальных ${ruDays(n)} подряд`
@@ -1243,6 +1421,12 @@ export function isStickerUnlocked(
   const secretRobloxBonusOk =
     sticker.needSecretRobloxBonusMin == null ||
     progress.achievementRobloxMin >= sticker.needSecretRobloxBonusMin
+  const puzzleOk =
+    sticker.needPuzzles == null || progress.puzzles >= sticker.needPuzzles
+  const legoOk =
+    sticker.needLegos == null || progress.legos >= sticker.needLegos
+  const studioOk =
+    !sticker.needStudioAllApproved || progress.studioAllApproved
   const needEarlyWorkout = sticker.needSecretEarlyPerfectHour != null
   const needPerfectByHour = sticker.needSecretPerfectByHour != null
   const secretTimeOk =
@@ -1267,6 +1451,9 @@ export function isStickerUnlocked(
     secretNoRobloxOk &&
     secretChewMaxOk &&
     secretRobloxBonusOk &&
+    puzzleOk &&
+    legoOk &&
+    studioOk &&
     secretTimeOk
   )
 }

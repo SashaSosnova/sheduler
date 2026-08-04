@@ -3,7 +3,12 @@ import { Confetti } from './Confetti'
 import {
   APP_LOCKED_MUST_DO,
   CREATE_IDEAS,
+  CREATE_KIND_BY_IDEA,
+  CREATE_PIECE_MAX,
+  createKindsFromPieces,
   EXTRA_TASK_IDEAS,
+  formatCreatePieceLabel,
+  toggleCreateIdea,
   MAIN_MUST_DO,
   MUST_DO_ITEMS,
   activeExercises,
@@ -278,9 +283,26 @@ export function TodayScreen({
               ) : null}
               {item.id === 'create' ? (
                 <div className="create-box">
-                  {day.createNote ? (
+                  {day.createIdeas.length ||
+                  day.puzzlePieces > 0 ||
+                  day.legoPieces > 0 ||
+                  day.createNote.trim() ? (
                     <p className="hint create-chosen">
-                      Сегодня: <strong>{day.createNote}</strong>
+                      Сегодня:{' '}
+                      <strong>
+                        {[
+                          day.puzzlePieces > 0
+                            ? formatCreatePieceLabel('puzzle', day.puzzlePieces)
+                            : null,
+                          day.legoPieces > 0
+                            ? formatCreatePieceLabel('lego', day.legoPieces)
+                            : null,
+                          ...day.createIdeas,
+                          day.createNote.trim() || null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </strong>
                     </p>
                   ) : null}
                   <button
@@ -290,51 +312,159 @@ export function TodayScreen({
                   >
                     {createOpen
                       ? 'Скрыть выбор'
-                      : day.createNote
-                        ? 'Сменить занятие →'
+                      : day.createIdeas.length ||
+                          day.puzzlePieces > 0 ||
+                          day.legoPieces > 0 ||
+                          day.createNote.trim()
+                        ? 'Добавить занятие →'
                         : 'Выбрать занятие →'}
                   </button>
                   {createOpen ? (
                     <div className="create-picker">
                       <div className="create-chip-grid">
-                        {CREATE_IDEAS.map((idea) => (
-                          <button
-                            key={idea}
-                            type="button"
-                            className={
-                              day.createNote === idea ? 'chip active' : 'chip'
+                        {CREATE_IDEAS.map((idea) => {
+                          const kind = CREATE_KIND_BY_IDEA[idea]
+                          if (kind === 'puzzle' || kind === 'lego') {
+                            const count =
+                              kind === 'puzzle'
+                                ? day.puzzlePieces
+                                : day.legoPieces
+                            if (count > 0) {
+                              return (
+                                <div
+                                  key={idea}
+                                  className="chip active create-cart-chip"
+                                  role="group"
+                                  aria-label={`${idea}, ${count}`}
+                                >
+                                  <button
+                                    type="button"
+                                    className="create-cart-step"
+                                    aria-label="Меньше"
+                                    onClick={() => {
+                                      const next = count - 1
+                                      if (kind === 'puzzle') {
+                                        patchDay({
+                                          puzzlePieces: next,
+                                          createKinds: createKindsFromPieces(
+                                            next,
+                                            day.legoPieces,
+                                          ),
+                                        })
+                                      } else {
+                                        patchDay({
+                                          legoPieces: next,
+                                          createKinds: createKindsFromPieces(
+                                            day.puzzlePieces,
+                                            next,
+                                          ),
+                                        })
+                                      }
+                                    }}
+                                  >
+                                    −
+                                  </button>
+                                  <span className="create-cart-label">
+                                    {idea}: {count}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="create-cart-step"
+                                    aria-label="Больше"
+                                    disabled={count >= CREATE_PIECE_MAX}
+                                    onClick={() => {
+                                      const next = Math.min(
+                                        CREATE_PIECE_MAX,
+                                        count + 1,
+                                      )
+                                      if (kind === 'puzzle') {
+                                        patchDay({
+                                          puzzlePieces: next,
+                                          createKinds: createKindsFromPieces(
+                                            next,
+                                            day.legoPieces,
+                                          ),
+                                        })
+                                      } else {
+                                        patchDay({
+                                          legoPieces: next,
+                                          createKinds: createKindsFromPieces(
+                                            day.puzzlePieces,
+                                            next,
+                                          ),
+                                        })
+                                      }
+                                    }}
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              )
                             }
-                            onClick={() => {
-                              patchDay({
-                                createNote: idea,
-                                ...applyMustDoFlags(day, { create: true }),
-                              })
-                              setCreateOpen(false)
-                            }}
-                          >
-                            {idea}
-                          </button>
-                        ))}
+                            return (
+                              <button
+                                key={idea}
+                                type="button"
+                                className="chip"
+                                onClick={() => {
+                                  if (kind === 'puzzle') {
+                                    patchDay({
+                                      puzzlePieces: 1,
+                                      createKinds: createKindsFromPieces(
+                                        1,
+                                        day.legoPieces,
+                                      ),
+                                    })
+                                  } else {
+                                    patchDay({
+                                      legoPieces: 1,
+                                      createKinds: createKindsFromPieces(
+                                        day.puzzlePieces,
+                                        1,
+                                      ),
+                                    })
+                                  }
+                                }}
+                              >
+                                {idea}
+                              </button>
+                            )
+                          }
+                          const active = day.createIdeas.includes(idea)
+                          return (
+                            <button
+                              key={idea}
+                              type="button"
+                              className={active ? 'chip active' : 'chip'}
+                              onClick={() => {
+                                const nextIdeas = toggleCreateIdea(
+                                  day.createIdeas,
+                                  idea,
+                                )
+                                patchDay({ createIdeas: nextIdeas })
+                              }}
+                            >
+                              {idea}
+                            </button>
+                          )
+                        })}
                       </div>
                       <label className="field">
                         <span>Или своё</span>
                         <input
-                          value={
-                            CREATE_IDEAS.includes(day.createNote)
-                              ? ''
-                              : day.createNote
-                          }
+                          value={day.createNote}
                           onChange={(e) => {
-                            const v = e.target.value
-                            patchDay({
-                              createNote: v,
-                              ...applyMustDoFlags(day, {
-                                create: Boolean(v.trim()),
-                              }),
-                            })
+                            patchDay({ createNote: e.target.value })
                           }}
                           onBlur={() => {
-                            if (day.createNote.trim()) setCreateOpen(false)
+                            if (
+                              day.createNote.trim() ||
+                              day.createIdeas.length ||
+                              day.puzzlePieces > 0 ||
+                              day.legoPieces > 0
+                            ) {
+                              setCreateOpen(false)
+                            }
                           }}
                           placeholder="Напиши сам"
                         />
