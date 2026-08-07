@@ -1951,6 +1951,146 @@
   align-self: flex-start;
 }
 
+.ex-control-camera {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ex-control-camera-banner {
+  margin: 0;
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+
+.ex-control-camera-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #111;
+  aspect-ratio: 3 / 4;
+  max-height: min(52vh, 420px);
+}
+
+.ex-control-camera-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+  background: #111;
+}
+
+.ex-control-camera-status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 0;
+  padding: 16px;
+  text-align: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  font-weight: 600;
+}
+
+.ex-control-camera-status p {
+  margin: 0;
+}
+
+.ex-control-camera-status.is-error {
+  color: #ffd0d0;
+}
+
+.ex-control-camera-retry {
+  min-width: 140px;
+}
+
+.ex-control-camera-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ex-control-camera-hint {
+  margin: 0;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.ex-control-camera-hint.is-rec {
+  color: #c0392b;
+  font-weight: 600;
+}
+
+.ex-control-badge-warn {
+  margin: 8px 0 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #b45309;
+}
+
+.ex-control-camera-rec {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #ff6b6b;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ex-control-share {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+  text-align: center;
+}
+
+.ex-control-share-card {
+  text-align: center;
+  margin-bottom: 14px;
+  padding: 16px 18px;
+}
+
+.ex-control-share-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.ex-control-share-card.is-pulse,
+.ex-control-share.is-pulse {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 2px;
+}
+
+.ex-control-share-meta {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.ex-control-share-hint {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--accent);
+}
+
 .ex-control-inline {
   color: var(--accent);
   font-weight: 600;

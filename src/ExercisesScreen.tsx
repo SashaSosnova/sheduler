@@ -1,4 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  ControlCamera,
+  type ControlCameraHandle,
+} from './ControlCamera'
 import {
   activeExercises,
   applyMustDoFlags,
@@ -20,6 +24,14 @@ import {
   uid,
   workoutDurationSec,
 } from './data'
+import {
+  getExerciseVideoClips,
+  getExerciseVideoClipsForExercises,
+  removeExerciseVideoClips,
+  saveExerciseVideoClip,
+  shareExerciseVideos,
+  type ExerciseVideoClip,
+} from './exerciseVideo'
 import { stampPerfectAt } from './progress'
 import { playDing } from './sound'
 import { Timer } from './Timer'
@@ -52,6 +64,23 @@ export function ExercisesScreen({
   const [skippedInPass, setSkippedInPass] = useState<Set<string>>(
     () => new Set(),
   )
+  const [shareBusy, setShareBusy] = useState(false)
+  const [shareHint, setShareHint] = useState<string | null>(null)
+  const [unsentClips, setUnsentClips] = useState<ExerciseVideoClip[]>(() =>
+    getExerciseVideoClips(key),
+  )
+  /** Briefly highlight share after a control block finishes. */
+  const [sharePulse, setSharePulse] = useState(false)
+
+  function refreshUnsentClips() {
+    setUnsentClips(getExerciseVideoClips(key))
+  }
+
+  useEffect(() => {
+    setShareHint(null)
+    setSharePulse(false)
+    setUnsentClips(getExerciseVideoClips(key))
+  }, [key])
 
   const groupItems = useMemo(() => {
     if (!activeGroup) return []
@@ -167,6 +196,17 @@ export function ExercisesScreen({
     })
 
     if (everyDone || groupFullyDone || remainingInPass.length === 0) {
+      if (groupFullyDone && activeGroup) {
+        const blockClips = getExerciseVideoClipsForExercises(
+          groupItems.map((e) => e.id),
+          key,
+        )
+        if (blockClips.length > 0) {
+          refreshUnsentClips()
+          setSharePulse(true)
+          setShareHint(null)
+        }
+      }
       setActiveGroup(null)
       setSkippedInPass(new Set())
     }
@@ -204,6 +244,7 @@ export function ExercisesScreen({
   }
 
   function openGroup(group: string) {
+    setSharePulse(false)
     setActiveGroup(group)
     setSkippedInPass(new Set())
   }
@@ -215,6 +256,63 @@ export function ExercisesScreen({
         c.id === controlId ? { ...c, filmed: true } : c,
       ),
     })
+  }
+
+  async function handleControlVideo(
+    exercise: Exercise,
+    controlId: string,
+    blob: Blob | null,
+  ) {
+    if (!blob || blob.size === 0) return
+    await saveExerciseVideoClip({
+      exerciseId: exercise.id,
+      exerciseName: exercise.name,
+      blob,
+    })
+    refreshUnsentClips()
+    markControlFilmed(controlId)
+  }
+
+  async function sendUnsentVideos() {
+    const clips = getExerciseVideoClips(key)
+    if (clips.length === 0) {
+      setShareHint('Нет записанных видео')
+      refreshUnsentClips()
+      return
+    }
+    setShareBusy(true)
+    setShareHint(null)
+    try {
+      const result = await shareExerciseVideos(clips)
+      // Keep clips on cancel / share / download — Android often reports
+      // success even when the sheet was dismissed. User clears explicitly.
+      if (result === 'cancelled') {
+        setShareHint('Отменено — можно отправить снова')
+      } else if (result === 'downloaded') {
+        setShareHint('Файл скачан — можно отправить снова или убрать')
+      } else {
+        setShareHint('Если отправила — можно убрать из списка')
+      }
+      refreshUnsentClips()
+    } catch (err) {
+      setShareHint(
+        err instanceof Error ? err.message : 'Не удалось отправить видео',
+      )
+      refreshUnsentClips()
+    } finally {
+      setShareBusy(false)
+    }
+  }
+
+  function clearUnsentVideos() {
+    const clips = getExerciseVideoClips(key)
+    removeExerciseVideoClips(
+      clips.map((c) => c.id),
+      key,
+    )
+    refreshUnsentClips()
+    setSharePulse(false)
+    setShareHint(null)
   }
 
   if (readOnly) {
@@ -290,6 +388,16 @@ export function ExercisesScreen({
           <p className="ex-wizard-complete-sub">
             Все {total} упражнений отмечены. Можно отдыхать.
           </p>
+          {unsentClips.length > 0 ? (
+            <ControlVideoShare
+              clips={unsentClips}
+              busy={shareBusy}
+              hint={shareHint}
+              pulse={sharePulse}
+              onSend={() => void sendUnsentVideos()}
+              onClear={clearUnsentVideos}
+            />
+          ) : null}
         </div>
       ) : activeGroup && current ? (
         <>
@@ -310,6 +418,12 @@ export function ExercisesScreen({
             onDone={() => markDone(current, false)}
             onTimerDone={() => markDone(current, true)}
             onSkip={skipCurrent}
+            onControlVideo={
+              currentControl && !currentControl.filmed
+                ? (blob) =>
+                    handleControlVideo(current, currentControl.id, blob)
+                : undefined
+            }
             onControlFilmed={
               currentControl && !currentControl.filmed
                 ? () => markControlFilmed(currentControl.id)
@@ -322,8 +436,64 @@ export function ExercisesScreen({
           groups={groups}
           exercisesDone={day.exercisesDone}
           onPick={openGroup}
+          shareClips={unsentClips}
+          shareBusy={shareBusy}
+          shareHint={shareHint}
+          sharePulse={sharePulse}
+          onShare={() => void sendUnsentVideos()}
+          onClearShare={clearUnsentVideos}
         />
       )}
+    </div>
+  )
+}
+
+function ControlVideoShare({
+  clips,
+  busy,
+  hint,
+  pulse,
+  onSend,
+  onClear,
+}: {
+  clips: ExerciseVideoClip[]
+  busy: boolean
+  hint: string | null
+  pulse?: boolean
+  onSend: () => void
+  onClear: () => void
+}) {
+  const countLabel =
+    clips.length === 1
+      ? '1 запись'
+      : clips.length < 5
+        ? `${clips.length} записи`
+        : `${clips.length} записей`
+  const names = clips.map((c) => c.exerciseName).join(', ')
+
+  return (
+    <div className={`ex-control-share${pulse ? ' is-pulse' : ''}`}>
+      <button
+        type="button"
+        className="btn primary wide"
+        disabled={busy}
+        onClick={onSend}
+      >
+        {busy ? 'Открываю…' : 'Отправить видео'}
+      </button>
+      <p className="ex-control-share-meta">
+        {countLabel}
+        {names ? ` · ${names}` : ''}
+      </p>
+      {hint ? <p className="ex-control-share-hint">{hint}</p> : null}
+      <button
+        type="button"
+        className="btn wide muted-btn"
+        disabled={busy}
+        onClick={onClear}
+      >
+        Убрать из списка
+      </button>
     </div>
   )
 }
@@ -332,10 +502,22 @@ function BlockPicker({
   groups,
   exercisesDone,
   onPick,
+  shareClips,
+  shareBusy,
+  shareHint,
+  sharePulse,
+  onShare,
+  onClearShare,
 }: {
   groups: ReturnType<typeof groupExercises>
   exercisesDone: Record<string, boolean>
   onPick: (group: string) => void
+  shareClips: ExerciseVideoClip[]
+  shareBusy: boolean
+  shareHint: string | null
+  sharePulse: boolean
+  onShare: () => void
+  onClearShare: () => void
 }) {
   return (
     <div className="ex-block-picker">
@@ -343,6 +525,20 @@ function BlockPicker({
         Выбери блок — можно в любом порядке. Паузы между блоками в время не
         входят.
       </p>
+      {shareClips.length > 0 ? (
+        <div
+          className={`card ex-wizard-card ex-control-share-card${sharePulse ? ' is-pulse' : ''}`}
+        >
+          <p className="ex-control-share-title">Видео контроля</p>
+          <ControlVideoShare
+            clips={shareClips}
+            busy={shareBusy}
+            hint={shareHint}
+            onSend={onShare}
+            onClear={onClearShare}
+          />
+        </div>
+      ) : null}
       <ul className="ex-block-list">
         {groups.map(({ group, items }) => {
           const done = items.filter((e) => exercisesDone[e.id]).length
@@ -395,6 +591,7 @@ function WizardStep({
   onDone,
   onTimerDone,
   onSkip,
+  onControlVideo,
   onControlFilmed,
 }: {
   exercise: Exercise
@@ -404,12 +601,57 @@ function WizardStep({
   onDone: () => void
   onTimerDone: () => void
   onSkip?: () => void
+  onControlVideo?: (blob: Blob | null) => void | Promise<void>
   onControlFilmed?: () => void
 }) {
   const note = exercise.notes.trim()
   const hasTimer = exercise.durationSec > 0
   const rounds = hasTimer ? parseTimerRounds(exercise.reps) : 1
   const needsFilm = Boolean(control && !control.filmed)
+  const cameraRef = useRef<ControlCameraHandle | null>(null)
+  const [finishing, setFinishing] = useState(false)
+  const [cameraFailed, setCameraFailed] = useState(false)
+  const [needRecordHint, setNeedRecordHint] = useState(false)
+
+  async function finish(withTimer: boolean) {
+    if (finishing) return
+    setFinishing(true)
+    try {
+      if (needsFilm && onControlVideo) {
+        if (!cameraRef.current?.isRecording()) {
+          setNeedRecordHint(true)
+          setFinishing(false)
+          return
+        }
+        setNeedRecordHint(false)
+        let blob: Blob | null = null
+        try {
+          blob = (await cameraRef.current?.stopAndGetBlob()) ?? null
+        } catch {
+          blob = null
+        }
+        if (blob && blob.size > 0) {
+          await onControlVideo(blob)
+        } else {
+          setCameraFailed(true)
+          setFinishing(false)
+          return
+        }
+      }
+      if (withTimer) onTimerDone()
+      else onDone()
+    } catch {
+      setCameraFailed(true)
+      setFinishing(false)
+    }
+  }
+
+  function continueWithoutVideo() {
+    if (finishing) return
+    onControlFilmed?.()
+    if (hasTimer) onTimerDone()
+    else onDone()
+  }
 
   return (
     <div className="card ex-wizard-card">
@@ -419,22 +661,35 @@ function WizardStep({
       <p className="ex-wizard-group">{exercise.group}</p>
       <h2 className="ex-wizard-name">{exercise.name}</h2>
       {needsFilm ? (
-        <div className="ex-control-badge">
-          <p className="ex-control-badge-title">Контроль · снять на видео</p>
-          <p className="ex-control-badge-sub">
-            Миотерапевт ждёт запись этого упражнения
-          </p>
-          {onControlFilmed ? (
-            <button
-              type="button"
-              className="btn primary"
-              style={{ marginTop: 10 }}
-              onClick={onControlFilmed}
-            >
-              Снято на видео
-            </button>
-          ) : null}
-        </div>
+        <>
+          <ControlCamera
+            ref={cameraRef}
+            active
+            onError={() => setCameraFailed(true)}
+          />
+          <div className="ex-control-badge">
+            <p className="ex-control-badge-title">Контроль · запись</p>
+            <p className="ex-control-badge-sub">
+              Сначала поставь камеру, потом нажми «Начать запись». После блока
+              можно отправить видео.
+            </p>
+            {needRecordHint ? (
+              <p className="ex-control-badge-warn">
+                Сначала нажми «Начать запись», потом делай упражнение
+              </p>
+            ) : null}
+            {cameraFailed ? (
+              <button
+                type="button"
+                className="btn primary"
+                style={{ marginTop: 10 }}
+                onClick={continueWithoutVideo}
+              >
+                Отметить без видео и продолжить
+              </button>
+            ) : null}
+          </div>
+        </>
       ) : control?.filmed ? (
         <p className="pill ex-control-done-pill">Контроль снят ✓</p>
       ) : null}
@@ -459,15 +714,25 @@ function WizardStep({
           persistKey={exercise.id}
           seconds={exercise.durationSec}
           rounds={rounds}
-          onFinish={onTimerDone}
+          onFinish={() => void finish(true)}
         />
       ) : (
-        <button type="button" className="btn primary wide" onClick={onDone}>
-          Сделано
+        <button
+          type="button"
+          className="btn primary wide"
+          disabled={finishing}
+          onClick={() => void finish(false)}
+        >
+          {finishing ? 'Сохраняю…' : 'Сделано'}
         </button>
       )}
       {onSkip ? (
-        <button type="button" className="btn wide muted-btn" onClick={onSkip}>
+        <button
+          type="button"
+          className="btn wide muted-btn"
+          disabled={finishing}
+          onClick={onSkip}
+        >
           Пропустить
         </button>
       ) : null}
