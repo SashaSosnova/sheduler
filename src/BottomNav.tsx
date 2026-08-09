@@ -1,18 +1,20 @@
 import type { TabId, UserRole } from './types'
 
-const CHILD_TABS: { id: TabId; label: string }[] = [
-  { id: 'today', label: 'Сегодня' },
-  { id: 'progress', label: 'Прогресс' },
-  { id: 'roblox', label: 'Roblox' },
-  { id: 'exercises', label: 'Зарядка' },
-  { id: 'chew', label: 'Жевание' },
+type NavTab = { id: TabId; label: string; icon: string }
+
+const CHILD_TABS: NavTab[] = [
+  { id: 'today', label: 'Сегодня', icon: './nav/today.png?v=18' },
+  { id: 'progress', label: 'Прогресс', icon: './nav/progress.png?v=18' },
+  { id: 'roblox', label: 'Roblox', icon: './nav/roblox.png?v=18' },
+  { id: 'exercises', label: 'Зарядка', icon: './nav/exercises.png?v=18' },
+  { id: 'chew', label: 'Жевание', icon: './nav/chew.png?v=18' },
 ]
 
-const PARENT_TABS: { id: TabId; label: string }[] = [
-  { id: 'calendar', label: 'Дни' },
-  { id: 'today', label: 'Награды' },
-  { id: 'exercises', label: 'Зарядка' },
-  { id: 'chew', label: 'Жевание' },
+const PARENT_TABS: NavTab[] = [
+  { id: 'calendar', label: 'Дни', icon: './nav/calendar.png?v=18' },
+  { id: 'today', label: 'Награды', icon: './nav/rewards.png?v=18' },
+  { id: 'exercises', label: 'Зарядка', icon: './nav/exercises.png?v=18' },
+  { id: 'chew', label: 'Жевание', icon: './nav/chew.png?v=18' },
 ]
 
 type Props = {
@@ -31,12 +33,15 @@ export function BottomNav({ active, role, onChange }: Props) {
     >
       {tabs.map((tab) => (
         <button
-          key={tab.id}
+          key={`${role}-${tab.id}`}
           type="button"
           className={active === tab.id ? 'nav-btn active' : 'nav-btn'}
+          aria-label={tab.label}
+          aria-current={active === tab.id ? 'page' : undefined}
           onClick={() => onChange(tab.id)}
         >
-          {tab.label}
+          <img className="nav-icon" src={tab.icon} alt="" draggable={false} />
+          <span className="nav-label">{tab.label}</span>
         </button>
       ))}
     </nav>

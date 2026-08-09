@@ -107,7 +107,6 @@ function App() {
         className={[
           showNav ? 'app-main' : 'app-main no-nav',
           showNav ? 'has-head-actions' : '',
-          showNav && isParent ? 'head-actions-parent' : '',
         ]
           .filter(Boolean)
           .join(' ')}
@@ -197,7 +196,9 @@ function App() {
         ) : null}
       </main>
       {showNav ? (
-        <BottomNav active={tab} role={role} onChange={setTab} />
+        <div className="app-bottom-bar">
+          <BottomNav active={tab} role={role} onChange={setTab} />
+        </div>
       ) : null}
       <StickerUnlockOverlay data={data} enabled={!isParent} />
       <ParentPinDialog

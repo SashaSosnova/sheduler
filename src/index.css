@@ -2,25 +2,28 @@
 
 :root {
   color-scheme: light;
-  --bg: #eef3f0;
-  --bg-deep: #e2ebe6;
-  --surface: #fbfcfb;
-  --ink: #1c2b26;
-  --muted: #5d7269;
-  --line: #c9d7d0;
-  --accent: #1a6b5c;
-  --accent-soft: #d5ebe4;
-  --warm: #c45c26;
-  --warm-soft: #f3e0d4;
-  --ok: #2f7d4c;
-  --danger: #a33b3b;
-  --shadow: 0 1px 0 rgba(28, 43, 38, 0.04);
+  --bg: #f4f2f8;
+  --bg-deep: #ebe6f3;
+  --surface: #fcfbfd;
+  --ink: #2a2438;
+  --muted: #7a738c;
+  --line: #ddd6e8;
+  --accent: #9b8ad4;
+  --accent-soft: #ebe6f8;
+  --warm: #c97a5c;
+  --warm-soft: #f4e6df;
+  --cool: #8bb8e0;
+  --cool-soft: #e4f0fa;
+  --heading: #1e3a5f;
+  --ok: #7aaf8e;
+  --danger: #b5684f;
+  --shadow: 0 1px 0 rgba(42, 36, 56, 0.05);
   --radius: 18px;
   /* Capacitor injects --safe-area-inset-*; env() is the web/iOS fallback */
   --safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
   --safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
-  --nav-pad-y: 12px;
-  --nav-btn-h: 52px;
+  --nav-pad-y: 6px;
+  --nav-btn-h: 56px;
   --nav-bar-h: calc(var(--nav-pad-y) + var(--nav-btn-h) + var(--nav-pad-y));
   --nav-h: var(--nav-bar-h);
   --nav-total-h: calc(var(--nav-bar-h) + var(--safe-bottom));
@@ -29,8 +32,9 @@
   font-weight: 400;
   color: var(--ink);
   background:
-    radial-gradient(ellipse 80% 50% at 10% -10%, #d9ebe3 0%, transparent 55%),
-    radial-gradient(ellipse 60% 40% at 100% 0%, #f0e6db 0%, transparent 50%),
+    radial-gradient(ellipse 70% 45% at 0% -5%, rgba(201, 122, 92, 0.22) 0%, transparent 55%),
+    radial-gradient(ellipse 65% 40% at 100% 0%, rgba(139, 184, 224, 0.3) 0%, transparent 50%),
+    radial-gradient(ellipse 50% 35% at 50% -8%, rgba(155, 138, 212, 0.22) 0%, transparent 55%),
     var(--bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;

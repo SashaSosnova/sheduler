@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import {
   flushScreenOvertime,
   formatPlayTime,
@@ -14,7 +14,6 @@ import {
   stampPerfectAt,
 } from './progress'
 import { ScreenLimitCard } from './ScreenLimitCard'
-import { StudioProjectCard } from './StudioProjectCard'
 import type { AppData, ScreenSlot } from './types'
 
 type Props = {
@@ -22,10 +21,7 @@ type Props = {
   onChange: (next: AppData) => void
 }
 
-type RobloxPane = 'play' | 'studio'
-
 export function RobloxScreen({ data, onChange }: Props) {
-  const [pane, setPane] = useState<RobloxPane>('studio')
   const key = todayKey()
   const day = normalizeDayLog(key, data.days[key])
   const allowed = isRobloxEnabled(data)
@@ -142,101 +138,67 @@ export function RobloxScreen({ data, onChange }: Props) {
         <div className="screen-head-row">
           <p className="eyebrow">Игра</p>
         </div>
-        <h1 className="no-capitalize">
-          {pane === 'play' ? 'Roblox' : 'Roblox Studio'}
-        </h1>
-        {pane === 'play' && playSubParts.length ? (
+        <h1 className="no-capitalize">Roblox</h1>
+        {playSubParts.length ? (
           <p className="sub">{playSubParts.join(' · ')}</p>
-        ) : null}
-        {pane === 'studio' ? (
-          <p className="sub">Проект в башне Хранителя Времени</p>
         ) : null}
       </header>
 
-      <div className="roblox-pane-switch" role="tablist" aria-label="Раздел Roblox">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={pane === 'studio'}
-          className={
-            pane === 'studio' ? 'roblox-pane-btn active' : 'roblox-pane-btn'
-          }
-          onClick={() => setPane('studio')}
-        >
-          Roblox Studio
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={pane === 'play'}
-          className={pane === 'play' ? 'roblox-pane-btn active' : 'roblox-pane-btn'}
-          onClick={() => setPane('play')}
-        >
-          Roblox
-        </button>
-      </div>
-
-      {pane === 'play' ? (
-        <>
-          {!allowed ? (
-            <section className="card">
-              <h2>Пока нельзя</h2>
-              <p className="hint" style={{ marginTop: 8 }}>
-                Родители временно запретили Roblox. Можно заниматься за
-                компьютером другими делами — просто без этой игры.
-              </p>
-            </section>
-          ) : (
-            <ScreenLimitCard
-              kind="roblox"
-              slot={robloxSlot}
-              limitSeconds={robloxLimit}
-              bonusNote={
-                robloxBonusMin > 0
-                  ? `Сегодня из копилки: +${robloxBonusMin} мин`
-                  : undefined
-              }
-              onChange={setSlot}
-            />
-          )}
-
-          <section className="card">
-            <div className="card-title-row">
-              <h2>Копилка бонусов</h2>
-              <span className={robloxBankMin > 0 ? 'pill' : 'pill muted'}>
-                {robloxBankMin} мин
-              </span>
-            </div>
-            {!allowed ? (
-              <p className="hint" style={{ marginTop: 8 }}>
-                Пока игра запрещена, минуты из копилки потратить нельзя.
-              </p>
-            ) : robloxBankMin > 0 ? (
-              <div className="roblox-bank-actions">
-                {bankClaimOptions.map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    className="btn ghost"
-                    onClick={() => claimBank(n)}
-                  >
-                    +{n} мин сегодня
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  className="btn primary"
-                  onClick={() => claimBank(robloxBankMin)}
-                >
-                  Все {robloxBankMin} мин сегодня
-                </button>
-              </div>
-            ) : null}
-          </section>
-        </>
+      {!allowed ? (
+        <section className="card">
+          <h2>Пока нельзя</h2>
+          <p className="hint" style={{ marginTop: 8 }}>
+            Родители временно запретили Roblox. Можно заниматься за компьютером
+            другими делами — просто без этой игры.
+          </p>
+        </section>
       ) : (
-        <StudioProjectCard data={data} onChange={onChange} mode="child" />
+        <ScreenLimitCard
+          kind="roblox"
+          slot={robloxSlot}
+          limitSeconds={robloxLimit}
+          bonusNote={
+            robloxBonusMin > 0
+              ? `Сегодня из копилки: +${robloxBonusMin} мин`
+              : undefined
+          }
+          onChange={setSlot}
+        />
       )}
+
+      <section className="card">
+        <div className="card-title-row">
+          <h2>Копилка бонусов</h2>
+          <span className={robloxBankMin > 0 ? 'pill' : 'pill muted'}>
+            {robloxBankMin} мин
+          </span>
+        </div>
+        {!allowed ? (
+          <p className="hint" style={{ marginTop: 8 }}>
+            Пока игра запрещена, минуты из копилки потратить нельзя.
+          </p>
+        ) : robloxBankMin > 0 ? (
+          <div className="roblox-bank-actions">
+            {bankClaimOptions.map((n) => (
+              <button
+                key={n}
+                type="button"
+                className="btn ghost"
+                onClick={() => claimBank(n)}
+              >
+                +{n} мин сегодня
+              </button>
+            ))}
+            <button
+              type="button"
+              className="btn primary"
+              onClick={() => claimBank(robloxBankMin)}
+            >
+              Все {robloxBankMin} мин сегодня
+            </button>
+          </div>
+        ) : null}
+      </section>
     </div>
   )
 }
