@@ -77,7 +77,7 @@ function App() {
     }
   }, [role, tab])
 
-  // Auto-add Tom Sawyer to finished books when the reader marks the book complete
+  // Auto-add Tom Sawyer when the reader finishes; aliases like «Том Сойер» count as the same book
   useEffect(() => {
     if (!tomSawyer.bookComplete) return
     if (isTomSawyerInFinishedBooks(data.finishedBooks ?? [])) return

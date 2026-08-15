@@ -6,12 +6,10 @@ import {
   chewDurationSec,
   flushScreenOvertime,
   normalizeDayLog,
-  normalizeStudioSprintStates,
   parseTimerRounds,
   todayKey,
   workoutDurationSec,
 } from './data'
-import { studioSprintIds } from './studioProject'
 import type {
   AppData,
   ChewEntry,
@@ -96,9 +94,36 @@ export function perfectDaysInMonth(
 
 export type StickerKind = 'art' | 'roblox' | 'gift'
 
+export type StickerTrack =
+  | 'streak'
+  | 'exercise'
+  | 'chew'
+  | 'school'
+  | 'books'
+  | 'home'
+  | 'create'
+  | 'secret'
+
+export const STICKER_TRACK_PAGES: {
+  id: StickerTrack
+  label: string
+  alwaysShow?: boolean
+}[] = [
+  { id: 'streak', label: 'Идеальные дни' },
+  { id: 'exercise', label: 'Зарядка' },
+  { id: 'chew', label: 'Жевание' },
+  { id: 'school', label: 'Школа', alwaysShow: true },
+  { id: 'books', label: 'Книги' },
+  { id: 'home', label: 'Дом' },
+  { id: 'create', label: 'Творчество' },
+  { id: 'secret', label: 'Секреты' },
+]
+
 export type Sticker = {
   id: string
   kind: StickerKind
+  /** Album page; inferred from needs if omitted */
+  track?: StickerTrack
   /** Portrait in /public/stickers */
   image: string
   label: string
@@ -148,8 +173,6 @@ export type Sticker = {
   needPuzzles?: number
   /** Completed Lego sets (pieces, not days) */
   needLegos?: number
-  /** All Roblox Studio sprints parent-approved */
-  needStudioAllApproved?: boolean
   robloxExtraMin?: number
   /** Rubles credited to moneyBankRub when this sticker unlocks */
   moneyRub?: number
@@ -158,6 +181,30 @@ export type Sticker = {
 }
 
 export const TOM_SAWYER_BOOK_TITLE = 'Приключения Тома Сойера'
+
+function normalizeBookTitle(title: string): string {
+  return title
+    .trim()
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[^a-z0-9а-я]+/g, ' ')
+    .trim()
+}
+
+/** Same book even if the parent typed a short name like «Том Сойер». */
+export function isTomSawyerTitle(title: string): boolean {
+  const n = normalizeBookTitle(title)
+  if (!n) return false
+  const sawyer = n.includes('сойер') || n.includes('sawyer')
+  const tom = n.includes('том') || /(^| )tom( |$)/.test(n)
+  return sawyer && tom
+}
+
+/** Identity for duplicate checks; Tom Sawyer aliases share one key. */
+export function bookTitleKey(title: string): string {
+  if (isTomSawyerTitle(title)) return TOM_SAWYER_BOOK_TITLE.toLowerCase()
+  return normalizeBookTitle(title)
+}
 
 /** Snapshot of counters used to evaluate sticker unlocks */
 export type StickerProgress = {
@@ -185,19 +232,16 @@ export type StickerProgress = {
   achievementRobloxMin: number
   puzzles: number
   legos: number
-  studioAllApproved: boolean
 }
 
 /**
- * Display order mixes franchises (not grouped by series).
- * Roughly easier → harder; secrets sprinkled through the list.
- * Ladders: OPM streaks · JJK exercise days · Клинок chew days ·
- * TMNT quality · TMNT parent · DB own tasks · DMC books · secrets
+ * Album pages group by what the kid does, not by franchise.
  */
 export const STICKERS: Sticker[] = [
   {
     id: 'hero-saitama',
     kind: 'art',
+    track: 'streak',
     needPerfect: 1,
     image: './stickers/saitama.png',
     label: 'Сайтама',
@@ -207,6 +251,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'feat-quality-1',
     kind: 'art',
+    track: 'exercise',
     needQualityWorkouts: 1,
     image: './stickers/casey-jones.png',
     label: 'Кейси Джонс',
@@ -216,6 +261,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'hero-lady',
     kind: 'gift',
+    track: 'books',
     needBooksFinished: 1,
     image: './stickers/lady.png',
     label: 'Леди',
@@ -226,6 +272,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'feat-parent-2',
     kind: 'art',
+    track: 'home',
     needParentTasks: 2,
     image: './stickers/leonardo.png',
     label: 'Леонардо',
@@ -236,6 +283,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'hero-megumi',
     kind: 'art',
+    track: 'exercise',
     needExerciseDays: 4,
     image: './stickers/megumi.png',
     label: 'Мегуми',
@@ -245,6 +293,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'hero-vegeta',
     kind: 'art',
+    track: 'home',
     needOwnTasks: 4,
     image: './stickers/vegeta.png',
     label: 'Вегета',
@@ -254,6 +303,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'hero-inosuke',
     kind: 'art',
+    track: 'chew',
     needChewDays: 5,
     image: './stickers/inosuke.png',
     label: 'Иноске',
@@ -263,6 +313,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'hero-tatsumaki',
     kind: 'art',
+    track: 'streak',
     needStreak: 3,
     image: './stickers/tatsumaki.png',
     label: 'Тацумаки',
@@ -272,6 +323,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'hero-dante',
     kind: 'gift',
+    track: 'books',
     needBooksFinished: 2,
     image: './stickers/dante.png',
     label: 'Данте',
@@ -282,6 +334,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'feat-secret-shortcut',
     kind: 'art',
+    track: 'secret',
     needSecretShortcut: true,
     image: './stickers/mumen-rider.png',
     label: 'Бесправный Ездок',
@@ -291,6 +344,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'feat-parent-6',
     kind: 'art',
+    track: 'home',
     needParentTasks: 6,
     image: './stickers/michelangelo.png',
     label: 'Микеланджело',
@@ -301,6 +355,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'hero-genos',
     kind: 'roblox',
+    track: 'streak',
     needStreak: 7,
     image: './stickers/genos.png',
     label: 'Генос',
@@ -311,6 +366,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'hero-mahoraga',
     kind: 'art',
+    track: 'exercise',
     needExerciseDays: 9,
     image: './stickers/mahoraga.png',
     label: 'Мохорога',
@@ -320,6 +376,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'hero-beerus',
     kind: 'art',
+    track: 'home',
     needOwnTasks: 8,
     image: './stickers/beerus.png',
     label: 'Бирус',
@@ -329,6 +386,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'feat-quality-8',
     kind: 'art',
+    track: 'exercise',
     needQualityWorkouts: 8,
     image: './stickers/karai.png',
     label: 'Карай',
@@ -338,6 +396,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'hero-dante-devil',
     kind: 'gift',
+    track: 'books',
     needBooksFinished: 3,
     image: './stickers/dante-devil.png',
     label: 'Данте (демон)',
@@ -348,6 +407,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'hero-zenitsu',
     kind: 'art',
+    track: 'chew',
     needChewDays: 11,
     image: './stickers/zenitsu.png',
     label: 'Зеницу',
@@ -357,6 +417,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'feat-parent-11',
     kind: 'art',
+    track: 'home',
     needParentTasks: 11,
     image: './stickers/raphael.png',
     label: 'Рафаэль',
@@ -367,6 +428,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'hero-child-emperor',
     kind: 'roblox',
+    track: 'streak',
     needStreak: 14,
     image: './stickers/child-emperor.png',
     label: 'Ребёнок-император',
@@ -377,6 +439,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'hero-goku',
     kind: 'art',
+    track: 'home',
     needOwnTasks: 12,
     image: './stickers/goku.png',
     label: 'Гоку',
@@ -386,6 +449,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'feat-quality-13',
     kind: 'art',
+    track: 'exercise',
     needQualityWorkouts: 13,
     image: './stickers/splinter.png',
     label: 'Сплинтер',
@@ -395,6 +459,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'hero-yuji',
     kind: 'art',
+    track: 'exercise',
     needExerciseDays: 15,
     image: './stickers/yuji.png',
     label: 'Юдзи',
@@ -404,6 +469,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'feat-secret-day-rhythm',
     kind: 'art',
+    track: 'secret',
     needSecretPerfectByHour: 20,
     image: './stickers/mahito.png',
     label: 'Махито',
@@ -413,6 +479,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'feat-secret-day-early',
     kind: 'art',
+    track: 'secret',
     needSecretEarlyPerfectHour: 10,
     needSecretPerfectByHour: 20,
     image: './stickers/nanami.png',
@@ -423,6 +490,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'feat-secret-no-roblox',
     kind: 'art',
+    track: 'secret',
     needSecretNoRoblox: true,
     image: './stickers/king.png',
     label: 'Кинг',
@@ -432,6 +500,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'feat-parent-16',
     kind: 'art',
+    track: 'home',
     needParentTasks: 16,
     image: './stickers/donatello.png',
     label: 'Донателло',
@@ -442,6 +511,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'hero-nezuko',
     kind: 'art',
+    track: 'chew',
     needChewDays: 17,
     image: './stickers/nezuko.png',
     label: 'Незуко',
@@ -451,6 +521,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'hero-bang',
     kind: 'roblox',
+    track: 'streak',
     needStreak: 21,
     image: './stickers/bang.png',
     label: 'Серебряный Клык',
@@ -461,6 +532,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'hero-inumaki',
     kind: 'gift',
+    track: 'exercise',
     needExerciseDays: 22,
     image: './stickers/inumaki.png',
     label: 'Инумаки',
@@ -471,6 +543,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'feat-quality-20',
     kind: 'gift',
+    track: 'exercise',
     needQualityWorkouts: 20,
     image: './stickers/shredder.png',
     label: 'Шредер',
@@ -481,6 +554,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'feat-secret-chew-50',
     kind: 'art',
+    track: 'secret',
     needSecretChewMax: true,
     image: './stickers/sukuna.png',
     label: 'Сукуна',
@@ -490,6 +564,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'hero-tanjiro',
     kind: 'gift',
+    track: 'chew',
     needChewDays: 24,
     image: './stickers/tanjiro.png',
     label: 'Танджиро',
@@ -498,8 +573,31 @@ export const STICKERS: Sticker[] = [
     giftHint: 'Награда: донат на 200 ₽ в Roblox',
   },
   {
+    id: 'hero-uzui',
+    kind: 'gift',
+    track: 'chew',
+    needChewDays: 40,
+    image: './stickers/uzui.png',
+    label: 'Узуй',
+    quote: 'Я — сама яркость!',
+    detail: 'Клинок, рассекающий демонов',
+    giftHint: 'Награда: набор неоновых палочек-браслетов',
+  },
+  {
+    id: 'hero-rengoku',
+    kind: 'gift',
+    track: 'chew',
+    needChewDays: 48,
+    image: './stickers/rengoku.png',
+    label: 'Ренгоку',
+    quote: 'Зажги своё сердце!',
+    detail: 'Клинок, рассекающий демонов',
+    giftHint: 'Награда: декоративный туман для фото, 5 баллонов',
+  },
+  {
     id: 'hero-gojo',
     kind: 'gift',
+    track: 'exercise',
     needExerciseDays: 27,
     image: './stickers/gojo.png',
     label: 'Годжо',
@@ -510,6 +608,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'hero-garou',
     kind: 'gift',
+    track: 'streak',
     needStreak: 28,
     image: './stickers/garou.png',
     label: 'Гарроу',
@@ -518,8 +617,31 @@ export const STICKERS: Sticker[] = [
     giftHint: 'Награда: поход в аквапарк',
   },
   {
+    id: 'hero-toji',
+    kind: 'gift',
+    track: 'exercise',
+    needExerciseDays: 50,
+    image: './stickers/toji.png',
+    label: 'Тодзи',
+    quote: 'Работа есть работа',
+    detail: 'Магическая битва',
+    giftHint: 'Награда: кольцевая лампа 26 см со штативом',
+  },
+  {
+    id: 'hero-blast',
+    kind: 'gift',
+    track: 'streak',
+    needStreak: 56,
+    image: './stickers/blast.png',
+    label: 'Бласт',
+    quote: 'Оставь это мне',
+    detail: 'One Punch Man',
+    giftHint: 'Награда: хромакей со стойкой для фотофона',
+  },
+  {
     id: 'feat-secret-roblox-bonus',
     kind: 'art',
+    track: 'secret',
     needSecretRobloxBonusMin: 60,
     image: './stickers/white-rabbit.png',
     label: 'Белый Кролик',
@@ -529,6 +651,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'feat-puzzle-1',
     kind: 'art',
+    track: 'create',
     needPuzzles: 1,
     image: './stickers/oei.png',
     label: 'Оэй',
@@ -538,6 +661,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'feat-lego-1',
     kind: 'art',
+    track: 'create',
     needLegos: 1,
     image: './stickers/chrome.png',
     label: 'Хром',
@@ -547,6 +671,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'feat-puzzle-3',
     kind: 'art',
+    track: 'create',
     needPuzzles: 3,
     image: './stickers/kuninao.png',
     label: 'Кунинао',
@@ -556,6 +681,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'feat-lego-3',
     kind: 'art',
+    track: 'create',
     needLegos: 3,
     image: './stickers/kaseki.png',
     label: 'Касэки',
@@ -565,6 +691,7 @@ export const STICKERS: Sticker[] = [
   {
     id: 'feat-puzzle-7',
     kind: 'art',
+    track: 'create',
     needPuzzles: 7,
     image: './stickers/hokusai.png',
     label: 'Хокусай',
@@ -574,20 +701,12 @@ export const STICKERS: Sticker[] = [
   {
     id: 'feat-lego-7',
     kind: 'art',
+    track: 'create',
     needLegos: 7,
     image: './stickers/senku.png',
     label: 'Сенку',
     quote: 'Десять миллиардов процентов собрано!',
     detail: 'Dr. Stone',
-  },
-  {
-    id: 'feat-studio-ship',
-    kind: 'roblox',
-    needStudioAllApproved: true,
-    image: './stickers/okabe.png',
-    label: 'Окабэ',
-    quote: 'Эл Психоконгроо!',
-    detail: 'Steins;Gate',
   },
 ]
 
@@ -691,23 +810,26 @@ function ownTasksRank(n: number): string {
 }
 
 /**
- * Exercise-days ladder (4 → 9 → 15 → 22 → 27).
- * Jujutsu Kaisen sorcerer grades: Megumi → Mahoraga → Yuji → Inumaki → Gojo.
+ * Exercise-days ladder (4 → 9 → 15 → 22 → 27 → 50).
+ * Jujutsu Kaisen sorcerer grades: Megumi → Mahoraga → Yuji → Inumaki → Gojo → Toji.
  */
 function exerciseDaysRank(n: number): string {
   if (n <= 4) return 'Колдун зарядки 4-го ранга'
   if (n <= 9) return 'Колдун зарядки 3-го ранга'
   if (n <= 15) return 'Колдун зарядки 2-го ранга'
   if (n <= 22) return 'Колдун зарядки 1-го ранга'
-  return 'Особый ранг зарядки'
+  if (n <= 27) return 'Особый ранг зарядки'
+  return 'Небесное ограничение зарядки'
 }
 
-/** Chew-diary ladder (5 → 11 → 17 → 24): Inosuke → Zenitsu → Nezuko → Tanjiro. */
+/** Chew-diary ladder (5 → 11 → 17 → 24 → 40 → 48): Inosuke → Zenitsu → Nezuko → Tanjiro → Uzui → Rengoku. */
 function chewDaysRank(n: number): string {
   if (n <= 5) return 'Охотник жевания мидзуното'
   if (n <= 11) return 'Охотник жевания каното'
   if (n <= 17) return 'Охотник жевания киноэ'
-  return 'Столп жевания'
+  if (n <= 24) return 'Столп жевания'
+  if (n <= 40) return 'Столп звука жевания'
+  return 'Столп пламени жевания'
 }
 
 /** Books ladder (1 → 2 → 3). */
@@ -717,13 +839,14 @@ function booksRank(n: number): string {
   return 'Книжный демон'
 }
 
-/** Ideal-day streak ladder (3 → 7 → 14 → 21 → 28). */
+/** Ideal-day streak ladder (3 → 7 → 14 → 21 → 28 → 56). */
 function streakRank(n: number): string {
   if (n <= 3) return 'Герой идеальных дней C-класса'
   if (n <= 7) return 'Герой идеальных дней B-класса'
   if (n <= 14) return 'Герой идеальных дней A-класса'
   if (n <= 21) return 'Герой идеальных дней S-класса'
-  return 'Легенда идеальных дней'
+  if (n <= 28) return 'Легенда идеальных дней'
+  return 'Бог идеальных дней'
 }
 
 /** Puzzle pieces ladder (1 → 3 → 7): Oei → Kuninao → Hokusai. */
@@ -780,15 +903,6 @@ export function resolvePuzzleCount(data: AppData): number {
 
 export function resolveLegoCount(data: AppData): number {
   return sumCreatePieces(data.days ?? {}, 'lego')
-}
-
-export function isStudioProjectComplete(
-  studioSprintStates: AppData['studioSprintStates'] | undefined,
-): boolean {
-  const states = normalizeStudioSprintStates(studioSprintStates)
-  const ids = studioSprintIds()
-  if (ids.length === 0) return false
-  return ids.every((id) => states[id]?.status === 'approved')
 }
 
 /** Assumed length for exercises without a timer (middle of 20–30 sec). */
@@ -1029,8 +1143,7 @@ export function countParentTasksDone(days: Record<string, DayLog>): number {
 }
 
 export function isTomSawyerInFinishedBooks(books: FinishedBook[]): boolean {
-  const target = TOM_SAWYER_BOOK_TITLE.toLowerCase()
-  return books.some((b) => b.title.trim().toLowerCase() === target)
+  return books.some((b) => isTomSawyerTitle(b.title))
 }
 
 /** Minutes already paid out from streak milestones (durable even after spending). */
@@ -1086,7 +1199,6 @@ export function stickerProgressFromData(data: AppData): StickerProgress {
     achievementRobloxMin: 0,
     puzzles: resolvePuzzleCount(data),
     legos: resolveLegoCount(data),
-    studioAllApproved: isStudioProjectComplete(data.studioSprintStates),
   }
   progress.achievementRobloxMin = totalAchievementRobloxMinutes(progress, data)
   return progress
@@ -1124,6 +1236,37 @@ export function isSecretSticker(sticker: Sticker): boolean {
   )
 }
 
+export function stickerTrack(sticker: Sticker): StickerTrack {
+  if (sticker.track) return sticker.track
+  if (isSecretSticker(sticker)) return 'secret'
+  if (sticker.needStreak != null || sticker.needPerfect != null) return 'streak'
+  if (
+    sticker.needExerciseDays != null ||
+    sticker.needQualityWorkouts != null
+  ) {
+    return 'exercise'
+  }
+  if (sticker.needChewDays != null) return 'chew'
+  if (sticker.needBooksFinished != null || sticker.needTomSawyerBook) {
+    return 'books'
+  }
+  if (sticker.needParentTasks != null || sticker.needOwnTasks != null) {
+    return 'home'
+  }
+  if (sticker.needPuzzles != null || sticker.needLegos != null) return 'create'
+  return 'home'
+}
+
+export function stickersForTrack(track: StickerTrack): Sticker[] {
+  return STICKERS.filter((s) => stickerTrack(s) === track)
+}
+
+export function visibleStickerTracks(): typeof STICKER_TRACK_PAGES {
+  return STICKER_TRACK_PAGES.filter(
+    (page) => page.alwaysShow || stickersForTrack(page.id).length > 0,
+  )
+}
+
 function progressFraction(current: number, need: number): string {
   return `${Math.min(Math.max(0, current), need)}/${need}`
 }
@@ -1155,7 +1298,6 @@ export function stickerNeedText(sticker: Sticker): string {
   if (sticker.needLegos != null) {
     return legosRank(sticker.needLegos)
   }
-  if (sticker.needStudioAllApproved) return 'Создатель миров'
   if (sticker.needStreak != null) {
     return streakRank(sticker.needStreak)
   }
@@ -1257,9 +1399,6 @@ export function stickerUnlockHint(
       : ''
     return `Собрать ${n} ${ruLegos(n)}${frac}`
   }
-  if (sticker.needStudioAllApproved) {
-    return 'Сдать все спринты игры в Roblox Studio (родитель принял)'
-  }
   if (sticker.needStreak != null) {
     const n = sticker.needStreak
     const streakNow = progress
@@ -1345,9 +1484,6 @@ export function stickerOpenedHint(sticker: Sticker): string {
     const n = sticker.needLegos
     return `Открыто: ранг «${legosRank(n)}» — ${n} ${ruLegos(n)} 🍫`
   }
-  if (sticker.needStudioAllApproved) {
-    return 'Открыто: все спринты Studio приняты родителем'
-  }
   if (sticker.needStreak != null) {
     const n = sticker.needStreak
     return `Открыто: ранг «${streakRank(n)}» — ${n} идеальных ${ruDays(n)} подряд`
@@ -1425,8 +1561,6 @@ export function isStickerUnlocked(
     sticker.needPuzzles == null || progress.puzzles >= sticker.needPuzzles
   const legoOk =
     sticker.needLegos == null || progress.legos >= sticker.needLegos
-  const studioOk =
-    !sticker.needStudioAllApproved || progress.studioAllApproved
   const needEarlyWorkout = sticker.needSecretEarlyPerfectHour != null
   const needPerfectByHour = sticker.needSecretPerfectByHour != null
   const secretTimeOk =
@@ -1453,7 +1587,6 @@ export function isStickerUnlocked(
     secretRobloxBonusOk &&
     puzzleOk &&
     legoOk &&
-    studioOk &&
     secretTimeOk
   )
 }
@@ -1503,6 +1636,21 @@ export function normalizeReadingBooks(raw: unknown): ReadingBook[] {
     .filter((b): b is ReadingBook => b !== null)
 }
 
+/** Drop reading copies of books already finished (including Tom Sawyer aliases). */
+export function reconcileReadingBooks(
+  books: ReadingBook[],
+  finished: FinishedBook[],
+): ReadingBook[] {
+  const finishedKeys = new Set(finished.map((b) => bookTitleKey(b.title)))
+  const byKey = new Map<string, ReadingBook>()
+  for (const book of books) {
+    const key = bookTitleKey(book.title)
+    if (!key || finishedKeys.has(key)) continue
+    if (!byKey.has(key)) byKey.set(key, book)
+  }
+  return [...byKey.values()]
+}
+
 /** Prefer readingBooks; fall back to legacy currentBook string. */
 export function resolveReadingBooks(
   readingBooks: unknown,
@@ -1516,50 +1664,91 @@ export function resolveReadingBooks(
   return [{ id: 'legacy-current-book', title }]
 }
 
+function pickFinishedBook(a: FinishedBook, b: FinishedBook): FinishedBook {
+  const tom = isTomSawyerTitle(a.title) || isTomSawyerTitle(b.title)
+  const finishedAt = Math.min(a.finishedAt, b.finishedAt)
+  const earlier = a.finishedAt <= b.finishedAt ? a : b
+  const id =
+    a.id === 'book-tom-sawyer' || b.id === 'book-tom-sawyer'
+      ? 'book-tom-sawyer'
+      : earlier.id
+  return {
+    id,
+    title: tom ? TOM_SAWYER_BOOK_TITLE : earlier.title,
+    finishedAt,
+  }
+}
+
 export function normalizeFinishedBooks(raw: unknown): FinishedBook[] {
   if (!Array.isArray(raw)) return []
-  return raw
-    .map((item): FinishedBook | null => {
-      if (!item || typeof item !== 'object') return null
-      const row = item as Partial<FinishedBook>
-      const title = typeof row.title === 'string' ? row.title.trim() : ''
-      if (!title) return null
-      const finishedAt =
-        typeof row.finishedAt === 'number' && Number.isFinite(row.finishedAt)
-          ? row.finishedAt
-          : Date.now()
-      const id =
-        typeof row.id === 'string' && row.id
+  const byKey = new Map<string, FinishedBook>()
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const row = item as Partial<FinishedBook>
+    const rawTitle = typeof row.title === 'string' ? row.title.trim() : ''
+    if (!rawTitle) continue
+    const title = isTomSawyerTitle(rawTitle)
+      ? TOM_SAWYER_BOOK_TITLE
+      : rawTitle
+    const finishedAt =
+      typeof row.finishedAt === 'number' && Number.isFinite(row.finishedAt)
+        ? row.finishedAt
+        : Date.now()
+    const id =
+      isTomSawyerTitle(title) && (!row.id || typeof row.id !== 'string')
+        ? 'book-tom-sawyer'
+        : typeof row.id === 'string' && row.id
           ? row.id
           : `book-${finishedAt}-${title.slice(0, 12)}`
-      return { id, title, finishedAt }
-    })
-    .filter((b): b is FinishedBook => b !== null)
+    const next: FinishedBook = { id, title, finishedAt }
+    const key = bookTitleKey(title)
+    const prev = byKey.get(key)
+    byKey.set(key, prev ? pickFinishedBook(prev, next) : next)
+  }
+  return [...byKey.values()].sort((a, b) => a.finishedAt - b.finishedAt)
 }
 
 export function removeReadingBookByTitle(
   books: ReadingBook[],
   title: string,
 ): ReadingBook[] {
-  const key = title.trim().toLowerCase()
-  return books.filter((b) => b.title.trim().toLowerCase() !== key)
+  const key = bookTitleKey(title)
+  if (!key) return books
+  return books.filter((b) => bookTitleKey(b.title) !== key)
 }
 
-/** Merge Tom Sawyer into finished books once (idempotent by title). */
+/** Merge Tom Sawyer into finished books once (idempotent by alias). */
 export function ensureTomSawyerFinishedBook(
   books: FinishedBook[],
   bookComplete: boolean,
 ): FinishedBook[] {
   if (!bookComplete) return books
-  if (isTomSawyerInFinishedBooks(books)) return books
-  return [
+  if (isTomSawyerInFinishedBooks(books)) return normalizeFinishedBooks(books)
+  return normalizeFinishedBooks([
     ...books,
     {
       id: 'book-tom-sawyer',
       title: TOM_SAWYER_BOOK_TITLE,
       finishedAt: Date.now(),
     },
-  ]
+  ])
+}
+
+/** Drop book-gift dismissals that were earned from a duplicate Tom Sawyer count. */
+export function pruneUnearnedBookGiftIds(
+  dismissedIds: string[],
+  booksFinished: number,
+): string[] {
+  const needById = new Map<string, number>()
+  for (const sticker of STICKERS) {
+    if (sticker.giftHint && sticker.needBooksFinished != null) {
+      needById.set(sticker.id, sticker.needBooksFinished)
+    }
+  }
+  return dismissedIds.filter((id) => {
+    const need = needById.get(id)
+    return need == null || booksFinished >= need
+  })
 }
 
 /** Extra Roblox minutes granted for a single day (one-time streak payout). */

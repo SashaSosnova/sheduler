@@ -25,7 +25,13 @@ import {
   workoutDurationSec,
 } from './data'
 import { loadParentLabel } from './parentAlerts'
-import { dayStars, isPerfectDay, shiftDayKey, stampPerfectAt } from './progress'
+import {
+  bookTitleKey,
+  dayStars,
+  isPerfectDay,
+  shiftDayKey,
+  stampPerfectAt,
+} from './progress'
 import {
   ReminderSection,
   TodayTimedReminderBanner,
@@ -375,12 +381,12 @@ export function CalendarScreen({
     if (!onChange) return
     const title = bookDraft.trim()
     if (!title) return
-    const bookKey = title.toLowerCase()
+    const bookKey = bookTitleKey(title)
     const alreadyReading = readingBooks.some(
-      (b) => b.title.toLowerCase() === bookKey,
+      (b) => bookTitleKey(b.title) === bookKey,
     )
     const alreadyFinished = finishedBooks.some(
-      (b) => b.title.toLowerCase() === bookKey,
+      (b) => bookTitleKey(b.title) === bookKey,
     )
     if (alreadyReading || alreadyFinished) {
       setBookDraft('')
@@ -400,7 +406,7 @@ export function CalendarScreen({
     const book = readingBooks.find((b) => b.id === id)
     if (!book) return
     const exists = finishedBooks.some(
-      (b) => b.title.toLowerCase() === book.title.toLowerCase(),
+      (b) => bookTitleKey(b.title) === bookTitleKey(book.title),
     )
     onChange({
       ...data,

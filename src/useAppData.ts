@@ -34,6 +34,8 @@ import {
   countParentTasksDone,
   currentStreak,
   normalizeFinishedBooks,
+  pruneUnearnedBookGiftIds,
+  reconcileReadingBooks,
   resolveReadingBooks,
   resolveLegoCount,
   resolvePuzzleCount,
@@ -147,6 +149,11 @@ function hydrateAppData(
       : 0,
     parentNow,
   )
+  const finishedBooks = normalizeFinishedBooks(partial.finishedBooks)
+  const readingBooks = reconcileReadingBooks(
+    resolveReadingBooks(partial.readingBooks, partial.currentBook),
+    finishedBooks,
+  )
   return applyPendingStickerMoneyRewards(
     applyPendingRobloxStreakRewards({
       ...base,
@@ -183,8 +190,9 @@ function hydrateAppData(
       moneyBankRub: normalizeNonNegInt(partial.moneyBankRub),
       banksUpdatedAt: normalizeNonNegInt(partial.banksUpdatedAt),
       claimedStickerMoneyIds: normalizeStringIds(partial.claimedStickerMoneyIds),
-      dismissedGiftStickerIds: normalizeStringIds(
-        partial.dismissedGiftStickerIds,
+      dismissedGiftStickerIds: pruneUnearnedBookGiftIds(
+        normalizeStringIds(partial.dismissedGiftStickerIds),
+        finishedBooks.length,
       ),
       equippedStickerId: normalizeEquippedStickerId(partial.equippedStickerId),
       bestStreak:
@@ -192,8 +200,8 @@ function hydrateAppData(
           ? Math.max(0, Math.floor(partial.bestStreak))
           : 0,
       bestParentTasks,
-      readingBooks: resolveReadingBooks(partial.readingBooks, partial.currentBook),
-      finishedBooks: normalizeFinishedBooks(partial.finishedBooks),
+      readingBooks,
+      finishedBooks,
       studioSprintStates: normalizeStudioSprintStates(partial.studioSprintStates),
       puzzleCount: resolvePuzzleCount({
         ...base,
@@ -480,15 +488,7 @@ function mergeFinishedBooks(
   local: FinishedBook[],
   remote: FinishedBook[],
 ): FinishedBook[] {
-  const byKey = new Map<string, FinishedBook>()
-  for (const book of [...local, ...remote]) {
-    const key = book.title.trim().toLowerCase()
-    const prev = byKey.get(key)
-    if (!prev || book.finishedAt < prev.finishedAt) {
-      byKey.set(key, book)
-    }
-  }
-  return [...byKey.values()].sort((a, b) => a.finishedAt - b.finishedAt)
+  return normalizeFinishedBooks([...local, ...remote])
 }
 
 function mergeReadingBooks(
@@ -496,16 +496,7 @@ function mergeReadingBooks(
   remote: ReadingBook[],
   finished: FinishedBook[],
 ): ReadingBook[] {
-  const finishedKeys = new Set(
-    finished.map((b) => b.title.trim().toLowerCase()),
-  )
-  const byKey = new Map<string, ReadingBook>()
-  for (const book of [...local, ...remote]) {
-    const key = book.title.trim().toLowerCase()
-    if (finishedKeys.has(key)) continue
-    if (!byKey.has(key)) byKey.set(key, book)
-  }
-  return [...byKey.values()]
+  return reconcileReadingBooks([...local, ...remote], finished)
 }
 
 /** Replace local state with cloud on family join (no merge with previous family). */
@@ -717,8 +708,18 @@ export function useAppData() {
               return
             }
             lastRemoteAt.current = payload.updatedAt
-            skipPushUntil.current = Date.now() + 1200
-            setData((prev) => applyCloud(prev, payload))
+            const rawBooks = payload.finishedBooks
+            const collapsedDuplicateBooks =
+              Array.isArray(rawBooks) &&
+              rawBooks.length > normalizeFinishedBooks(rawBooks).length
+            skipPushUntil.current = collapsedDuplicateBooks
+              ? 0
+              : Date.now() + 1200
+            setData((prev) => {
+              const next = applyCloud(prev, payload)
+              if (collapsedDuplicateBooks) schedulePush(next)
+              return next
+            })
             setFamily((f) => ({
               ...f,
               code,
@@ -748,7 +749,7 @@ export function useAppData() {
       unsub()
       if (pushTimer.current) window.clearTimeout(pushTimer.current)
     }
-  }, [family.code])
+  }, [family.code, schedulePush])
 
   const createFamilyCloud = useCallback(async () => {
     if (!isFirebaseConfigured()) {

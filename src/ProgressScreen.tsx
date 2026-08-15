@@ -20,8 +20,10 @@ import {
   stickerProgressFromData,
   stickerRewardText,
   stickerUnlockHint,
+  stickersForTrack,
   unlockedRankStickers,
   unlockedStickers,
+  visibleStickerTracks,
   type Sticker,
   type StickerProgress,
 } from './progress'
@@ -38,7 +40,9 @@ export function ProgressScreen({ data, onChange }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [rankPickerOpen, setRankPickerOpen] = useState(false)
   const [cols, setCols] = useState(3)
+  const [pageIndex, setPageIndex] = useState(0)
   const detailRef = useRef<HTMLDivElement>(null)
+  const pages = useMemo(() => visibleStickerTracks(), [])
 
   useEffect(() => {
     const mq = window.matchMedia(STICKER_COLS_MQ)
@@ -96,21 +100,42 @@ export function ProgressScreen({ data, onChange }: Props) {
     ? stickerRewardText(selectedSticker)
     : null
 
+  const activePage = pages[pageIndex] ?? pages[0]
+  const pageStickers = activePage ? stickersForTrack(activePage.id) : []
+  const pageOpenCount = pageStickers.filter((s) =>
+    isStickerUnlocked(s, progress),
+  ).length
+  const showSchoolTeaser =
+    activePage?.id === 'school' && pageStickers.length === 0
+
   const selectedIndex = selectedId
-    ? STICKERS.findIndex((s) => s.id === selectedId)
+    ? pageStickers.findIndex((s) => s.id === selectedId)
     : -1
   const detailAfterIndex =
     selectedIndex >= 0
       ? Math.min(
-          STICKERS.length - 1,
+          pageStickers.length - 1,
           Math.floor(selectedIndex / cols) * cols + cols - 1,
         )
       : -1
 
   useEffect(() => {
+    if (!selectedId || !activePage) return
+    if (
+      !stickersForTrack(activePage.id).some((s) => s.id === selectedId)
+    ) {
+      setSelectedId(null)
+    }
+  }, [activePage, selectedId])
+
+  useEffect(() => {
     if (!selectedId || !detailRef.current) return
     detailRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [selectedId])
+
+  function goToPage(index: number) {
+    setPageIndex(index)
+  }
 
   const levelPct = Math.min(100, (stats.intoLevel / stats.need) * 100)
   const rank = levelRank(stats.level)
@@ -232,59 +257,100 @@ export function ProgressScreen({ data, onChange }: Props) {
         ) : null}
       </section>
 
-      <section className="card">
+      <section className="card sticker-album-card">
         <div className="card-title-row">
           <h2>Достижения</h2>
           <span className="pill muted">
             {stats.stickers.length}/{STICKERS.length}
           </span>
         </div>
-        <div className="sticker-row">
-          {STICKERS.map((s, i) => {
-            const open = isStickerUnlocked(s, progress)
-            const selected = selectedId === s.id
-            return (
-              <Fragment key={s.id}>
-                <button
-                  type="button"
-                  className={`sticker kind-${s.kind} ${open ? 'open' : 'locked'} ${selected ? 'selected' : ''}`}
-                  aria-pressed={selected}
-                  aria-label={
-                    open
-                      ? `${s.label}. ${s.quote}. ${s.detail}`
-                      : `${stickerNeedText(s)}. ${stickerUnlockHint(s, progress)}`
-                  }
-                  onClick={() =>
-                    setSelectedId((prev) => (prev === s.id ? null : s.id))
-                  }
-                >
-                  <img
-                    className="sticker-art"
-                    src={s.image}
-                    alt=""
-                    draggable={false}
-                  />
-                  <span className="sticker-caption">
-                    <span className="sticker-label">
-                      {open ? s.label : stickerNeedText(s)}
-                    </span>
-                    {open ? (
-                      <span className="sticker-quote">«{s.quote}»</span>
-                    ) : null}
-                  </span>
-                </button>
-                {i === detailAfterIndex && selectedSticker ? (
-                  <StickerDetailCard
-                    ref={detailRef}
-                    sticker={selectedSticker}
-                    open={selectedOpen}
-                    reward={selectedReward}
-                    progress={progress}
-                  />
-                ) : null}
-              </Fragment>
-            )
-          })}
+        <div className="sticker-album-chapter">
+          <div className="sticker-album-head">
+            <p className="sticker-album-page-title">
+              {activePage?.label ?? 'Достижения'}
+            </p>
+            {showSchoolTeaser ? (
+              <span className="pill muted">скоро</span>
+            ) : (
+              <span className="pill muted">
+                {pageOpenCount}/{pageStickers.length}
+              </span>
+            )}
+          </div>
+          <div className="sticker-album">
+            {showSchoolTeaser ? (
+              <SchoolSoonSplash />
+            ) : (
+              <div className="sticker-row">
+                {pageStickers.map((s, i) => {
+                  const open = isStickerUnlocked(s, progress)
+                  const selected = selectedId === s.id
+                  return (
+                    <Fragment key={s.id}>
+                      <button
+                        type="button"
+                        className={`sticker kind-${s.kind} ${open ? 'open' : 'locked'} ${selected ? 'selected' : ''}`}
+                        aria-pressed={selected}
+                        aria-label={
+                          open
+                            ? `${s.label}. ${s.quote}. ${s.detail}`
+                            : `${stickerNeedText(s)}. ${stickerUnlockHint(s, progress)}`
+                        }
+                        onClick={() =>
+                          setSelectedId((prev) =>
+                            prev === s.id ? null : s.id,
+                          )
+                        }
+                      >
+                        <img
+                          className="sticker-art"
+                          src={s.image}
+                          alt=""
+                          draggable={false}
+                        />
+                        <span className="sticker-caption">
+                          <span className="sticker-label">
+                            {open ? s.label : stickerNeedText(s)}
+                          </span>
+                          {open ? (
+                            <span className="sticker-quote">
+                              «{s.quote}»
+                            </span>
+                          ) : null}
+                        </span>
+                      </button>
+                      {i === detailAfterIndex && selectedSticker ? (
+                        <StickerDetailCard
+                          ref={detailRef}
+                          sticker={selectedSticker}
+                          open={selectedOpen}
+                          reward={selectedReward}
+                          progress={progress}
+                        />
+                      ) : null}
+                    </Fragment>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+          <div
+            className="sticker-album-dots"
+            role="tablist"
+            aria-label="Страницы альбома"
+          >
+            {pages.map((page, i) => (
+              <button
+                key={page.id}
+                type="button"
+                role="tab"
+                aria-selected={i === pageIndex}
+                aria-label={page.label}
+                className={`sticker-album-dot${i === pageIndex ? ' is-active' : ''}`}
+                onClick={() => goToPage(i)}
+              />
+            ))}
+          </div>
         </div>
       </section>
 
@@ -332,6 +398,23 @@ export function ProgressScreen({ data, onChange }: Props) {
           </div>
         </div>
       ) : null}
+    </div>
+  )
+}
+
+function SchoolSoonSplash() {
+  return (
+    <div className="school-soon">
+      <div className="school-soon-art-wrap">
+        <img
+          className="school-soon-art"
+          src="./stickers/school-soon.png?v=4"
+          alt="1 сентября"
+          draggable={false}
+        />
+      </div>
+      <p className="school-soon-title">Скоро появится!</p>
+      <p className="school-soon-sub">Жди 1 сентября</p>
     </div>
   )
 }
