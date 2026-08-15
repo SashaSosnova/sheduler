@@ -36,6 +36,100 @@ type Props = {
 
 const STICKER_COLS_MQ = '(min-width: 700px)'
 
+function bindAlbumSwipe(
+  viewport: HTMLDivElement,
+  track: HTMLDivElement,
+  pageCount: number,
+  pageIndexRef: { current: number },
+  setPageIndex: (index: number) => void,
+) {
+  type Swipe = {
+    id: number
+    x: number
+    y: number
+    lock: 'x' | 'y' | null
+  }
+  let swipe: Swipe | null = null
+  let swallowClick = false
+
+  function setDrag(px: number, dragging: boolean) {
+    track.style.setProperty('--album-drag', `${px}px`)
+    track.classList.toggle('is-dragging', dragging)
+  }
+
+  function onPointerDown(e: PointerEvent) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    swipe = { id: e.pointerId, x: e.clientX, y: e.clientY, lock: null }
+  }
+
+  function onPointerMove(e: PointerEvent) {
+    if (!swipe || swipe.id !== e.pointerId) return
+    const dx = e.clientX - swipe.x
+    const dy = e.clientY - swipe.y
+    if (!swipe.lock) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return
+      swipe.lock = Math.abs(dx) > Math.abs(dy) + 4 ? 'x' : 'y'
+      if (swipe.lock === 'x') {
+        try {
+          viewport.setPointerCapture(e.pointerId)
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    if (swipe.lock !== 'x') return
+    const i = pageIndexRef.current
+    const last = pageCount - 1
+    const next =
+      (i === 0 && dx > 0) || (i === last && dx < 0) ? dx * 0.32 : dx
+    setDrag(next, true)
+  }
+
+  function onPointerUp(e: PointerEvent) {
+    if (!swipe || swipe.id !== e.pointerId) return
+    const dx = e.clientX - swipe.x
+    const lock = swipe.lock
+    swipe = null
+    if (lock !== 'x') {
+      setDrag(0, false)
+      return
+    }
+    const threshold = Math.max(40, viewport.clientWidth * 0.15)
+    let next = pageIndexRef.current
+    if (dx < -threshold) next = Math.min(pageCount - 1, next + 1)
+    else if (dx > threshold) next = Math.max(0, next - 1)
+    if (Math.abs(dx) > 12) swallowClick = true
+    setPageIndex(next)
+    setDrag(0, false)
+  }
+
+  function onClickCapture(e: MouseEvent) {
+    if (!swallowClick) return
+    swallowClick = false
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  function onTouchMove(e: TouchEvent) {
+    if (swipe?.lock === 'x') e.preventDefault()
+  }
+
+  viewport.addEventListener('pointerdown', onPointerDown)
+  viewport.addEventListener('pointermove', onPointerMove)
+  viewport.addEventListener('pointerup', onPointerUp)
+  viewport.addEventListener('pointercancel', onPointerUp)
+  viewport.addEventListener('click', onClickCapture, true)
+  viewport.addEventListener('touchmove', onTouchMove, { passive: false })
+  return () => {
+    viewport.removeEventListener('pointerdown', onPointerDown)
+    viewport.removeEventListener('pointermove', onPointerMove)
+    viewport.removeEventListener('pointerup', onPointerUp)
+    viewport.removeEventListener('pointercancel', onPointerUp)
+    viewport.removeEventListener('click', onClickCapture, true)
+    viewport.removeEventListener('touchmove', onTouchMove)
+  }
+}
+
 export function ProgressScreen({ data, onChange }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [rankPickerOpen, setRankPickerOpen] = useState(false)
@@ -141,92 +235,13 @@ export function ProgressScreen({ data, onChange }: Props) {
     const viewport = albumRef.current
     const track = albumTrackRef.current
     if (!viewport || !track) return
-
-    type Swipe = {
-      id: number
-      x: number
-      y: number
-      lock: 'x' | 'y' | null
-    }
-    let swipe: Swipe | null = null
-    let swallowClick = false
-
-    function setDrag(px: number, dragging: boolean) {
-      track.style.setProperty('--album-drag', `${px}px`)
-      track.classList.toggle('is-dragging', dragging)
-    }
-
-    function onPointerDown(e: PointerEvent) {
-      if (e.pointerType === 'mouse' && e.button !== 0) return
-      swipe = { id: e.pointerId, x: e.clientX, y: e.clientY, lock: null }
-    }
-
-    function onPointerMove(e: PointerEvent) {
-      if (!swipe || swipe.id !== e.pointerId) return
-      const dx = e.clientX - swipe.x
-      const dy = e.clientY - swipe.y
-      if (!swipe.lock) {
-        if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return
-        swipe.lock = Math.abs(dx) > Math.abs(dy) + 4 ? 'x' : 'y'
-        if (swipe.lock === 'x') {
-          try {
-            viewport.setPointerCapture(e.pointerId)
-          } catch {
-            /* ignore */
-          }
-        }
-      }
-      if (swipe.lock !== 'x') return
-      const i = pageIndexRef.current
-      const last = pages.length - 1
-      const next =
-        (i === 0 && dx > 0) || (i === last && dx < 0) ? dx * 0.32 : dx
-      setDrag(next, true)
-    }
-
-    function onPointerUp(e: PointerEvent) {
-      if (!swipe || swipe.id !== e.pointerId) return
-      const dx = e.clientX - swipe.x
-      const lock = swipe.lock
-      swipe = null
-      if (lock !== 'x') {
-        setDrag(0, false)
-        return
-      }
-      const threshold = Math.max(40, viewport.clientWidth * 0.15)
-      let next = pageIndexRef.current
-      if (dx < -threshold) next = Math.min(pages.length - 1, next + 1)
-      else if (dx > threshold) next = Math.max(0, next - 1)
-      if (Math.abs(dx) > 12) swallowClick = true
-      setPageIndex(next)
-      setDrag(0, false)
-    }
-
-    function onClickCapture(e: MouseEvent) {
-      if (!swallowClick) return
-      swallowClick = false
-      e.preventDefault()
-      e.stopPropagation()
-    }
-
-    function onTouchMove(e: TouchEvent) {
-      if (swipe?.lock === 'x') e.preventDefault()
-    }
-
-    viewport.addEventListener('pointerdown', onPointerDown)
-    viewport.addEventListener('pointermove', onPointerMove)
-    viewport.addEventListener('pointerup', onPointerUp)
-    viewport.addEventListener('pointercancel', onPointerUp)
-    viewport.addEventListener('click', onClickCapture, true)
-    viewport.addEventListener('touchmove', onTouchMove, { passive: false })
-    return () => {
-      viewport.removeEventListener('pointerdown', onPointerDown)
-      viewport.removeEventListener('pointermove', onPointerMove)
-      viewport.removeEventListener('pointerup', onPointerUp)
-      viewport.removeEventListener('pointercancel', onPointerUp)
-      viewport.removeEventListener('click', onClickCapture, true)
-      viewport.removeEventListener('touchmove', onTouchMove)
-    }
+    return bindAlbumSwipe(
+      viewport,
+      track,
+      pages.length,
+      pageIndexRef,
+      setPageIndex,
+    )
   }, [pages.length])
 
   function goToPage(index: number) {
