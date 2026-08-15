@@ -1489,7 +1489,31 @@
 }
 
 .sticker-album {
-  min-width: 0;
+  overflow: hidden;
+  touch-action: pan-y;
+  overscroll-behavior-x: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.sticker-album * {
+  touch-action: pan-y;
+}
+
+.sticker-album-track {
+  display: flex;
+  transition: transform 0.28s ease;
+}
+
+.sticker-album-track.is-dragging {
+  transition: none;
+}
+
+.sticker-album-page {
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 100%;
+  box-sizing: border-box;
 }
 
 .sticker-album .sticker-row {

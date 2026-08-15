@@ -58,6 +58,7 @@ body,
 
 body {
   min-width: 320px;
+  overflow-x: hidden;
 }
 
 /* Phones often report 0 via env(); keep a floor above the gesture/nav bar */

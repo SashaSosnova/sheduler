@@ -42,7 +42,11 @@ export function ProgressScreen({ data, onChange }: Props) {
   const [cols, setCols] = useState(3)
   const [pageIndex, setPageIndex] = useState(0)
   const detailRef = useRef<HTMLDivElement>(null)
+  const albumRef = useRef<HTMLDivElement>(null)
+  const albumTrackRef = useRef<HTMLDivElement>(null)
+  const pageIndexRef = useRef(0)
   const pages = useMemo(() => visibleStickerTracks(), [])
+  pageIndexRef.current = pageIndex
 
   useEffect(() => {
     const mq = window.matchMedia(STICKER_COLS_MQ)
@@ -132,6 +136,98 @@ export function ProgressScreen({ data, onChange }: Props) {
     if (!selectedId || !detailRef.current) return
     detailRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [selectedId])
+
+  useEffect(() => {
+    const viewport = albumRef.current
+    const track = albumTrackRef.current
+    if (!viewport || !track) return
+
+    type Swipe = {
+      id: number
+      x: number
+      y: number
+      lock: 'x' | 'y' | null
+    }
+    let swipe: Swipe | null = null
+    let swallowClick = false
+
+    function setDrag(px: number, dragging: boolean) {
+      track.style.setProperty('--album-drag', `${px}px`)
+      track.classList.toggle('is-dragging', dragging)
+    }
+
+    function onPointerDown(e: PointerEvent) {
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      swipe = { id: e.pointerId, x: e.clientX, y: e.clientY, lock: null }
+    }
+
+    function onPointerMove(e: PointerEvent) {
+      if (!swipe || swipe.id !== e.pointerId) return
+      const dx = e.clientX - swipe.x
+      const dy = e.clientY - swipe.y
+      if (!swipe.lock) {
+        if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return
+        swipe.lock = Math.abs(dx) > Math.abs(dy) + 4 ? 'x' : 'y'
+        if (swipe.lock === 'x') {
+          try {
+            viewport.setPointerCapture(e.pointerId)
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+      if (swipe.lock !== 'x') return
+      const i = pageIndexRef.current
+      const last = pages.length - 1
+      const next =
+        (i === 0 && dx > 0) || (i === last && dx < 0) ? dx * 0.32 : dx
+      setDrag(next, true)
+    }
+
+    function onPointerUp(e: PointerEvent) {
+      if (!swipe || swipe.id !== e.pointerId) return
+      const dx = e.clientX - swipe.x
+      const lock = swipe.lock
+      swipe = null
+      if (lock !== 'x') {
+        setDrag(0, false)
+        return
+      }
+      const threshold = Math.max(40, viewport.clientWidth * 0.15)
+      let next = pageIndexRef.current
+      if (dx < -threshold) next = Math.min(pages.length - 1, next + 1)
+      else if (dx > threshold) next = Math.max(0, next - 1)
+      if (Math.abs(dx) > 12) swallowClick = true
+      setPageIndex(next)
+      setDrag(0, false)
+    }
+
+    function onClickCapture(e: MouseEvent) {
+      if (!swallowClick) return
+      swallowClick = false
+      e.preventDefault()
+      e.stopPropagation()
+    }
+
+    function onTouchMove(e: TouchEvent) {
+      if (swipe?.lock === 'x') e.preventDefault()
+    }
+
+    viewport.addEventListener('pointerdown', onPointerDown)
+    viewport.addEventListener('pointermove', onPointerMove)
+    viewport.addEventListener('pointerup', onPointerUp)
+    viewport.addEventListener('pointercancel', onPointerUp)
+    viewport.addEventListener('click', onClickCapture, true)
+    viewport.addEventListener('touchmove', onTouchMove, { passive: false })
+    return () => {
+      viewport.removeEventListener('pointerdown', onPointerDown)
+      viewport.removeEventListener('pointermove', onPointerMove)
+      viewport.removeEventListener('pointerup', onPointerUp)
+      viewport.removeEventListener('pointercancel', onPointerUp)
+      viewport.removeEventListener('click', onClickCapture, true)
+      viewport.removeEventListener('touchmove', onTouchMove)
+    }
+  }, [pages.length])
 
   function goToPage(index: number) {
     setPageIndex(index)
@@ -277,62 +373,80 @@ export function ProgressScreen({ data, onChange }: Props) {
               </span>
             )}
           </div>
-          <div className="sticker-album">
-            {showSchoolTeaser ? (
-              <SchoolSoonSplash />
-            ) : (
-              <div className="sticker-row">
-                {pageStickers.map((s, i) => {
-                  const open = isStickerUnlocked(s, progress)
-                  const selected = selectedId === s.id
-                  return (
-                    <Fragment key={s.id}>
-                      <button
-                        type="button"
-                        className={`sticker kind-${s.kind} ${open ? 'open' : 'locked'} ${selected ? 'selected' : ''}`}
-                        aria-pressed={selected}
-                        aria-label={
-                          open
-                            ? `${s.label}. ${s.quote}. ${s.detail}`
-                            : `${stickerNeedText(s)}. ${stickerUnlockHint(s, progress)}`
-                        }
-                        onClick={() =>
-                          setSelectedId((prev) =>
-                            prev === s.id ? null : s.id,
+          <div ref={albumRef} className="sticker-album">
+            <div
+              ref={albumTrackRef}
+              className="sticker-album-track"
+              style={{
+                transform: `translate3d(calc(${-pageIndex * 100}% + var(--album-drag, 0px)), 0, 0)`,
+              }}
+            >
+              {pages.map((page) => {
+                const stickers = stickersForTrack(page.id)
+                const teaser = page.id === 'school' && stickers.length === 0
+                return (
+                  <div key={page.id} className="sticker-album-page">
+                    {teaser ? (
+                      <SchoolSoonSplash />
+                    ) : (
+                      <div className="sticker-row">
+                        {stickers.map((s, i) => {
+                          const open = isStickerUnlocked(s, progress)
+                          const selected = selectedId === s.id
+                          return (
+                            <Fragment key={s.id}>
+                              <button
+                                type="button"
+                                className={`sticker kind-${s.kind} ${open ? 'open' : 'locked'} ${selected ? 'selected' : ''}`}
+                                aria-pressed={selected}
+                                aria-label={
+                                  open
+                                    ? `${s.label}. ${s.quote}. ${s.detail}`
+                                    : `${stickerNeedText(s)}. ${stickerUnlockHint(s, progress)}`
+                                }
+                                onClick={() =>
+                                  setSelectedId((prev) =>
+                                    prev === s.id ? null : s.id,
+                                  )
+                                }
+                              >
+                                <img
+                                  className="sticker-art"
+                                  src={s.image}
+                                  alt=""
+                                  draggable={false}
+                                />
+                                <span className="sticker-caption">
+                                  <span className="sticker-label">
+                                    {open ? s.label : stickerNeedText(s)}
+                                  </span>
+                                  {open ? (
+                                    <span className="sticker-quote">
+                                      «{s.quote}»
+                                    </span>
+                                  ) : null}
+                                </span>
+                              </button>
+                              {page.id === activePage?.id &&
+                              i === detailAfterIndex &&
+                              selectedSticker ? (
+                                <StickerDetailCard
+                                  ref={detailRef}
+                                  sticker={selectedSticker}
+                                  open={selectedOpen}
+                                  reward={selectedReward}
+                                  progress={progress}
+                                />
+                              ) : null}
+                            </Fragment>
                           )
-                        }
-                      >
-                        <img
-                          className="sticker-art"
-                          src={s.image}
-                          alt=""
-                          draggable={false}
-                        />
-                        <span className="sticker-caption">
-                          <span className="sticker-label">
-                            {open ? s.label : stickerNeedText(s)}
-                          </span>
-                          {open ? (
-                            <span className="sticker-quote">
-                              «{s.quote}»
-                            </span>
-                          ) : null}
-                        </span>
-                      </button>
-                      {i === detailAfterIndex && selectedSticker ? (
-                        <StickerDetailCard
-                          ref={detailRef}
-                          sticker={selectedSticker}
-                          open={selectedOpen}
-                          reward={selectedReward}
-                          progress={progress}
-                        />
-                      ) : null}
-                    </Fragment>
-                  )
-                })}
-              </div>
-            )}
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
           <div
             className="sticker-album-dots"
