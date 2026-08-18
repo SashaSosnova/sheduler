@@ -26,7 +26,6 @@ import {
   TodayTimedReminderBanner,
 } from './ReminderSection'
 import { playDing } from './sound'
-import { useTomSawyerReadToday } from './tomSawyerSync'
 import type { AppData, MustDoId } from './types'
 
 type Props = {
@@ -56,7 +55,6 @@ export function TodayScreen({
   const exerciseComplete =
     exerciseTotal > 0 && exerciseDone === exerciseTotal
   const chewComplete = Boolean(chewToday)
-  const readComplete = useTomSawyerReadToday()
   const extraDone = day.extraTasks.filter((t) => t.done).length
   const [extraDraft, setExtraDraft] = useState('')
   const [extraOpen, setExtraOpen] = useState(false)
@@ -89,15 +87,13 @@ export function TodayScreen({
     })
   }
 
-  // Auto-mark exercise/chew/read when done in-app; never clear a parent override
+  // Auto-mark exercise/chew when done in-app; never clear a parent override
   useEffect(() => {
     const nextExercise = exerciseComplete || Boolean(day.mustDo.exercise)
     const nextChew = chewComplete || Boolean(day.mustDo.chew)
-    const nextRead = readComplete || Boolean(day.mustDo.read)
     if (
       day.mustDo.exercise === nextExercise &&
-      day.mustDo.chew === nextChew &&
-      day.mustDo.read === nextRead
+      day.mustDo.chew === nextChew
     ) {
       return
     }
@@ -105,17 +101,14 @@ export function TodayScreen({
       applyMustDoFlags(day, {
         exercise: nextExercise,
         chew: nextChew,
-        read: nextRead,
       }),
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     exerciseComplete,
     chewComplete,
-    readComplete,
     day.mustDo.exercise,
     day.mustDo.chew,
-    day.mustDo.read,
   ])
 
   function toggleMust(id: MustDoId) {
@@ -126,7 +119,6 @@ export function TodayScreen({
   function isMustChecked(id: MustDoId): boolean {
     if (id === 'exercise') return exerciseComplete || Boolean(day.mustDo.exercise)
     if (id === 'chew') return chewComplete || Boolean(day.mustDo.chew)
-    if (id === 'read') return readComplete || Boolean(day.mustDo.read)
     return Boolean(day.mustDo[id])
   }
 
@@ -139,7 +131,6 @@ export function TodayScreen({
       return !exerciseComplete || workoutSec == null
     }
     if (id === 'chew') return Boolean(day.mustDo.chew) && !chewComplete
-    if (id === 'read') return Boolean(day.mustDo.read) && !readComplete
     return false
   }
 

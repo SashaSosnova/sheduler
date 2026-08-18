@@ -243,7 +243,7 @@ export function isRobloxEnabled(data: { robloxEnabled?: boolean }): boolean {
 export const MAIN_MUST_DO: MustDoId[] = ['exercise', 'chew']
 
 /** Checked only when completed inside the app — not by tapping the checkbox */
-export const APP_LOCKED_MUST_DO: MustDoId[] = ['exercise', 'chew', 'read']
+export const APP_LOCKED_MUST_DO: MustDoId[] = ['exercise', 'chew']
 
 export function emptyScreenSlot(limitSec: number): ScreenSlot {
   return {

@@ -6,19 +6,12 @@ import { ExercisesScreen } from './ExercisesScreen'
 import { ParentPinDialog } from './ParentPinDialog'
 import { ParentSummaryScreen } from './ParentSummaryScreen'
 import { ProgressScreen } from './ProgressScreen'
-import {
-  TOM_SAWYER_BOOK_TITLE,
-  ensureTomSawyerFinishedBook,
-  isTomSawyerInFinishedBooks,
-  removeReadingBookByTitle,
-} from './progress'
 import { RoleSetupScreen } from './RoleSetupScreen'
 import { RobloxScreen } from './RobloxScreen'
 import { ScreenHeadActions } from './ScreenHeadActions'
 import { SettingsScreen } from './SettingsScreen'
 import { StickerUnlockOverlay } from './StickerUnlockOverlay'
 import { TodayScreen } from './TodayScreen'
-import { useTomSawyerLive } from './tomSawyerSync'
 import type { TabId, UserRole } from './types'
 import { useAppData } from './useAppData'
 import { useChildTaskAlerts } from './useChildTaskAlerts'
@@ -41,7 +34,6 @@ function App() {
   const notifications = useNotifications(role)
   const parentAlerts = useParentAlerts(role, data)
   const childTaskAlerts = useChildTaskAlerts(role, data)
-  const tomSawyer = useTomSawyerLive()
   const [tab, setTab] = useState<TabId>(() =>
     role === 'parent' ? 'calendar' : 'today',
   )
@@ -76,20 +68,6 @@ function App() {
       setTab('calendar')
     }
   }, [role, tab])
-
-  // Auto-add Tom Sawyer when the reader finishes; aliases like «Том Сойер» count as the same book
-  useEffect(() => {
-    if (!tomSawyer.bookComplete) return
-    if (isTomSawyerInFinishedBooks(data.finishedBooks ?? [])) return
-    setData((prev) => ({
-      ...prev,
-      finishedBooks: ensureTomSawyerFinishedBook(prev.finishedBooks ?? [], true),
-      readingBooks: removeReadingBookByTitle(
-        prev.readingBooks ?? [],
-        TOM_SAWYER_BOOK_TITLE,
-      ),
-    }))
-  }, [tomSawyer.bookComplete, data.finishedBooks, setData])
 
   if (!role) {
     return (
@@ -148,13 +126,14 @@ function App() {
             readOnly={isParent}
           />
         ) : null}
-        {tab === 'chew' ? (
+        <div hidden={tab !== 'chew'} inert={tab !== 'chew'}>
           <ChewDiaryScreen
             data={data}
             onChange={setData}
             readOnly={isParent}
+            active={tab === 'chew'}
           />
-        ) : null}
+        </div>
         {tab === 'settings' ? (
           <SettingsScreen
             role={role}

@@ -16,6 +16,8 @@ type Props = {
   data: AppData
   onChange: (next: AppData) => void
   readOnly?: boolean
+  /** False while another tab is shown — screen stays mounted to keep the draft */
+  active?: boolean
 }
 
 type ReportPeriod = '14' | 'month' | 'all' | 'custom'
@@ -79,6 +81,7 @@ export function ChewDiaryScreen({
   data,
   onChange,
   readOnly = false,
+  active = true,
 }: Props) {
   const key = todayKey()
   const [editing, setEditing] = useState(false)
@@ -135,6 +138,10 @@ export function ChewDiaryScreen({
   useEffect(() => {
     if (readOnly) setEditing(false)
   }, [readOnly])
+
+  useEffect(() => {
+    if (!active) setReportOpen(false)
+  }, [active])
 
   // New calendar day — clear the draft. Do not reset when switching food.
   useEffect(() => {
