@@ -15,8 +15,10 @@ import { TodayScreen } from './TodayScreen'
 import type { TabId, UserRole } from './types'
 import { useAppData } from './useAppData'
 import { useChildTaskAlerts } from './useChildTaskAlerts'
+import { useFamilyBackgroundSync } from './useFamilyBackgroundSync'
 import { useNotifications } from './useNotifications'
 import { useParentAlerts } from './useParentAlerts'
+import { usePushBridge } from './usePushBridge'
 import { useUserRole } from './useUserRole'
 import './App.css'
 
@@ -32,8 +34,15 @@ function App() {
   } = useAppData()
   const { role, setRole } = useUserRole()
   const notifications = useNotifications(role)
-  const parentAlerts = useParentAlerts(role, data)
-  const childTaskAlerts = useChildTaskAlerts(role, data)
+  const parentAlerts = useParentAlerts(role, data, family.connected)
+  const childTaskAlerts = useChildTaskAlerts(role, data, family.connected)
+  usePushBridge(role, family.code)
+  useFamilyBackgroundSync(
+    role,
+    family.code,
+    parentAlerts.childName,
+    role === 'parent' ? parentAlerts.enabled : childTaskAlerts.enabled,
+  )
   const [tab, setTab] = useState<TabId>(() =>
     role === 'parent' ? 'calendar' : 'today',
   )

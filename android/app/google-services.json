@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "320223710326",
+    "project_id": "kid-sheduler",
+    "storage_bucket": "kid-sheduler.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:320223710326:android:41d03249c8838b8ed3a357",
+        "android_client_info": {
+          "package_name": "com.sosnova.sheduler"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDNYPCfpB7OHh5YHPjPTkftEk4TI6gRJKo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

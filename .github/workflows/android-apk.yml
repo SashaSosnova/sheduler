@@ -51,6 +51,16 @@ jobs:
       - name: Cap sync Android
         run: npx cap sync android
 
+      - name: Write google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s\n' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+          else
+            echo "No GOOGLE_SERVICES_JSON secret — push in background will be off until the file is added"
+          fi
+
       - name: Ensure release keystore exists
         run: |
           if [ ! -f android/kanikuly.keystore ]; then
@@ -98,21 +108,22 @@ jobs:
           gh release create apk-latest \
             release/sheduler.apk \
             release/kanikuly.apk \
-            --title "Sheduler 2.6.6" \
+            --title "Sheduler 2.11.0" \
             --notes "$(cat <<'EOF'
-          **Sheduler v2.6.6** — APK для установки с файла (без adb).
+          **Sheduler v2.11.0** — APK для установки с файла (без adb).
 
           Что нового:
-          - фикс ложного открытия Кинга и Бесправного Ездока на старых днях без трекинга
-          - секретные ачивки считаются только по надёжным данным зарядки / Roblox
+          - дневник жевания сразу уходит в облако, даже если приложение закрыли
+          - родителю приходит уведомление о жевании и зарядке, пока приложение закрыто
 
           Package id: `com.sosnova.sheduler`.
 
           Как поставить на Samsung:
-          1. Удали старое приложение Kanikuly / Sheduler, если есть.
+          1. Ставь **поверх** текущего приложения. Не удаляй и не чисти данные — иначе пропадёт сегодняшнее жевание.
           2. Автоблокировка → выкл.
           3. Мои файлы → Установка неизвестных приложений → разрешить.
           4. Скачай **sheduler.apk** и открой из Downloads.
+          5. Настройки → Батарея → Sheduler → без ограничений.
 
           Дальше обновления с той же ссылки должны ставиться поверх.
           EOF

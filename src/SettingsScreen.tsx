@@ -321,6 +321,10 @@ export function SettingsScreen({
                 <span>{childName} заполнил дневник жевания</span>
               </li>
             </ul>
+            <p className="hint" style={{ marginTop: 8 }}>
+              Приходит даже если приложение закрыто. На Samsung: настройки →
+              батарея → Sheduler → без ограничений.
+            </p>
             <div className="row-gap">
               <button
                 type="button"
@@ -369,6 +373,10 @@ export function SettingsScreen({
                 </li>
               ))}
             </ul>
+            <p className="hint" style={{ marginTop: 8 }}>
+              Эти напоминания стоят на телефоне и приходят, даже если приложение
+              закрыто.
+            </p>
             <div className="row-gap">
               <button
                 type="button"
@@ -411,6 +419,10 @@ export function SettingsScreen({
                 <span>Добавлено задание от мамы: Купить хлеб</span>
               </li>
             </ul>
+            <p className="hint" style={{ marginTop: 8 }}>
+              Приходит даже если приложение закрыто. На Samsung: батарея →
+              Sheduler → без ограничений.
+            </p>
             <div className="row-gap">
               <button
                 type="button"

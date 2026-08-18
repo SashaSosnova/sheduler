@@ -47,6 +47,15 @@ function saveSeen(seen: Set<string>): void {
   }
 }
 
+/** Ignore a push event when the app later opens, so it is not shown twice. */
+export function markChildTaskAlertSeen(key: string): void {
+  if (!key) return
+  const seen = loadSeen()
+  if (seen.has(key)) return
+  seen.add(key)
+  saveSeen(seen)
+}
+
 function isSeeded(): boolean {
   try {
     return localStorage.getItem(SEEDED_KEY) === '1'

@@ -23,9 +23,11 @@ import {
   pushFamilyData,
   subscribeFamily,
   ensureAuth,
+  unregisterDeviceToken,
   type CloudPayload,
   type FamilyStatus,
 } from './familySync'
+import { stopFamilyBackgroundAlerts } from './familyAlertsNative'
 import { isFirebaseConfigured } from './firebase'
 import {
   ROBLOX_STREAK_REWARDS,
@@ -53,6 +55,9 @@ import type {
 } from './types'
 
 const STORAGE_KEY = 'vacation-planner-v2'
+const PENDING_SYNC_KEY = 'vacation-planner-pending-sync'
+const PUSH_DEBOUNCE_MS = 400
+const PUSH_RETRY_MS = 2500
 
 type StoredData = {
   days?: Record<string, DayLog>
@@ -85,6 +90,94 @@ type StoredData = {
   legoCount?: number
   exercises?: unknown
   exerciseControls?: unknown
+}
+
+function loadPendingSync(): boolean {
+  try {
+    return localStorage.getItem(PENDING_SYNC_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function savePendingSync(pending: boolean) {
+  try {
+    if (pending) localStorage.setItem(PENDING_SYNC_KEY, '1')
+    else localStorage.removeItem(PENDING_SYNC_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+function toStoredData(data: AppData): StoredData {
+  return {
+    days: data.days,
+    chewEntries: data.chewEntries,
+    cookingLeft: data.cookingLeft,
+    routineId: ROUTINE_ID,
+    exercises: data.exercises ?? [],
+    exerciseControls: data.exerciseControls ?? [],
+    claimedRobloxStreaks: data.claimedRobloxStreaks ?? [],
+    robloxBonusBankMin: data.robloxBonusBankMin ?? 0,
+    robloxBonusEarnedMin: data.robloxBonusEarnedMin ?? 0,
+    robloxEnabled: data.robloxEnabled !== false,
+    robloxLimitMin: normalizeRobloxLimitMin(data.robloxLimitMin),
+    robloxSettingsUpdatedAt: data.robloxSettingsUpdatedAt ?? 0,
+    medications: data.medications ?? [],
+    medicationUpdatedAt: data.medicationUpdatedAt ?? 0,
+    moneyBankRub: data.moneyBankRub ?? 0,
+    banksUpdatedAt: data.banksUpdatedAt ?? 0,
+    claimedStickerMoneyIds: data.claimedStickerMoneyIds ?? [],
+    dismissedGiftStickerIds: data.dismissedGiftStickerIds ?? [],
+    equippedStickerId: data.equippedStickerId ?? null,
+    bestStreak: data.bestStreak ?? 0,
+    bestParentTasks: data.bestParentTasks ?? 0,
+    readingBooks: data.readingBooks ?? [],
+    finishedBooks: data.finishedBooks ?? [],
+    studioSprintStates: data.studioSprintStates ?? {},
+    puzzleCount: data.puzzleCount ?? 0,
+    legoCount: data.legoCount ?? 0,
+  }
+}
+
+function persistLocal(data: AppData) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(toStoredData(data)))
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+/** True when this device has chew/checklist progress the cloud snapshot lacks. */
+function localAheadOfRemote(local: AppData, remote: CloudPayload): boolean {
+  const remoteChew = new Set((remote.chewEntries ?? []).map((e) => e.id))
+  for (const entry of local.chewEntries ?? []) {
+    if (!remoteChew.has(entry.id)) return true
+  }
+  for (const [date, day] of Object.entries(local.days ?? {})) {
+    const remoteDay = remote.days?.[date]
+    const flags = day.mustDo ?? {}
+    if (!remoteDay) {
+      if (Object.values(flags).some(Boolean)) return true
+      continue
+    }
+    for (const [id, done] of Object.entries(flags)) {
+      if (done && !remoteDay.mustDo?.[id as keyof typeof remoteDay.mustDo]) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+function chewEntriesChanged(prev: AppData, next: AppData): boolean {
+  const a = prev.chewEntries ?? []
+  const b = next.chewEntries ?? []
+  if (a.length !== b.length) return true
+  for (let i = 0; i < a.length; i++) {
+    if (JSON.stringify(a[i]) !== JSON.stringify(b[i])) return true
+  }
+  return false
 }
 
 function normalizeStringIds(raw: unknown): string[] {
@@ -576,69 +669,107 @@ export function useAppData() {
   const dataRef = useRef(data)
   const skipPushUntil = useRef(0)
   const pushTimer = useRef<number | null>(null)
+  const retryTimer = useRef<number | null>(null)
   const lastRemoteAt = useRef(0)
+  const pendingPushRef = useRef<AppData | null>(null)
+  const pushInFlightRef = useRef(false)
+  const pushAgainRef = useRef(false)
 
   useEffect(() => {
     dataRef.current = data
   }, [data])
 
   useEffect(() => {
-    const toStore: StoredData = {
-      days: data.days,
-      chewEntries: data.chewEntries,
-      cookingLeft: data.cookingLeft,
-      routineId: ROUTINE_ID,
-      exercises: data.exercises ?? [],
-      exerciseControls: data.exerciseControls ?? [],
-      claimedRobloxStreaks: data.claimedRobloxStreaks ?? [],
-      robloxBonusBankMin: data.robloxBonusBankMin ?? 0,
-      robloxBonusEarnedMin: data.robloxBonusEarnedMin ?? 0,
-      robloxEnabled: data.robloxEnabled !== false,
-      robloxLimitMin: normalizeRobloxLimitMin(data.robloxLimitMin),
-      robloxSettingsUpdatedAt: data.robloxSettingsUpdatedAt ?? 0,
-      medications: data.medications ?? [],
-      medicationUpdatedAt: data.medicationUpdatedAt ?? 0,
-      moneyBankRub: data.moneyBankRub ?? 0,
-      banksUpdatedAt: data.banksUpdatedAt ?? 0,
-      claimedStickerMoneyIds: data.claimedStickerMoneyIds ?? [],
-      dismissedGiftStickerIds: data.dismissedGiftStickerIds ?? [],
-      equippedStickerId: data.equippedStickerId ?? null,
-      bestStreak: data.bestStreak ?? 0,
-      bestParentTasks: data.bestParentTasks ?? 0,
-      readingBooks: data.readingBooks ?? [],
-      finishedBooks: data.finishedBooks ?? [],
-      studioSprintStates: data.studioSprintStates ?? {},
-      puzzleCount: data.puzzleCount ?? 0,
-      legoCount: data.legoCount ?? 0,
-    }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(toStore))
+    persistLocal(data)
   }, [data])
 
-  const schedulePush = useCallback((next: AppData) => {
+  const clearPushTimers = useCallback(() => {
+    if (pushTimer.current) {
+      window.clearTimeout(pushTimer.current)
+      pushTimer.current = null
+    }
+    if (retryTimer.current) {
+      window.clearTimeout(retryTimer.current)
+      retryTimer.current = null
+    }
+  }, [])
+
+  const flushPush = useCallback(async (mode: 'debounce' | 'flush' | 'retry') => {
     const code = loadFamilyCode()
     if (!code || !isFirebaseConfigured()) return
-    if (Date.now() < skipPushUntil.current) return
 
-    if (pushTimer.current) window.clearTimeout(pushTimer.current)
-    pushTimer.current = window.setTimeout(async () => {
-      setFamily((f) => ({ ...f, syncing: true, error: null }))
-      try {
-        const updatedAt = await pushFamilyData(code, next)
-        lastRemoteAt.current = updatedAt
-        setFamily((f) => ({
-          ...f,
-          syncing: false,
-          connected: true,
-          lastSyncedAt: updatedAt,
-          error: null,
-        }))
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : 'Не удалось сохранить в облако'
-        setFamily((f) => ({ ...f, syncing: false, error: message }))
+    const skipWait = skipPushUntil.current - Date.now()
+    // Going to background must not wait — the WebView may be killed next.
+    if (skipWait > 0 && mode !== 'flush') {
+      if (pushTimer.current) window.clearTimeout(pushTimer.current)
+      pushTimer.current = window.setTimeout(() => {
+        void flushPush('debounce')
+      }, skipWait + 30)
+      return
+    }
+
+    if (pushInFlightRef.current) {
+      pushAgainRef.current = true
+      return
+    }
+
+    const next = pendingPushRef.current ?? (loadPendingSync() ? dataRef.current : null)
+    if (!next) return
+
+    pushInFlightRef.current = true
+    let ok = false
+    setFamily((f) => ({ ...f, syncing: true, error: null }))
+    try {
+      const updatedAt = await pushFamilyData(code, next)
+      lastRemoteAt.current = updatedAt
+      if (pendingPushRef.current === next) {
+        pendingPushRef.current = null
+        savePendingSync(false)
       }
-    }, 700)
+      ok = true
+      setFamily((f) => ({
+        ...f,
+        syncing: false,
+        connected: true,
+        lastSyncedAt: updatedAt,
+        error: null,
+      }))
+    } catch (err) {
+      savePendingSync(true)
+      const message =
+        err instanceof Error ? err.message : 'Не удалось сохранить в облако'
+      setFamily((f) => ({ ...f, syncing: false, error: message }))
+      if (retryTimer.current) window.clearTimeout(retryTimer.current)
+      retryTimer.current = window.setTimeout(() => {
+        void flushPush('retry')
+      }, PUSH_RETRY_MS)
+    } finally {
+      pushInFlightRef.current = false
+    }
+    if (ok && (pushAgainRef.current || pendingPushRef.current)) {
+      pushAgainRef.current = false
+      if (pendingPushRef.current) void flushPush('retry')
+    }
   }, [])
+
+  const schedulePush = useCallback(
+    (next: AppData, delayMs = PUSH_DEBOUNCE_MS) => {
+      const code = loadFamilyCode()
+      if (!code || !isFirebaseConfigured()) return
+      pendingPushRef.current = next
+      savePendingSync(true)
+      persistLocal(next)
+      if (pushTimer.current) window.clearTimeout(pushTimer.current)
+      if (delayMs <= 0) {
+        void flushPush('flush')
+        return
+      }
+      pushTimer.current = window.setTimeout(() => {
+        void flushPush('debounce')
+      }, delayMs)
+    },
+    [flushPush],
+  )
 
   const setDataAndSync = useCallback(
     (action: AppData | ((prev: AppData) => AppData)) => {
@@ -677,7 +808,11 @@ export function useAppData() {
           }
         }
         const normalized = hydrateAppData(withMeta)
-        schedulePush(normalized)
+        persistLocal(normalized)
+        schedulePush(
+          normalized,
+          chewEntriesChanged(prev, normalized) ? 0 : PUSH_DEBOUNCE_MS,
+        )
         return normalized
       })
     },
@@ -691,10 +826,19 @@ export function useAppData() {
 
     setFamily((f) => ({ ...f, code, syncing: true, error: null }))
     let unsub = () => {}
+    let cancelled = false
 
     ;(async () => {
       try {
         await ensureAuth()
+        if (cancelled) return
+        // Upload anything left from a previous force-close before we listen,
+        // so a stale cloud snapshot cannot sit on top of an unsynced chew entry.
+        if (loadPendingSync() || pendingPushRef.current) {
+          pendingPushRef.current = pendingPushRef.current ?? dataRef.current
+          await flushPush('flush')
+        }
+        if (cancelled) return
         unsub = subscribeFamily(
           code,
           (payload) => {
@@ -717,7 +861,17 @@ export function useAppData() {
               : Date.now() + 1200
             setData((prev) => {
               const next = applyCloud(prev, payload)
-              if (collapsedDuplicateBooks) schedulePush(next)
+              persistLocal(next)
+              const shouldUpload =
+                collapsedDuplicateBooks ||
+                loadPendingSync() ||
+                pendingPushRef.current != null ||
+                localAheadOfRemote(next, payload)
+              if (shouldUpload) {
+                pendingPushRef.current = next
+                savePendingSync(true)
+                schedulePush(next)
+              }
               return next
             })
             setFamily((f) => ({
@@ -746,10 +900,42 @@ export function useAppData() {
     })()
 
     return () => {
+      cancelled = true
       unsub()
-      if (pushTimer.current) window.clearTimeout(pushTimer.current)
     }
-  }, [family.code, schedulePush])
+  }, [family.code, schedulePush, flushPush])
+
+  useEffect(() => {
+    const onFlush = () => {
+      if (!pendingPushRef.current && !loadPendingSync()) return
+      clearPushTimers()
+      void flushPush('flush')
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        onFlush()
+        return
+      }
+      if (pendingPushRef.current || loadPendingSync()) {
+        void flushPush('retry')
+      }
+    }
+    const onOnline = () => {
+      if (pendingPushRef.current || loadPendingSync()) {
+        void flushPush('retry')
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('pagehide', onFlush)
+    window.addEventListener('online', onOnline)
+    document.addEventListener('freeze', onFlush)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('pagehide', onFlush)
+      window.removeEventListener('online', onOnline)
+      document.removeEventListener('freeze', onFlush)
+    }
+  }, [flushPush, clearPushTimers])
 
   const createFamilyCloud = useCallback(async () => {
     if (!isFirebaseConfigured()) {
@@ -763,6 +949,8 @@ export function useAppData() {
     try {
       const code = await createFamily(dataRef.current)
       lastRemoteAt.current = Date.now()
+      pendingPushRef.current = null
+      savePendingSync(false)
       setFamily({
         code,
         connected: true,
@@ -789,6 +977,9 @@ export function useAppData() {
       const payload = await joinFamily(code)
       lastRemoteAt.current = payload.updatedAt
       skipPushUntil.current = Date.now() + 1200
+      pendingPushRef.current = null
+      savePendingSync(false)
+      clearPushTimers()
       setData(replaceFromCloud(payload))
       setFamily({
         code: code.trim().toUpperCase(),
@@ -801,10 +992,16 @@ export function useAppData() {
       const message = err instanceof Error ? err.message : 'Не удалось войти по коду'
       setFamily((f) => ({ ...f, syncing: false, error: message }))
     }
-  }, [])
+  }, [clearPushTimers])
 
   const leaveFamilyCloud = useCallback(() => {
+    const code = loadFamilyCode()
+    void unregisterDeviceToken(code)
+    void stopFamilyBackgroundAlerts()
     leaveFamily()
+    pendingPushRef.current = null
+    savePendingSync(false)
+    clearPushTimers()
     setFamily({
       code: null,
       connected: false,
@@ -812,7 +1009,7 @@ export function useAppData() {
       error: null,
       lastSyncedAt: null,
     })
-  }, [])
+  }, [clearPushTimers])
 
   return {
     data,

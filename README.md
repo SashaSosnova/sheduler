@@ -78,19 +78,14 @@ APK появится примерно здесь:
 
 1. **Authentication** → Sign-in method → **Anonymous** → Enable.
 2. **Firestore Database** → Create database (режим production).
-3. **Firestore** → Rules → вставь правила из файла `firestore.rules` в репозитории и Publish:
-
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /families/{familyCode} {
-      allow read, write: if request.auth != null;
-    }
-  }
-}
-```
+3. **Firestore** → Rules → вставь правила из файла `firestore.rules` в репозитории и Publish.
 
 После этого: `npm run dev` → **Создать семью** → на втором устройстве **Войти по коду**.
 
 Синхронизируются: дни (чек-лист, задания, напоминания, Roblox), дневник жевания, копилки и достижения. Зарядка берётся из кода приложения.
+
+### Push-уведомления (приложение закрыто)
+
+Платный тариф Firebase не нужен. Телефон сам слушает облако в фоне.
+
+Нужны: файл `android/app/google-services.json` и новая версия приложения на обоих телефонах. На Samsung отключи ограничения батареи для Sheduler.

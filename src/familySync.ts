@@ -4,6 +4,7 @@ import {
   type User,
 } from 'firebase/auth'
 import {
+  deleteDoc,
   doc,
   getDoc,
   onSnapshot,
@@ -20,10 +21,12 @@ import type {
   FinishedBook,
   ReadingBook,
   StudioSprintState,
+  UserRole,
 } from './types'
 import { getFirebaseAuth, getFirebaseDb, isFirebaseConfigured } from './firebase'
 
 const FAMILY_KEY = 'vacation-family-code'
+const DEVICE_ID_KEY = 'vacation-device-id'
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 
 export type CloudPayload = {
@@ -121,6 +124,60 @@ export async function ensureAuth(): Promise<User> {
 
 function familyRef(code: string) {
   return doc(getFirebaseDb(), 'families', code)
+}
+
+function deviceRef(code: string, deviceId: string) {
+  return doc(getFirebaseDb(), 'families', code, 'devices', deviceId)
+}
+
+export function getDeviceId(): string {
+  try {
+    const existing = localStorage.getItem(DEVICE_ID_KEY)
+    if (existing) return existing
+    const id = `dev-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+    localStorage.setItem(DEVICE_ID_KEY, id)
+    return id
+  } catch {
+    return `dev-${Date.now()}`
+  }
+}
+
+export async function registerDeviceToken(
+  code: string,
+  role: UserRole,
+  token: string,
+): Promise<void> {
+  if (!code || !token) return
+  await ensureAuth()
+  await setDoc(deviceRef(code, getDeviceId()), {
+    token,
+    role,
+    updatedAt: Date.now(),
+  })
+}
+
+export async function unregisterDeviceToken(code: string | null): Promise<void> {
+  if (!code) return
+  try {
+    await ensureAuth()
+    await deleteDoc(deviceRef(code, getDeviceId()))
+  } catch {
+    /* offline / already gone */
+  }
+}
+
+export async function updateFamilyChildName(
+  code: string | null,
+  name: string,
+): Promise<void> {
+  if (!code) return
+  const trimmed = name.trim()
+  await ensureAuth()
+  await setDoc(
+    familyRef(code),
+    { childDisplayName: trimmed || 'Даня' },
+    { merge: true },
+  )
 }
 
 export function toCloudPayload(data: AppData, updatedAt = Date.now()): CloudPayload {
@@ -274,6 +331,9 @@ export function subscribeFamily(
         readingBooks: remote.readingBooks,
         currentBook: remote.currentBook,
         finishedBooks: remote.finishedBooks ?? [],
+        studioSprintStates: remote.studioSprintStates ?? {},
+        puzzleCount: remote.puzzleCount ?? 0,
+        legoCount: remote.legoCount ?? 0,
         updatedAt: remote.updatedAt ?? Date.now(),
       })
     },

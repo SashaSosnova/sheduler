@@ -84,14 +84,38 @@ async function ensureChannel(): Promise<void> {
   }
 }
 
+const SCHEDULE_DAYS = 7
+
+function reminderOccurrenceId(baseId: number, dayOffset: number): number {
+  return baseId * 10 + dayOffset
+}
+
 export async function cancelAllReminders(): Promise<void> {
   if (!notificationsSupported()) return
-  await LocalNotifications.cancel({
-    notifications: [
-      ...REMINDERS.map((r) => ({ id: r.notificationId })),
-      ...LEGACY_NOTIFICATION_IDS.map((id) => ({ id })),
-    ],
-  })
+  const ids = [
+    ...REMINDERS.map((r) => ({ id: r.notificationId })),
+    ...LEGACY_NOTIFICATION_IDS.map((id) => ({ id })),
+  ]
+  for (const r of REMINDERS) {
+    for (let day = 0; day < SCHEDULE_DAYS; day++) {
+      ids.push({ id: reminderOccurrenceId(r.notificationId, day) })
+    }
+  }
+  await LocalNotifications.cancel({ notifications: ids })
+}
+
+function upcomingTimes(hour: number, minute: number, count: number): Date[] {
+  const out: Date[] = []
+  const now = Date.now()
+  for (let i = 0; i < count + 2 && out.length < count; i++) {
+    const at = new Date()
+    at.setSeconds(0, 0)
+    at.setMilliseconds(0)
+    at.setHours(hour, minute, 0, 0)
+    at.setDate(at.getDate() + i)
+    if (at.getTime() > now + 15_000) out.push(at)
+  }
+  return out
 }
 
 export async function scheduleReminders(): Promise<boolean> {
@@ -104,21 +128,36 @@ export async function scheduleReminders(): Promise<boolean> {
     return false
   }
 
+  try {
+    const plugin = LocalNotifications as typeof LocalNotifications & {
+      checkExactNotificationSetting?: () => Promise<{ exact_alarm: string }>
+      changeExactNotificationSetting?: () => Promise<unknown>
+    }
+    const exact = await plugin.checkExactNotificationSetting?.()
+    if (exact && exact.exact_alarm !== 'granted') {
+      await plugin.changeExactNotificationSetting?.()
+    }
+  } catch {
+    /* older plugin / not Android */
+  }
+
   await cancelAllReminders()
 
-  await LocalNotifications.schedule({
-    notifications: REMINDERS.map((r) => ({
-      id: r.notificationId,
+  const notifications = REMINDERS.flatMap((r) =>
+    upcomingTimes(r.hour, r.minute, SCHEDULE_DAYS).map((at, day) => ({
+      id: reminderOccurrenceId(r.notificationId, day),
       title: r.title,
       body: r.body,
       channelId: CHANNEL_ID,
       schedule: {
-        on: { hour: r.hour, minute: r.minute },
+        at,
         allowWhileIdle: true,
       },
       extra: { reminderId: r.id },
     })),
-  })
+  )
+
+  await LocalNotifications.schedule({ notifications })
 
   return true
 }

@@ -1,6 +1,12 @@
 import { initializeApp, type FirebaseApp } from 'firebase/app'
 import { getAuth, type Auth } from 'firebase/auth'
-import { getFirestore, type Firestore } from 'firebase/firestore'
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  type Firestore,
+} from 'firebase/firestore'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY as string,
@@ -33,6 +39,19 @@ export function getFirebaseAuth(): Auth {
 }
 
 export function getFirebaseDb(): Firestore {
-  if (!db) db = getFirestore(getFirebaseApp())
+  if (!db) {
+    const app = getFirebaseApp()
+    try {
+      // Keep queued writes across WebView pauses so a chew save can
+      // finish uploading after the child leaves the app.
+      db = initializeFirestore(app, {
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager(),
+        }),
+      })
+    } catch {
+      db = getFirestore(app)
+    }
+  }
   return db
 }
