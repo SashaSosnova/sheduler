@@ -5,7 +5,7 @@ type NavTab = { id: TabId; label: string; icon: string }
 const CHILD_TABS: NavTab[] = [
   { id: 'today', label: 'Сегодня', icon: './nav/today.png?v=18' },
   { id: 'progress', label: 'Прогресс', icon: './nav/progress.png?v=18' },
-  { id: 'roblox', label: 'Roblox', icon: './nav/roblox.png?v=18' },
+  { id: 'rewards', label: 'Награды', icon: './nav/rewards.png?v=18' },
   { id: 'exercises', label: 'Зарядка', icon: './nav/exercises.png?v=18' },
   { id: 'chew', label: 'Жевание', icon: './nav/chew.png?v=18' },
 ]

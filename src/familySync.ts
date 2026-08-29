@@ -20,6 +20,7 @@ import type {
   ExerciseControl,
   FinishedBook,
   ReadingBook,
+  SchoolGrade,
   StudioSprintState,
   UserRole,
 } from './types'
@@ -32,6 +33,8 @@ const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 export type CloudPayload = {
   days: Record<string, DayLog>
   chewEntries: ChewEntry[]
+  schoolGrades?: SchoolGrade[]
+  deletedSchoolGradeIds?: string[]
   cookingLeft: number
   exercises?: Exercise[]
   exerciseControls?: ExerciseControl[]
@@ -184,6 +187,8 @@ export function toCloudPayload(data: AppData, updatedAt = Date.now()): CloudPayl
   return {
     days: data.days,
     chewEntries: data.chewEntries ?? [],
+    schoolGrades: data.schoolGrades ?? [],
+    deletedSchoolGradeIds: data.deletedSchoolGradeIds ?? [],
     cookingLeft: data.cookingLeft,
     exercises: data.exercises ?? [],
     exerciseControls: data.exerciseControls ?? [],
@@ -250,6 +255,8 @@ export async function joinFamily(rawCode: string): Promise<CloudPayload> {
   return {
     days: remote.days ?? {},
     chewEntries: remote.chewEntries ?? [],
+    schoolGrades: remote.schoolGrades ?? [],
+    deletedSchoolGradeIds: remote.deletedSchoolGradeIds ?? [],
     cookingLeft: remote.cookingLeft ?? 5,
     exercises: remote.exercises,
     exerciseControls: remote.exerciseControls,
@@ -309,6 +316,8 @@ export function subscribeFamily(
       onData({
         days: remote.days ?? {},
         chewEntries: remote.chewEntries ?? [],
+        schoolGrades: remote.schoolGrades ?? [],
+        deletedSchoolGradeIds: remote.deletedSchoolGradeIds ?? [],
         cookingLeft: remote.cookingLeft ?? 5,
         exercises: remote.exercises,
         exerciseControls: remote.exerciseControls,

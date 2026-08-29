@@ -1,12 +1,16 @@
 import {
   MUST_DO_ITEMS,
+  SCHOOL_QUARTER_MIN_GRADES,
   isRobloxEnabled,
+  isSchoolQuarterEnded,
   normalizeRobloxLimitMin,
   activeExercises,
   chewDurationSec,
   flushScreenOvertime,
   normalizeDayLog,
   parseTimerRounds,
+  schoolQuarterKey,
+  schoolSubjectKey,
   todayKey,
   workoutDurationSec,
 } from './data'
@@ -18,6 +22,7 @@ import type {
   Exercise,
   FinishedBook,
   ReadingBook,
+  SchoolGrade,
 } from './types'
 
 /** 2 ideal days at 5 must-dos each → next level */
@@ -173,6 +178,13 @@ export type Sticker = {
   needPuzzles?: number
   /** Completed Lego sets (pieces, not days) */
   needLegos?: number
+  /** Diary 5s in this school subject */
+  needSubject?: string
+  needSubjectFives?: number
+  /** Finished quarters with no 3s or 2s */
+  needCleanQuarters?: number
+  /** Finished quarters where every mark is a 5 */
+  needExcellentQuarters?: number
   robloxExtraMin?: number
   /** Rubles credited to moneyBankRub when this sticker unlocks */
   moneyRub?: number
@@ -232,6 +244,9 @@ export type StickerProgress = {
   achievementRobloxMin: number
   puzzles: number
   legos: number
+  fivesBySubject: Record<string, number>
+  cleanQuarters: number
+  excellentQuarters: number
 }
 
 /**
@@ -639,6 +654,90 @@ export const STICKERS: Sticker[] = [
     giftHint: 'Награда: хромакей со стойкой для фотофона',
   },
   {
+    id: 'streak-isagi',
+    kind: 'art',
+    track: 'streak',
+    needStreak: 40,
+    image: './stickers/isagi.png',
+    label: 'Исаги',
+    quote: 'Эта пьеса — моя',
+    detail: 'Синяя тюрьма',
+  },
+  {
+    id: 'streak-bachira',
+    kind: 'art',
+    track: 'streak',
+    needStreak: 48,
+    image: './stickers/bachira.png',
+    label: 'Батира',
+    quote: 'Поиграй со мной!',
+    detail: 'Синяя тюрьма',
+  },
+  {
+    id: 'streak-kaiser',
+    kind: 'art',
+    track: 'streak',
+    needStreak: 60,
+    image: './stickers/kaiser.png',
+    label: 'Кайзер',
+    quote: 'Импакт Кайзера',
+    detail: 'Синяя тюрьма',
+    moneyRub: 100,
+  },
+  {
+    id: 'streak-barou',
+    kind: 'art',
+    track: 'streak',
+    needStreak: 75,
+    image: './stickers/barou.png',
+    label: 'Бароу',
+    quote: 'Это моя площадь',
+    detail: 'Синяя тюрьма',
+    moneyRub: 200,
+  },
+  {
+    id: 'exercise-rudo',
+    kind: 'art',
+    track: 'exercise',
+    needExerciseDays: 36,
+    image: './stickers/rudo.png',
+    label: 'Рудо',
+    quote: 'Я всё заберу обратно',
+    detail: 'Гачиакута',
+  },
+  {
+    id: 'exercise-enjin',
+    kind: 'art',
+    track: 'exercise',
+    needExerciseDays: 44,
+    image: './stickers/enjin.png',
+    label: 'Энджин',
+    quote: 'Добро пожаловать в яму',
+    detail: 'Гачиакута',
+  },
+  {
+    id: 'exercise-riyo',
+    kind: 'art',
+    track: 'exercise',
+    needExerciseDays: 58,
+    image: './stickers/riyo.png',
+    label: 'Риё',
+    quote: 'Разрежем!',
+    detail: 'Гачиакута',
+    moneyRub: 100,
+  },
+  {
+    id: 'exercise-zanka',
+    kind: 'art',
+    track: 'exercise',
+    needExerciseDays: 72,
+    image: './stickers/zanka.png',
+    label: 'Занка',
+    quote: 'Не позорь отряд',
+    detail: 'Гачиакута',
+    moneyRub: 200,
+  },
+  {
     id: 'feat-secret-roblox-bonus',
     kind: 'art',
     track: 'secret',
@@ -707,6 +806,220 @@ export const STICKERS: Sticker[] = [
     label: 'Сенку',
     quote: 'Десять миллиардов процентов собрано!',
     detail: 'Dr. Stone',
+  },
+  ...(
+    [
+      {
+        id: 'school-lomonosov',
+        subject: 'Русский язык',
+        n: 3,
+        image: './stickers/lomonosov.png',
+        label: 'Ломоносов',
+        quote: 'Науки юношей питают',
+      },
+      {
+        id: 'school-dal',
+        subject: 'Русский язык',
+        n: 7,
+        image: './stickers/dal.png',
+        label: 'Даль',
+        quote: 'Живое великорусское слово',
+      },
+      {
+        id: 'school-ozhegov',
+        subject: 'Русский язык',
+        n: 10,
+        image: './stickers/ozhegov.png',
+        label: 'Ожегов',
+        quote: 'Слово надо знать точно',
+      },
+      {
+        id: 'school-chukovsky',
+        subject: 'Русский язык',
+        n: 15,
+        image: './stickers/chukovsky.png',
+        label: 'Чуковский',
+        quote: 'От двух до пяти',
+      },
+      {
+        id: 'school-pythagoras',
+        subject: 'Математика',
+        n: 3,
+        image: './stickers/pythagoras.png',
+        label: 'Пифагор',
+        quote: 'Всё есть число',
+      },
+      {
+        id: 'school-kovalevskaya',
+        subject: 'Математика',
+        n: 7,
+        image: './stickers/kovalevskaya.png',
+        label: 'Ковалевская',
+        quote: 'В математике есть красота',
+      },
+      {
+        id: 'school-euler',
+        subject: 'Математика',
+        n: 10,
+        image: './stickers/euler.png',
+        label: 'Эйлер',
+        quote: 'Формула — это поэзия',
+      },
+      {
+        id: 'school-lobachevsky',
+        subject: 'Математика',
+        n: 15,
+        image: './stickers/lobachevsky.png',
+        label: 'Лобачевский',
+        quote: 'Прямые могут встретиться',
+      },
+      {
+        id: 'school-pushkin',
+        subject: 'Литература',
+        n: 3,
+        image: './stickers/pushkin.png',
+        label: 'Пушкин',
+        quote: 'Я памятник себе воздвиг',
+      },
+      {
+        id: 'school-gogol',
+        subject: 'Литература',
+        n: 7,
+        image: './stickers/gogol.png',
+        label: 'Гоголь',
+        quote: 'Необыкновенно странно',
+      },
+      {
+        id: 'school-chekhov',
+        subject: 'Литература',
+        n: 10,
+        image: './stickers/chekhov.png',
+        label: 'Чехов',
+        quote: 'Краткость — сестра таланта',
+      },
+      {
+        id: 'school-tolstoy',
+        subject: 'Литература',
+        n: 15,
+        image: './stickers/tolstoy.png',
+        label: 'Толстой',
+        quote: 'Война и мир начинаются дома',
+      },
+      {
+        id: 'school-darwin',
+        subject: 'Окружающий мир',
+        n: 3,
+        image: './stickers/darwin.png',
+        label: 'Дарвин',
+        quote: 'Происхождение видов',
+      },
+      {
+        id: 'school-mendeleev',
+        subject: 'Окружающий мир',
+        n: 7,
+        image: './stickers/mendeleev.png',
+        label: 'Менделеев',
+        quote: 'Таблица есть таблица',
+      },
+      {
+        id: 'school-newton',
+        subject: 'Окружающий мир',
+        n: 10,
+        image: './stickers/newton.png',
+        label: 'Ньютон',
+        quote: 'Яблоко упало — закон нашёлся',
+      },
+      {
+        id: 'school-vernadsky',
+        subject: 'Окружающий мир',
+        n: 15,
+        image: './stickers/vernadsky.png',
+        label: 'Вернадский',
+        quote: 'Живое вещество планеты',
+      },
+      {
+        id: 'school-shakespeare',
+        subject: 'Английский язык',
+        n: 3,
+        image: './stickers/shakespeare.png',
+        label: 'Шекспир',
+        quote: 'Быть или не быть',
+      },
+      {
+        id: 'school-carroll',
+        subject: 'Английский язык',
+        n: 7,
+        image: './stickers/carroll.png',
+        label: 'Кэрролл',
+        quote: 'Вниз по кроличьей норе',
+      },
+      {
+        id: 'school-dickens',
+        subject: 'Английский язык',
+        n: 10,
+        image: './stickers/dickens.png',
+        label: 'Диккенс',
+        quote: 'Лучшие времена впереди',
+      },
+      {
+        id: 'school-tolkien',
+        subject: 'Английский язык',
+        n: 15,
+        image: './stickers/tolkien.png',
+        label: 'Толкин',
+        quote: 'В путь, туда и обратно',
+      },
+    ] as const
+  ).map((hero) => ({
+    id: hero.id,
+    kind: 'art' as const,
+    track: 'school' as const,
+    needSubject: hero.subject,
+    needSubjectFives: hero.n,
+    image: hero.image,
+    label: hero.label,
+    quote: hero.quote,
+    detail: hero.subject,
+  })),
+  {
+    id: 'school-comenius',
+    kind: 'art',
+    track: 'school',
+    needCleanQuarters: 1,
+    image: './stickers/comenius.png',
+    label: 'Коменский',
+    quote: 'Учить всех всему',
+    detail: 'Четверти',
+  },
+  {
+    id: 'school-ushinsky',
+    kind: 'art',
+    track: 'school',
+    needCleanQuarters: 2,
+    image: './stickers/ushinsky.png',
+    label: 'Ушинский',
+    quote: 'Родное слово',
+    detail: 'Четверти',
+  },
+  {
+    id: 'school-montessori',
+    kind: 'art',
+    track: 'school',
+    needExcellentQuarters: 1,
+    image: './stickers/montessori.png',
+    label: 'Монтессори',
+    quote: 'Помоги мне сделать самому',
+    detail: 'Четверти',
+  },
+  {
+    id: 'school-vygotsky',
+    kind: 'art',
+    track: 'school',
+    needCleanQuarters: 3,
+    image: './stickers/vygotsky.png',
+    label: 'Выготский',
+    quote: 'Учимся вместе',
+    detail: 'Четверти',
   },
 ]
 
@@ -810,19 +1123,23 @@ function ownTasksRank(n: number): string {
 }
 
 /**
- * Exercise-days ladder (4 → 9 → 15 → 22 → 27 → 50).
- * Jujutsu Kaisen sorcerer grades: Megumi → Mahoraga → Yuji → Inumaki → Gojo → Toji.
+ * Exercise-days ranks by exact threshold so new stickers never rename old ones.
  */
 function exerciseDaysRank(n: number): string {
-  if (n <= 4) return 'Колдун зарядки 4-го ранга'
-  if (n <= 9) return 'Колдун зарядки 3-го ранга'
-  if (n <= 15) return 'Колдун зарядки 2-го ранга'
-  if (n <= 22) return 'Колдун зарядки 1-го ранга'
-  if (n <= 27) return 'Особый ранг зарядки'
-  return 'Небесное ограничение зарядки'
+  if (n === 4) return 'Колдун зарядки 4-го ранга'
+  if (n === 9) return 'Колдун зарядки 3-го ранга'
+  if (n === 15) return 'Колдун зарядки 2-го ранга'
+  if (n === 22) return 'Колдун зарядки 1-го ранга'
+  if (n === 27) return 'Особый ранг зарядки'
+  if (n === 36) return 'Чистильщик зарядки'
+  if (n === 44) return 'Капитан чистильщиков зарядки'
+  if (n === 50) return 'Небесное ограничение зарядки'
+  if (n === 58) return 'Жнец зарядки'
+  if (n === 72) return 'Элита отряда зарядки'
+  return 'Колдун зарядки'
 }
 
-/** Chew-diary ladder (5 → 11 → 17 → 24 → 40 → 48): Inosuke → Zenitsu → Nezuko → Tanjiro → Uzui → Rengoku. */
+/** Chew-diary ladder (5 → 11 → 17 → 24 → 40 → 48). */
 function chewDaysRank(n: number): string {
   if (n <= 5) return 'Охотник жевания мидзуното'
   if (n <= 11) return 'Охотник жевания каното'
@@ -839,14 +1156,19 @@ function booksRank(n: number): string {
   return 'Книжный демон'
 }
 
-/** Ideal-day streak ladder (3 → 7 → 14 → 21 → 28 → 56). */
+/** Ideal-day ranks by exact threshold so new stickers never rename old ones. */
 function streakRank(n: number): string {
-  if (n <= 3) return 'Герой идеальных дней C-класса'
-  if (n <= 7) return 'Герой идеальных дней B-класса'
-  if (n <= 14) return 'Герой идеальных дней A-класса'
-  if (n <= 21) return 'Герой идеальных дней S-класса'
-  if (n <= 28) return 'Легенда идеальных дней'
-  return 'Бог идеальных дней'
+  if (n === 3) return 'Герой идеальных дней C-класса'
+  if (n === 7) return 'Герой идеальных дней B-класса'
+  if (n === 14) return 'Герой идеальных дней A-класса'
+  if (n === 21) return 'Герой идеальных дней S-класса'
+  if (n === 28) return 'Легенда идеальных дней'
+  if (n === 40) return 'Ас мира идеальных дней'
+  if (n === 48) return 'Гений мира идеальных дней'
+  if (n === 56) return 'Бог идеальных дней'
+  if (n === 60) return 'Император мира идеальных дней'
+  if (n === 75) return 'Король мира идеальных дней'
+  return 'Герой идеальных дней'
 }
 
 /** Puzzle pieces ladder (1 → 3 → 7): Oei → Kuninao → Hokusai. */
@@ -861,6 +1183,62 @@ function legosRank(n: number): string {
   if (n <= 1) return 'Ученик мастерской кубиков'
   if (n <= 3) return 'Ремесленник кубиков'
   return 'Гений строительства'
+}
+
+function schoolSubjectGenitive(subject: string): string {
+  const key = schoolSubjectKey(subject)
+  if (key === 'русский язык') return 'русского языка'
+  if (key === 'математика') return 'математики'
+  if (key === 'литература') return 'литературы'
+  if (key === 'окружающий мир') return 'окружающего мира'
+  if (key === 'английский язык') return 'английского языка'
+  return subject.toLowerCase()
+}
+
+/** Fives in one subject (3 → 7 → 10 → 15): ученик → бакалавр → магистр → кандидат. */
+function schoolSubjectFivesRank(subject: string, n: number): string {
+  const name = schoolSubjectGenitive(subject)
+  if (n <= 3) return `Ученик ${name}`
+  if (n <= 7) return `Бакалавр ${name}`
+  if (n <= 10) return `Магистр ${name}`
+  return `Кандидат ${name}`
+}
+
+function schoolSubjectPrep(subject: string): string {
+  const key = schoolSubjectKey(subject)
+  if (key === 'русский язык') return 'русскому языку'
+  if (key === 'математика') return 'математике'
+  if (key === 'литература') return 'литературе'
+  if (key === 'окружающий мир') return 'окружающему миру'
+  if (key === 'английский язык') return 'английскому языку'
+  return subject.toLowerCase()
+}
+
+/** Clean-quarter ladder (1 → 2 → 3): Comenius → Ushinsky → Vygotsky. */
+function schoolCleanQuarterRank(n: number): string {
+  if (n <= 1) return 'Ученик четвертей'
+  if (n <= 2) return 'Бакалавр четвертей'
+  return 'Кандидат четвертей'
+}
+
+function schoolExcellentQuarterRank(_n: number): string {
+  return 'Магистр отличников'
+}
+
+function ruFives(n: number): string {
+  const n10 = n % 10
+  const n100 = n % 100
+  if (n10 === 1 && n100 !== 11) return 'пятёрку'
+  if (n10 >= 2 && n10 <= 4 && (n100 < 10 || n100 >= 20)) return 'пятёрки'
+  return 'пятёрок'
+}
+
+function ruQuarters(n: number): string {
+  const n10 = n % 10
+  const n100 = n % 100
+  if (n10 === 1 && n100 !== 11) return 'четверть'
+  if (n10 >= 2 && n10 <= 4 && (n100 < 10 || n100 >= 20)) return 'четверти'
+  return 'четвертей'
 }
 
 function ruPuzzles(n: number): string {
@@ -968,6 +1346,74 @@ export function countQualityWorkouts(
 /** Total calendar days with зарядка checked. */
 export function countExerciseDays(days: Record<string, DayLog>): number {
   return Object.values(days).filter((day) => Boolean(day.mustDo.exercise)).length
+}
+
+export function countFives(grades: SchoolGrade[]): number {
+  return grades.filter((g) => g.mark === 5).length
+}
+
+export function countFivesInSubject(
+  grades: SchoolGrade[],
+  subject: string,
+): number {
+  const want = schoolSubjectKey(subject)
+  if (!want) return 0
+  return grades.filter(
+    (g) => g.mark === 5 && schoolSubjectKey(g.subject) === want,
+  ).length
+}
+
+export function fivesBySubjectMap(
+  grades: SchoolGrade[],
+): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const grade of grades) {
+    if (grade.mark !== 5) continue
+    const key = schoolSubjectKey(grade.subject)
+    if (!key) continue
+    out[key] = (out[key] ?? 0) + 1
+  }
+  return out
+}
+
+type QuarterStats = { clean: number; excellent: number }
+
+function quarterStats(
+  grades: SchoolGrade[],
+  today = todayKey(),
+): QuarterStats {
+  const byQuarter = new Map<string, SchoolGrade[]>()
+  for (const grade of grades) {
+    const key = schoolQuarterKey(grade.date)
+    if (!key) continue
+    const list = byQuarter.get(key)
+    if (list) list.push(grade)
+    else byQuarter.set(key, [grade])
+  }
+  let clean = 0
+  let excellent = 0
+  for (const [key, list] of byQuarter) {
+    if (!isSchoolQuarterEnded(key, today)) continue
+    if (list.length < SCHOOL_QUARTER_MIN_GRADES) continue
+    const worst = Math.min(...list.map((g) => g.mark))
+    if (worst >= 4) clean++
+    if (worst === 5) excellent++
+  }
+  return { clean, excellent }
+}
+
+export function countCleanQuarters(
+  grades: SchoolGrade[],
+  today = todayKey(),
+): number {
+  return quarterStats(grades, today).clean
+}
+
+export function countExcellentQuarters(
+  grades: SchoolGrade[],
+  today = todayKey(),
+): number {
+  return quarterStats(grades, today).excellent
 }
 
 /** Total unique calendar days that have at least one chew diary entry. */
@@ -1199,6 +1645,9 @@ export function stickerProgressFromData(data: AppData): StickerProgress {
     achievementRobloxMin: 0,
     puzzles: resolvePuzzleCount(data),
     legos: resolveLegoCount(data),
+    fivesBySubject: fivesBySubjectMap(data.schoolGrades ?? []),
+    cleanQuarters: countCleanQuarters(data.schoolGrades ?? []),
+    excellentQuarters: countExcellentQuarters(data.schoolGrades ?? []),
   }
   progress.achievementRobloxMin = totalAchievementRobloxMinutes(progress, data)
   return progress
@@ -1254,6 +1703,13 @@ export function stickerTrack(sticker: Sticker): StickerTrack {
     return 'home'
   }
   if (sticker.needPuzzles != null || sticker.needLegos != null) return 'create'
+  if (
+    sticker.needSubjectFives != null ||
+    sticker.needCleanQuarters != null ||
+    sticker.needExcellentQuarters != null
+  ) {
+    return 'school'
+  }
   return 'home'
 }
 
@@ -1297,6 +1753,15 @@ export function stickerNeedText(sticker: Sticker): string {
   }
   if (sticker.needLegos != null) {
     return legosRank(sticker.needLegos)
+  }
+  if (sticker.needSubjectFives != null && sticker.needSubject) {
+    return schoolSubjectFivesRank(sticker.needSubject, sticker.needSubjectFives)
+  }
+  if (sticker.needCleanQuarters != null) {
+    return schoolCleanQuarterRank(sticker.needCleanQuarters)
+  }
+  if (sticker.needExcellentQuarters != null) {
+    return schoolExcellentQuarterRank(sticker.needExcellentQuarters)
   }
   if (sticker.needStreak != null) {
     return streakRank(sticker.needStreak)
@@ -1399,6 +1864,29 @@ export function stickerUnlockHint(
       : ''
     return `Собрать ${n} ${ruLegos(n)}${frac}`
   }
+  if (sticker.needSubjectFives != null && sticker.needSubject) {
+    const n = sticker.needSubjectFives
+    const have = progress
+      ? (progress.fivesBySubject[schoolSubjectKey(sticker.needSubject)] ?? 0)
+      : 0
+    const frac = progress ? ` (${progressFraction(have, n)})` : ''
+    const name = schoolSubjectPrep(sticker.needSubject)
+    return `${n} ${ruFives(n)} по ${name}${frac}`
+  }
+  if (sticker.needCleanQuarters != null) {
+    const n = sticker.needCleanQuarters
+    const frac = progress
+      ? ` (${progressFraction(progress.cleanQuarters, n)})`
+      : ''
+    return `${n} ${ruQuarters(n)} без троек (пиши все оценки)${frac}`
+  }
+  if (sticker.needExcellentQuarters != null) {
+    const n = sticker.needExcellentQuarters
+    const frac = progress
+      ? ` (${progressFraction(progress.excellentQuarters, n)})`
+      : ''
+    return `${n === 1 ? 'Четверть' : `${n} ${ruQuarters(n)}`} из одних пятёрок${frac}`
+  }
   if (sticker.needStreak != null) {
     const n = sticker.needStreak
     const streakNow = progress
@@ -1484,6 +1972,19 @@ export function stickerOpenedHint(sticker: Sticker): string {
     const n = sticker.needLegos
     return `Открыто: ранг «${legosRank(n)}» — ${n} ${ruLegos(n)} 🍫`
   }
+  if (sticker.needSubjectFives != null && sticker.needSubject) {
+    const n = sticker.needSubjectFives
+    const rank = schoolSubjectFivesRank(sticker.needSubject, n)
+    return `Открыто: ранг «${rank}»`
+  }
+  if (sticker.needCleanQuarters != null) {
+    const n = sticker.needCleanQuarters
+    return `Открыто: ранг «${schoolCleanQuarterRank(n)}» — ${n} ${ruQuarters(n)} без троек`
+  }
+  if (sticker.needExcellentQuarters != null) {
+    const n = sticker.needExcellentQuarters
+    return `Открыто: ранг «${schoolExcellentQuarterRank(n)}» — ${n} ${ruQuarters(n)} из пятёрок`
+  }
   if (sticker.needStreak != null) {
     const n = sticker.needStreak
     return `Открыто: ранг «${streakRank(n)}» — ${n} идеальных ${ruDays(n)} подряд`
@@ -1561,6 +2062,17 @@ export function isStickerUnlocked(
     sticker.needPuzzles == null || progress.puzzles >= sticker.needPuzzles
   const legoOk =
     sticker.needLegos == null || progress.legos >= sticker.needLegos
+  const subjectFivesOk =
+    sticker.needSubjectFives == null ||
+    !sticker.needSubject ||
+    (progress.fivesBySubject[schoolSubjectKey(sticker.needSubject)] ?? 0) >=
+      sticker.needSubjectFives
+  const cleanQuartersOk =
+    sticker.needCleanQuarters == null ||
+    progress.cleanQuarters >= sticker.needCleanQuarters
+  const excellentQuartersOk =
+    sticker.needExcellentQuarters == null ||
+    progress.excellentQuarters >= sticker.needExcellentQuarters
   const needEarlyWorkout = sticker.needSecretEarlyPerfectHour != null
   const needPerfectByHour = sticker.needSecretPerfectByHour != null
   const secretTimeOk =
@@ -1587,6 +2099,9 @@ export function isStickerUnlocked(
     secretRobloxBonusOk &&
     puzzleOk &&
     legoOk &&
+    subjectFivesOk &&
+    cleanQuartersOk &&
+    excellentQuartersOk &&
     secretTimeOk
   )
 }

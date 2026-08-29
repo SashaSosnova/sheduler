@@ -9,6 +9,7 @@ import {
 } from './data'
 import {
   claimRobloxBankMinutes,
+  pendingGiftStickers,
   robloxBonusMinutes,
   robloxLimitSeconds,
   stampPerfectAt,
@@ -21,7 +22,7 @@ type Props = {
   onChange: (next: AppData) => void
 }
 
-export function RobloxScreen({ data, onChange }: Props) {
+export function RewardsScreen({ data, onChange }: Props) {
   const key = todayKey()
   const day = normalizeDayLog(key, data.days[key])
   const allowed = isRobloxEnabled(data)
@@ -31,6 +32,8 @@ export function RobloxScreen({ data, onChange }: Props) {
   const robloxBankMin = Math.max(0, Math.floor(data.robloxBonusBankMin ?? 0))
   const robloxSlot = day.screens.roblox
   const bankClaimOptions = [10, 15, 20, 25, 30].filter((n) => n <= robloxBankMin)
+  const pendingGifts = pendingGiftStickers(data)
+  const moneyBank = Math.floor(data.moneyBankRub ?? 0)
 
   function patchDay(partial: Partial<typeof day>) {
     const next = stampPerfectAt(
@@ -125,7 +128,7 @@ export function RobloxScreen({ data, onChange }: Props) {
   const usedSec = robloxSlot.usedSec
   const playSubParts: string[] = []
   if (!allowed) {
-    playSubParts.push('сейчас нельзя')
+    playSubParts.push('сейчас нельзя играть')
   } else {
     playSubParts.push(`лимит ${Math.round(robloxLimit / 60)} мин`)
     if (robloxBonusMin > 0) playSubParts.push(`из копилки +${robloxBonusMin}`)
@@ -136,39 +139,63 @@ export function RobloxScreen({ data, onChange }: Props) {
     <div className="screen">
       <header className="screen-head">
         <div className="screen-head-row">
-          <p className="eyebrow">Игра</p>
+          <p className="eyebrow">Копилки</p>
         </div>
-        <h1 className="no-capitalize">Roblox</h1>
+        <h1>Награды</h1>
         {playSubParts.length ? (
           <p className="sub">{playSubParts.join(' · ')}</p>
         ) : null}
       </header>
 
-      {!allowed ? (
-        <section className="card">
-          <h2>Пока нельзя</h2>
+      <section className="card piggy-bank-card">
+        <div className="card-title-row">
+          <h2 className="piggy-bank-title">
+            <svg
+              className="piggy-bank-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5z" />
+              <path d="M2 9v1c0 1.1.9 2 2 2h1" />
+              <path d="M16 11h.01" />
+            </svg>
+            Свинья-копилка
+          </h2>
+          <span
+            className={
+              moneyBank > 0 || pendingGifts.length > 0 ? 'pill' : 'pill muted'
+            }
+          >
+            {moneyBank} ₽
+            {pendingGifts.length > 0 ? ` · ${pendingGifts.length}` : ''}
+          </span>
+        </div>
+        {pendingGifts.length > 0 ? (
+          <ul className="gift-pending-list">
+            {pendingGifts.map((gift) => (
+              <li key={gift.id} className="gift-pending-item is-readonly">
+                <div className="gift-pending-main">
+                  <span className="gift-pending-title">{gift.label}</span>
+                  <span className="hint">{gift.giftHint}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : moneyBank <= 0 ? (
           <p className="hint" style={{ marginTop: 8 }}>
-            Родители временно запретили Roblox. Можно заниматься за компьютером
-            другими делами — просто без этой игры.
+            Сюда падают рубли и подарки за ачивки.
           </p>
-        </section>
-      ) : (
-        <ScreenLimitCard
-          kind="roblox"
-          slot={robloxSlot}
-          limitSeconds={robloxLimit}
-          bonusNote={
-            robloxBonusMin > 0
-              ? `Сегодня из копилки: +${robloxBonusMin} мин`
-              : undefined
-          }
-          onChange={setSlot}
-        />
-      )}
+        ) : null}
+      </section>
 
       <section className="card">
         <div className="card-title-row">
-          <h2>Копилка бонусов</h2>
+          <h2>Минуты игры</h2>
           <span className={robloxBankMin > 0 ? 'pill' : 'pill muted'}>
             {robloxBankMin} мин
           </span>
@@ -197,8 +224,34 @@ export function RobloxScreen({ data, onChange }: Props) {
               Все {robloxBankMin} мин сегодня
             </button>
           </div>
-        ) : null}
+        ) : (
+          <p className="hint" style={{ marginTop: 8 }}>
+            Бонусные минуты за серии идеальных дней копятся здесь.
+          </p>
+        )}
       </section>
+
+      {!allowed ? (
+        <section className="card">
+          <h2>Пока нельзя</h2>
+          <p className="hint" style={{ marginTop: 8 }}>
+            Родители временно запретили игру. Можно заниматься за компьютером
+            другими делами.
+          </p>
+        </section>
+      ) : (
+        <ScreenLimitCard
+          kind="roblox"
+          slot={robloxSlot}
+          limitSeconds={robloxLimit}
+          bonusNote={
+            robloxBonusMin > 0
+              ? `Сегодня из копилки: +${robloxBonusMin} мин`
+              : undefined
+          }
+          onChange={setSlot}
+        />
+      )}
     </div>
   )
 }

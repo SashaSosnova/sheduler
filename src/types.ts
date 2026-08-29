@@ -9,7 +9,7 @@ export type TabId =
   | 'calendar'
   | 'exercises'
   | 'chew'
-  | 'roblox'
+  | 'rewards'
   | 'settings'
 
 export type Exercise = {
@@ -201,6 +201,18 @@ export type FinishedBook = {
   finishedAt: number
 }
 
+export type SchoolMark = 5 | 4 | 3 | 2
+
+/** One diary mark — used by school achievements, not perfect-day stars */
+export type SchoolGrade = {
+  id: string
+  /** YYYY-MM-DD */
+  date: string
+  subject: string
+  mark: SchoolMark
+  createdAt: number
+}
+
 export type AppData = {
   exercises: Exercise[]
   days: Record<string, DayLog>
@@ -268,4 +280,8 @@ export type AppData = {
   puzzleCount: number
   /** Lifetime completed Lego sets (pieces, not days) */
   legoCount: number
+  /** School diary marks (5/4/3/2) for the school album */
+  schoolGrades: SchoolGrade[]
+  /** Ids removed on any device — merge must not resurrect them */
+  deletedSchoolGradeIds: string[]
 }

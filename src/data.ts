@@ -10,6 +10,8 @@ import type {
   MedSlotId,
   Medication,
   MustDoId,
+  SchoolGrade,
+  SchoolMark,
   ScreenSlot,
   StudioSprintState,
   StudioSprintStatus,
@@ -111,6 +113,163 @@ export const CREATE_KIND_BY_IDEA: Record<string, CreateKind> = {
 
 export const CREATE_PIECE_MAX = 4
 export const CREATE_PIECE_OPTIONS = [1, 2, 3, 4] as const
+
+export const SCHOOL_SUBJECTS = [
+  'Русский язык',
+  'Математика',
+  'Литература',
+  'Окружающий мир',
+  'Английский язык',
+  'История',
+  'Биология',
+  'Физкультура',
+  'ИЗО',
+  'Музыка',
+] as const
+
+/** Subjects with their own five-counter in the school album */
+export const SCHOOL_TRACK_SUBJECTS = [
+  'Русский язык',
+  'Математика',
+  'Литература',
+  'Окружающий мир',
+  'Английский язык',
+] as const
+
+export const SCHOOL_MARKS: SchoolMark[] = [5, 4, 3, 2]
+
+/** At least this many marks before a finished quarter can unlock. */
+export const SCHOOL_QUARTER_MIN_GRADES = 3
+
+export function normalizeSchoolSubject(raw: string): string {
+  return raw.trim().replace(/\s+/g, ' ')
+}
+
+const SCHOOL_SUBJECT_ALIASES: Record<string, string> = {
+  русский: 'русский язык',
+  'русский язык': 'русский язык',
+  английский: 'английский язык',
+  'английский язык': 'английский язык',
+}
+
+export function schoolSubjectKey(subject: string): string {
+  const key = normalizeSchoolSubject(subject)
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+  return SCHOOL_SUBJECT_ALIASES[key] ?? key
+}
+
+/** Short label for the five-counter (chips keep the full name). */
+export function schoolSubjectShort(subject: string): string {
+  const key = schoolSubjectKey(subject)
+  if (key === 'русский язык') return 'Русский'
+  if (key === 'английский язык') return 'Английский'
+  if (key === 'окружающий мир') return 'Окружайка'
+  return normalizeSchoolSubject(subject)
+}
+
+const SCHOOL_MARK_SET = new Set<number>(SCHOOL_MARKS)
+
+export function normalizeSchoolMark(raw: unknown): SchoolMark | null {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return null
+  const n = Math.floor(raw)
+  return SCHOOL_MARK_SET.has(n) ? (n as SchoolMark) : null
+}
+
+export function normalizeSchoolGrades(raw: unknown): SchoolGrade[] {
+  if (!Array.isArray(raw)) return []
+  const out: SchoolGrade[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const row = item as Partial<SchoolGrade>
+    const date =
+      typeof row.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(row.date)
+        ? row.date
+        : ''
+    const subject = normalizeSchoolSubject(
+      typeof row.subject === 'string' ? row.subject : '',
+    )
+    const mark = normalizeSchoolMark(row.mark)
+    const createdAt =
+      typeof row.createdAt === 'number' && Number.isFinite(row.createdAt)
+        ? Math.floor(row.createdAt)
+        : 0
+    if (!date || !subject || mark == null || createdAt <= 0) continue
+    out.push({
+      id: typeof row.id === 'string' && row.id ? row.id : uid(),
+      date,
+      subject,
+      mark,
+      createdAt,
+    })
+  }
+  return out.sort((a, b) => a.createdAt - b.createdAt)
+}
+
+export function mergeSchoolGrades(
+  local: SchoolGrade[],
+  remote: SchoolGrade[],
+  localDeleted: string[] = [],
+  remoteDeleted: string[] = [],
+): { grades: SchoolGrade[]; deletedIds: string[] } {
+  const deletedIds = [
+    ...new Set(
+      [...localDeleted, ...remoteDeleted].filter((id) => id.trim().length > 0),
+    ),
+  ]
+  const deleted = new Set(deletedIds)
+  const byId = new Map<string, SchoolGrade>()
+  for (const grade of [...local, ...remote]) {
+    if (deleted.has(grade.id)) continue
+    const prev = byId.get(grade.id)
+    if (!prev || grade.createdAt >= prev.createdAt) byId.set(grade.id, grade)
+  }
+  return {
+    grades: [...byId.values()].sort((a, b) => a.createdAt - b.createdAt),
+    deletedIds,
+  }
+}
+
+/**
+ * Academic quarter key `YYYY-qN` (year = September start), or null in summer.
+ * Q1 Sep–Oct, Q2 Nov–Dec, Q3 Jan–24 Mar, Q4 25 Mar–May.
+ */
+export function schoolQuarterKey(dateKey: string): string | null {
+  const [y, m, d] = dateKey.split('-').map(Number)
+  if (!y || !m || !d) return null
+  if (m >= 9 && m <= 10) return `${y}-q1`
+  if (m >= 11 && m <= 12) return `${y}-q2`
+  if (m === 1 || m === 2 || (m === 3 && d <= 24)) return `${y - 1}-q3`
+  if ((m === 3 && d >= 25) || m === 4 || m === 5) return `${y - 1}-q4`
+  return null
+}
+
+export function schoolQuarterEndDate(quarterKey: string): string | null {
+  const match = /^(\d{4})-q([1-4])$/.exec(quarterKey)
+  if (!match) return null
+  const year = Number(match[1])
+  const q = Number(match[2])
+  if (q === 1) return `${year}-10-31`
+  if (q === 2) return `${year}-12-31`
+  if (q === 3) return `${year + 1}-03-24`
+  return `${year + 1}-05-31`
+}
+
+export function schoolQuarterLabel(quarterKey: string): string {
+  const match = /^(\d{4})-q([1-4])$/.exec(quarterKey)
+  if (!match) return quarterKey
+  const year = Number(match[1])
+  const q = match[2]
+  return `${q} четверть ${year}/${String(year + 1).slice(2)}`
+}
+
+export function isSchoolQuarterEnded(
+  quarterKey: string,
+  today = todayKey(),
+): boolean {
+  const end = schoolQuarterEndDate(quarterKey)
+  return Boolean(end && today > end)
+}
 
 export function createKindFromNote(note: string): CreateKind | null {
   const key = note.trim()
@@ -1498,6 +1657,8 @@ export function defaultAppData(): AppData {
     studioSprintStates: {},
     puzzleCount: 0,
     legoCount: 0,
+    schoolGrades: [],
+    deletedSchoolGradeIds: [],
   }
 }
 

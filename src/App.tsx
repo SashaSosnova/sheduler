@@ -7,7 +7,7 @@ import { ParentPinDialog } from './ParentPinDialog'
 import { ParentSummaryScreen } from './ParentSummaryScreen'
 import { ProgressScreen } from './ProgressScreen'
 import { RoleSetupScreen } from './RoleSetupScreen'
-import { RobloxScreen } from './RobloxScreen'
+import { RewardsScreen } from './RewardsScreen'
 import { ScreenHeadActions } from './ScreenHeadActions'
 import { SettingsScreen } from './SettingsScreen'
 import { StickerUnlockOverlay } from './StickerUnlockOverlay'
@@ -69,11 +69,11 @@ function App() {
     document.body.scrollTop = 0
   }, [tab])
 
-  // Role-based tabs: child has no calendar; parent has no roblox tab
+  // Role-based tabs: child has no calendar; parent has no rewards/progress tab
   useEffect(() => {
     if (!role) return
     if (role === 'child' && tab === 'calendar') setTab('today')
-    if (role === 'parent' && (tab === 'roblox' || tab === 'progress')) {
+    if (role === 'parent' && (tab === 'rewards' || tab === 'progress')) {
       setTab('calendar')
     }
   }, [role, tab])
@@ -118,8 +118,8 @@ function App() {
         {tab === 'progress' ? (
           <ProgressScreen data={data} onChange={setData} />
         ) : null}
-        {tab === 'roblox' ? (
-          <RobloxScreen data={data} onChange={setData} />
+        {tab === 'rewards' ? (
+          <RewardsScreen data={data} onChange={setData} />
         ) : null}
         {tab === 'calendar' ? (
           <CalendarScreen

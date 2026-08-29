@@ -10,8 +10,10 @@ import {
   mergeDaysMaps,
   mergeExerciseControls,
   mergeExercises,
+  mergeSchoolGrades,
   mergeStudioSprintStates,
   normalizeExerciseControls,
+  normalizeSchoolGrades,
   normalizeStudioSprintStates,
   resolveExercises,
 } from './data'
@@ -51,6 +53,7 @@ import type {
   DayLog,
   FinishedBook,
   ReadingBook,
+  SchoolGrade,
   StudioSprintState,
 } from './types'
 
@@ -62,6 +65,8 @@ const PUSH_RETRY_MS = 2500
 type StoredData = {
   days?: Record<string, DayLog>
   chewEntries?: ChewEntry[]
+  schoolGrades?: SchoolGrade[]
+  deletedSchoolGradeIds?: string[]
   cookingLeft?: number
   routineId?: string
   claimedRobloxStreaks?: number[]
@@ -113,6 +118,8 @@ function toStoredData(data: AppData): StoredData {
   return {
     days: data.days,
     chewEntries: data.chewEntries,
+    schoolGrades: data.schoolGrades ?? [],
+    deletedSchoolGradeIds: data.deletedSchoolGradeIds ?? [],
     cookingLeft: data.cookingLeft,
     routineId: ROUTINE_ID,
     exercises: data.exercises ?? [],
@@ -154,6 +161,10 @@ function localAheadOfRemote(local: AppData, remote: CloudPayload): boolean {
   for (const entry of local.chewEntries ?? []) {
     if (!remoteChew.has(entry.id)) return true
   }
+  const remoteGrades = new Set((remote.schoolGrades ?? []).map((e) => e.id))
+  for (const grade of local.schoolGrades ?? []) {
+    if (!remoteGrades.has(grade.id)) return true
+  }
   for (const [date, day] of Object.entries(local.days ?? {})) {
     const remoteDay = remote.days?.[date]
     const flags = day.mustDo ?? {}
@@ -178,6 +189,19 @@ function chewEntriesChanged(prev: AppData, next: AppData): boolean {
     if (JSON.stringify(a[i]) !== JSON.stringify(b[i])) return true
   }
   return false
+}
+
+function schoolGradesChanged(prev: AppData, next: AppData): boolean {
+  const a = prev.schoolGrades ?? []
+  const b = next.schoolGrades ?? []
+  if (a.length !== b.length) return true
+  for (let i = 0; i < a.length; i++) {
+    if (JSON.stringify(a[i]) !== JSON.stringify(b[i])) return true
+  }
+  const da = prev.deletedSchoolGradeIds ?? []
+  const db = next.deletedSchoolGradeIds ?? []
+  if (da.length !== db.length) return true
+  return da.join() !== db.join()
 }
 
 function normalizeStringIds(raw: unknown): string[] {
@@ -247,6 +271,12 @@ function hydrateAppData(
     resolveReadingBooks(partial.readingBooks, partial.currentBook),
     finishedBooks,
   )
+  const school = mergeSchoolGrades(
+    normalizeSchoolGrades(partial.schoolGrades),
+    [],
+    normalizeStringIds(partial.deletedSchoolGradeIds),
+    [],
+  )
   return applyPendingStickerMoneyRewards(
     applyPendingRobloxStreakRewards({
       ...base,
@@ -254,6 +284,8 @@ function hydrateAppData(
       exercises: resolveExercises(partial.exercises ?? base.exercises),
       days,
       chewEntries: partial.chewEntries ?? [],
+      schoolGrades: school.grades,
+      deletedSchoolGradeIds: school.deletedIds,
       exerciseControls: normalizeExerciseControls(
         partial.exerciseControls ?? base.exerciseControls,
       ),
@@ -372,6 +404,8 @@ function load(): AppData {
     return hydrateAppData({
       days,
       chewEntries,
+      schoolGrades: parsed.schoolGrades,
+      deletedSchoolGradeIds: parsed.deletedSchoolGradeIds,
       exercises: resolveExercises(parsed.exercises),
       exerciseControls: normalizeExerciseControls(parsed.exerciseControls),
       cookingLeft: parsed.cookingLeft ?? 5,
@@ -479,6 +513,12 @@ function applyCloud(prev: AppData, payload: CloudPayload): AppData {
     prev.chewEntries ?? [],
     payload.chewEntries ?? [],
   )
+  const school = mergeSchoolGrades(
+    prev.schoolGrades ?? [],
+    payload.schoolGrades ?? [],
+    prev.deletedSchoolGradeIds ?? [],
+    payload.deletedSchoolGradeIds ?? [],
+  )
   const remoteDismissed = resolveDismissedGiftStickerIds(
     payload.dismissedGiftStickerIds,
     {
@@ -521,6 +561,8 @@ function applyCloud(prev: AppData, payload: CloudPayload): AppData {
     ...prev,
     days,
     chewEntries,
+    schoolGrades: school.grades,
+    deletedSchoolGradeIds: school.deletedIds,
     exercises,
     exerciseControls,
     cookingLeft: payload.cookingLeft ?? prev.cookingLeft,
@@ -608,6 +650,8 @@ function replaceFromCloud(payload: CloudPayload): AppData {
   return hydrateAppData({
     days,
     chewEntries,
+    schoolGrades: payload.schoolGrades,
+    deletedSchoolGradeIds: payload.deletedSchoolGradeIds,
     exercises: resolveExercises(payload.exercises),
     exerciseControls: normalizeExerciseControls(payload.exerciseControls),
     cookingLeft: payload.cookingLeft ?? 5,
@@ -811,7 +855,8 @@ export function useAppData() {
         persistLocal(normalized)
         schedulePush(
           normalized,
-          chewEntriesChanged(prev, normalized) ? 0 : PUSH_DEBOUNCE_MS,
+          chewEntriesChanged(prev, normalized) ||
+            schoolGradesChanged(prev, normalized) ? 0 : PUSH_DEBOUNCE_MS,
         )
         return normalized
       })

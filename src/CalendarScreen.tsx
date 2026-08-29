@@ -36,6 +36,7 @@ import {
   ReminderSection,
   TodayTimedReminderBanner,
 } from './ReminderSection'
+import { SchoolGradesCard } from './SchoolGradesCard'
 import type { AppData, MedSlotId, MustDoId } from './types'
 
 type Props = {
@@ -639,6 +640,16 @@ export function CalendarScreen({
             </div>
           ))
         )}
+
+        {onChange ? (
+          <SchoolGradesCard
+            data={data}
+            onChange={onChange}
+            date={selected}
+            readOnly={!canEditSelected}
+            embedded
+          />
+        ) : null}
 
         <div className="calendar-detail-block">
           <h3>Таблетки</h3>

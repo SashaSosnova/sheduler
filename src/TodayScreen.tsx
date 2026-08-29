@@ -25,6 +25,7 @@ import {
   ReminderSection,
   TodayTimedReminderBanner,
 } from './ReminderSection'
+import { SchoolGradesCard } from './SchoolGradesCard'
 import { playDing } from './sound'
 import type { AppData, MustDoId } from './types'
 
@@ -469,6 +470,8 @@ export function TodayScreen({
           })}
         </ul>
       </section>
+
+      <SchoolGradesCard data={data} onChange={onChange} date={key} />
 
       <section className="card">
         <div className="card-title-row">
