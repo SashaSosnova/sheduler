@@ -6,6 +6,7 @@ import {
   chewDurationSec,
   formatPlayTime,
   normalizeDayLog,
+  schoolDayPlanFromData,
   todayKey,
   uid,
 } from './data'
@@ -223,6 +224,7 @@ export function ChewDiaryScreen({
         ...day,
         ...applyMustDoFlags(day, { chew: true }, now),
       }),
+      schoolDayPlanFromData(data),
     )
     onChange({
       ...data,

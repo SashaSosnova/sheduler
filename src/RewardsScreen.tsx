@@ -1,139 +1,25 @@
-import { useEffect } from 'react'
 import {
-  flushScreenOvertime,
-  formatPlayTime,
-  isRobloxEnabled,
-  normalizeDayLog,
-  normalizeRobloxLimitMin,
-  todayKey,
-} from './data'
-import {
-  claimRobloxBankMinutes,
-  pendingGiftStickers,
-  robloxBonusMinutes,
-  robloxLimitSeconds,
-  stampPerfectAt,
+  pendingPhysicalGiftStickers,
+  pendingRobloxDonateStickers,
 } from './progress'
-import { ScreenLimitCard } from './ScreenLimitCard'
-import type { AppData, ScreenSlot } from './types'
+import type { AppData } from './types'
 
 type Props = {
   data: AppData
-  onChange: (next: AppData) => void
 }
 
-export function RewardsScreen({ data, onChange }: Props) {
-  const key = todayKey()
-  const day = normalizeDayLog(key, data.days[key])
-  const allowed = isRobloxEnabled(data)
-  const robloxLimit = robloxLimitSeconds(data, key)
-  const baseMin = normalizeRobloxLimitMin(data.robloxLimitMin)
-  const robloxBonusMin = robloxBonusMinutes(data.days, key)
-  const robloxBankMin = Math.max(0, Math.floor(data.robloxBonusBankMin ?? 0))
-  const robloxSlot = day.screens.roblox
-  const bankClaimOptions = [10, 15, 20, 25, 30].filter((n) => n <= robloxBankMin)
-  const pendingGifts = pendingGiftStickers(data)
+export function RewardsScreen({ data }: Props) {
+  const pendingGifts = pendingPhysicalGiftStickers(data)
+  const pendingDonates = pendingRobloxDonateStickers(data)
   const moneyBank = Math.floor(data.moneyBankRub ?? 0)
+  const robloxBankMin = Math.max(0, Math.floor(data.robloxBonusBankMin ?? 0))
 
-  function patchDay(partial: Partial<typeof day>) {
-    const next = stampPerfectAt(
-      day,
-      normalizeDayLog(key, { ...day, ...partial }),
-    )
-    onChange({
-      ...data,
-      days: {
-        ...data.days,
-        [key]: next,
-      },
-    })
-  }
-
-  function claimBank(minutes: number) {
-    if (!allowed) return
-    onChange(claimRobloxBankMinutes(data, minutes, key))
-  }
-
-  function setSlot(slot: ScreenSlot) {
-    if (!allowed) return
-    patchDay({
-      screens: {
-        ...day.screens,
-        roblox: slot,
-      },
-    })
-  }
-
-  // Parent banned Roblox while a session was running — stop and keep usedSec.
-  useEffect(() => {
-    if (allowed) return
-    if (robloxSlot.endsAt == null && robloxSlot.overtimeStartedAt == null) {
-      return
-    }
-    const now = Date.now()
-    let next = flushScreenOvertime(robloxSlot, now)
-    if (robloxSlot.endsAt != null && !robloxSlot.finished) {
-      const left = Math.max(0, Math.ceil((robloxSlot.endsAt - now) / 1000))
-      const played = Math.max(0, robloxSlot.remainingSec - left)
-      next = {
-        ...next,
-        endsAt: null,
-        remainingSec: left,
-        finished: false,
-        usedSec: robloxSlot.usedSec + played,
-        overtimeStartedAt: null,
-      }
-    } else {
-      next = {
-        ...next,
-        endsAt: null,
-        overtimeStartedAt: null,
-      }
-    }
-    patchDay({
-      screens: {
-        ...day.screens,
-        roblox: next,
-      },
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allowed, robloxSlot.endsAt, robloxSlot.overtimeStartedAt])
-
-  // Sync unused Roblox slot to today's limit (base + bonuses)
-  useEffect(() => {
-    if (!allowed) return
-    if (robloxSlot.finished || robloxSlot.endsAt || robloxSlot.usedSec > 0) return
-    if (robloxSlot.remainingSec === robloxLimit) return
-    const baseSec = baseMin * 60
-    if (robloxSlot.remainingSec < baseSec && robloxSlot.remainingSec !== 0) {
-      return
-    }
-    patchDay({
-      screens: {
-        ...day.screens,
-        roblox: { ...robloxSlot, remainingSec: robloxLimit },
-      },
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    allowed,
-    robloxLimit,
-    baseMin,
-    robloxSlot.remainingSec,
-    robloxSlot.finished,
-    robloxSlot.endsAt,
-    robloxSlot.usedSec,
-  ])
-
-  const usedSec = robloxSlot.usedSec
-  const playSubParts: string[] = []
-  if (!allowed) {
-    playSubParts.push('сейчас нельзя играть')
-  } else {
-    playSubParts.push(`лимит ${Math.round(robloxLimit / 60)} мин`)
-    if (robloxBonusMin > 0) playSubParts.push(`из копилки +${robloxBonusMin}`)
-    if (usedSec > 0) playSubParts.push(`сыграно ${formatPlayTime(usedSec)}`)
-  }
+  const extrasPill = [
+    `${robloxBankMin} мин`,
+    pendingDonates.length > 0 ? `${pendingDonates.length}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
     <div className="screen">
@@ -142,9 +28,7 @@ export function RewardsScreen({ data, onChange }: Props) {
           <p className="eyebrow">Копилки</p>
         </div>
         <h1>Награды</h1>
-        {playSubParts.length ? (
-          <p className="sub">{playSubParts.join(' · ')}</p>
-        ) : null}
+        <p className="sub">Рубли, подарки и бонусы Roblox</p>
       </header>
 
       <section className="card piggy-bank-card">
@@ -195,63 +79,67 @@ export function RewardsScreen({ data, onChange }: Props) {
 
       <section className="card">
         <div className="card-title-row">
-          <h2>Минуты игры</h2>
-          <span className={robloxBankMin > 0 ? 'pill' : 'pill muted'}>
-            {robloxBankMin} мин
+          <h2 className="piggy-bank-title">
+            <svg
+              className="piggy-bank-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <rect x="3" y="8" width="14" height="12" rx="2" />
+              <path d="M17 12h3l1 3v5h-4" />
+              <circle cx="8" cy="16" r="1.2" />
+              <path d="M7 8V6h6v2" />
+            </svg>
+            Roblox
+          </h2>
+          <span
+            className={
+              robloxBankMin > 0 || pendingDonates.length > 0
+                ? 'pill'
+                : 'pill muted'
+            }
+          >
+            {extrasPill}
           </span>
         </div>
-        {!allowed ? (
+
+        {robloxBankMin <= 0 && pendingDonates.length === 0 ? (
           <p className="hint" style={{ marginTop: 8 }}>
-            Пока игра запрещена, минуты из копилки потратить нельзя.
+            Сюда падают бонусные минуты и донаты за ачивки.
           </p>
-        ) : robloxBankMin > 0 ? (
-          <div className="roblox-bank-actions">
-            {bankClaimOptions.map((n) => (
-              <button
-                key={n}
-                type="button"
-                className="btn ghost"
-                onClick={() => claimBank(n)}
-              >
-                +{n} мин сегодня
-              </button>
-            ))}
-            <button
-              type="button"
-              className="btn primary"
-              onClick={() => claimBank(robloxBankMin)}
-            >
-              Все {robloxBankMin} мин сегодня
-            </button>
-          </div>
         ) : (
-          <p className="hint" style={{ marginTop: 8 }}>
-            Бонусные минуты за серии идеальных дней копятся здесь.
-          </p>
+          <>
+            {robloxBankMin > 0 ? (
+              <p className="hint" style={{ marginTop: 8 }}>
+                {robloxBankMin} мин бонуса — родитель выдаст сверх обычного
+                времени на компьютере.
+              </p>
+            ) : null}
+            {pendingDonates.length > 0 ? (
+              <>
+                <p className="hint" style={{ marginTop: 14 }}>
+                  Донаты
+                </p>
+                <ul className="gift-pending-list">
+                  {pendingDonates.map((gift) => (
+                    <li key={gift.id} className="gift-pending-item is-readonly">
+                      <div className="gift-pending-main">
+                        <span className="gift-pending-title">{gift.label}</span>
+                        <span className="hint">{gift.giftHint}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+          </>
         )}
       </section>
-
-      {!allowed ? (
-        <section className="card">
-          <h2>Пока нельзя</h2>
-          <p className="hint" style={{ marginTop: 8 }}>
-            Родители временно запретили игру. Можно заниматься за компьютером
-            другими делами.
-          </p>
-        </section>
-      ) : (
-        <ScreenLimitCard
-          kind="roblox"
-          slot={robloxSlot}
-          limitSeconds={robloxLimit}
-          bonusNote={
-            robloxBonusMin > 0
-              ? `Сегодня из копилки: +${robloxBonusMin} мин`
-              : undefined
-          }
-          onChange={setSlot}
-        />
-      )}
     </div>
   )
 }

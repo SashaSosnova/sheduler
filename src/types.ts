@@ -40,6 +40,8 @@ export type MustDoId =
   | 'chew'
   | 'read'
   | 'create'
+  | 'homework'
+  | 'backpack'
   | 'wash-am'
   | 'wash-pm'
 
@@ -166,6 +168,8 @@ export type DayLog = {
   legoPieces: number
   /** Derived: puzzle/lego tracks active today */
   createKinds: CreateKind[]
+  /** Today's checkmarks for weekly electives (id → done) */
+  electiveDone: Record<string, boolean>
   screens: Record<ScreenKind, ScreenSlot>
   /** One-day Roblox bonus minutes claimed for this date (not permanent) */
   robloxBonusMin: number
@@ -173,22 +177,6 @@ export type DayLog = {
 
 /** Creative achievement tracks (must-do create + matching chip) */
 export type CreateKind = 'puzzle' | 'lego'
-
-export type StudioSprintStatus =
-  | 'todo'
-  | 'submitted'
-  | 'needs_work'
-  | 'approved'
-
-export type StudioSprintState = {
-  status: StudioSprintStatus
-  /** Short note from child when submitting */
-  childNote?: string
-  /** Parent advice when sending back for revision */
-  parentNote?: string
-  /** Unix ms — last-write-wins on family sync */
-  updatedAt: number
-}
 
 export type ReadingBook = {
   id: string
@@ -199,6 +187,16 @@ export type FinishedBook = {
   id: string
   title: string
   finishedAt: number
+}
+
+/** Weekly club / after-school class — shown on matching weekdays */
+export type Elective = {
+  id: string
+  title: string
+  /** Local time HH:mm */
+  time: string
+  /** 1 = Monday … 7 = Sunday */
+  weekdays: number[]
 }
 
 export type SchoolMark = 5 | 4 | 3 | 2
@@ -253,6 +251,8 @@ export type AppData = {
   banksUpdatedAt: number
   /** Sticker ids whose moneyRub was already credited to moneyBankRub */
   claimedStickerMoneyIds: string[]
+  /** Sticker ids whose robloxExtraMin was already credited to the Roblox bank */
+  claimedStickerRobloxIds: string[]
   /**
    * Sticker ids whose giftHint was marked «выдано» by the parent.
    * Unlocked gift stickers not in this list stay pending in the turtle bank.
@@ -271,11 +271,6 @@ export type AppData = {
   readingBooks: ReadingBook[]
   /** Books marked finished (parent or Tom Sawyer sync) */
   finishedBooks: FinishedBook[]
-  /**
-   * Progress for Roblox Studio game sprints (catalog ids → state).
-   * Per-sprint updatedAt is last-write-wins on merge.
-   */
-  studioSprintStates: Record<string, StudioSprintState>
   /** Lifetime completed puzzles (pieces, not days) */
   puzzleCount: number
   /** Lifetime completed Lego sets (pieces, not days) */
@@ -284,4 +279,20 @@ export type AppData = {
   schoolGrades: SchoolGrade[]
   /** Ids removed on any device — merge must not resurrect them */
   deletedSchoolGradeIds: string[]
+  /**
+   * Extra no-school days the parent marked (каникулы / отмена уроков).
+   * Weekends and built-in holidays do not need to be listed.
+   */
+  extraBreakDates: string[]
+  /**
+   * Days the parent marked as school despite a built-in holiday.
+   * Wins over extraBreakDates when both contain the same date.
+   */
+  extraSchoolDates: string[]
+  /** Unix ms when extraBreakDates / extraSchoolDates last changed */
+  schoolCalendarUpdatedAt: number
+  /** Recurring after-school clubs (luxurious maximum) */
+  electives: Elective[]
+  /** Unix ms when electives list last changed — last-write-wins */
+  electivesUpdatedAt: number
 }

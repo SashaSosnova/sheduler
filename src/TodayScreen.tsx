@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { Confetti } from './Confetti'
 import {
   APP_LOCKED_MUST_DO,
@@ -10,21 +10,22 @@ import {
   formatCreatePieceLabel,
   toggleCreateIdea,
   MAIN_MUST_DO,
-  MUST_DO_ITEMS,
   activeExercises,
   applyMustDoFlags,
   chewDurationSec,
   formatPlayTime,
   normalizeDayLog,
+  optionalMustDoItems,
+  requiredMustDoItems,
+  schoolDayPlanFromData,
+  schoolRestLabel,
+  SCHOOL_GRADES_START,
   todayKey,
   uid,
   workoutDurationSec,
 } from './data'
+import { ElectiveSchedule } from './ElectiveSchedule'
 import { stampPerfectAt } from './progress'
-import {
-  ReminderSection,
-  TodayTimedReminderBanner,
-} from './ReminderSection'
 import { SchoolGradesCard } from './SchoolGradesCard'
 import { playDing } from './sound'
 import type { AppData, MustDoId } from './types'
@@ -43,8 +44,12 @@ export function TodayScreen({
   onOpenChew,
 }: Props) {
   const key = todayKey()
+  const plan = schoolDayPlanFromData(data)
   const day = normalizeDayLog(key, data.days[key])
-  const doneCount = MUST_DO_ITEMS.filter((i) => day.mustDo[i.id]).length
+  const requiredItems = requiredMustDoItems(key, plan)
+  const optionalItems = optionalMustDoItems(key, plan)
+  const restLabel = schoolRestLabel(key, plan)
+  const doneCount = requiredItems.filter((i) => day.mustDo[i.id]).length
   const active = activeExercises(data.exercises)
   const exerciseDone = active.filter((e) => day.exercisesDone[e.id]).length
   const exerciseTotal = active.length
@@ -65,19 +70,20 @@ export function TodayScreen({
 
   useEffect(() => {
     if (
-      prevDoneRef.current < MUST_DO_ITEMS.length &&
-      doneCount >= MUST_DO_ITEMS.length
+      prevDoneRef.current < requiredItems.length &&
+      doneCount >= requiredItems.length
     ) {
       playDing()
       setCelebrate(true)
     }
     prevDoneRef.current = doneCount
-  }, [doneCount])
+  }, [doneCount, requiredItems.length])
 
   function patchDay(partial: Partial<typeof day>) {
     const next = stampPerfectAt(
       day,
       normalizeDayLog(key, { ...day, ...partial }),
+      plan,
     )
     onChange({
       ...data,
@@ -167,6 +173,15 @@ export function TodayScreen({
     })
   }
 
+  function toggleElective(id: string) {
+    patchDay({
+      electiveDone: {
+        ...day.electiveDone,
+        [id]: !day.electiveDone[id],
+      },
+    })
+  }
+
   return (
     <div className="screen">
       <Confetti show={celebrate} onDone={() => setCelebrate(false)} />
@@ -176,30 +191,29 @@ export function TodayScreen({
         </div>
         <h1>{formatRuDate(key)}</h1>
         <p className="sub">
-          Сделано {doneCount} из {MUST_DO_ITEMS.length} · зарядка {exerciseDone}/
+          Сделано {doneCount} из {requiredItems.length} · зарядка {exerciseDone}/
           {exerciseTotal || 0}
+          {restLabel ? ` · ${restLabel}` : ''}
           {day.extraTasks.length
             ? ` · ещё ${extraDone}/${day.extraTasks.length}`
             : ''}
         </p>
       </header>
 
-      <TodayTimedReminderBanner data={data} onChange={onChange} />
-
       <section className="card">
         <div className="card-title-row">
           <h2>Обязательный минимум</h2>
           <span className="pill">
-            {doneCount}/{MUST_DO_ITEMS.length}
+            {doneCount}/{requiredItems.length}
           </span>
         </div>
         <ul className="check-list">
-          {MUST_DO_ITEMS.map((item) => {
+          {requiredItems.map((item) => {
             const locked = APP_LOCKED_MUST_DO.includes(item.id)
             const parentOnly = isParentMarkedOnly(item.id)
             return (
+            <Fragment key={item.id}>
             <li
-              key={item.id}
               className={MAIN_MUST_DO.includes(item.id) ? 'must-main' : undefined}
             >
               <label
@@ -466,12 +480,247 @@ export function TodayScreen({
                 </div>
               ) : null}
             </li>
+            </Fragment>
             )
           })}
         </ul>
       </section>
 
-      <SchoolGradesCard data={data} onChange={onChange} date={key} />
+      <section className="card">
+        <div className="card-title-row">
+          <h2>Роскошный максимум</h2>
+          <span className="pill muted">не в звёзды</span>
+        </div>
+        {optionalItems.length ? (
+          <ul className="check-list">
+            {optionalItems.map((item) => (
+              <li key={item.id}>
+                <label className="check-row">
+                  <input
+                    type="checkbox"
+                    checked={isMustChecked(item.id)}
+                    onChange={() => toggleMust(item.id)}
+                  />
+                  <span>{item.label}</span>
+                </label>
+                {item.id === 'read' && (data.readingBooks ?? []).length > 0 ? (
+                  <p className="hint">
+                    Сейчас читаешь:{' '}
+                    <strong>
+                      {(data.readingBooks ?? []).map((b) => b.title).join(', ')}
+                    </strong>
+                  </p>
+                ) : null}
+                {item.id === 'create' ? (
+                  <div className="create-box">
+                    {day.createIdeas.length ||
+                    day.puzzlePieces > 0 ||
+                    day.legoPieces > 0 ||
+                    day.createNote.trim() ? (
+                      <p className="hint create-chosen">
+                        Сегодня:{' '}
+                        <strong>
+                          {[
+                            day.puzzlePieces > 0
+                              ? formatCreatePieceLabel(
+                                  'puzzle',
+                                  day.puzzlePieces,
+                                )
+                              : null,
+                            day.legoPieces > 0
+                              ? formatCreatePieceLabel('lego', day.legoPieces)
+                              : null,
+                            ...day.createIdeas,
+                            day.createNote.trim() || null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </strong>
+                      </p>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="linkish"
+                      onClick={() => setCreateOpen((v) => !v)}
+                    >
+                      {createOpen
+                        ? 'Скрыть выбор'
+                        : day.createIdeas.length ||
+                            day.puzzlePieces > 0 ||
+                            day.legoPieces > 0 ||
+                            day.createNote.trim()
+                          ? 'Добавить занятие →'
+                          : 'Выбрать занятие →'}
+                    </button>
+                    {createOpen ? (
+                      <div className="create-picker">
+                        <div className="create-chip-grid">
+                          {CREATE_IDEAS.map((idea) => {
+                            const kind = CREATE_KIND_BY_IDEA[idea]
+                            if (kind === 'puzzle' || kind === 'lego') {
+                              const count =
+                                kind === 'puzzle'
+                                  ? day.puzzlePieces
+                                  : day.legoPieces
+                              if (count > 0) {
+                                return (
+                                  <div
+                                    key={idea}
+                                    className="chip active create-cart-chip"
+                                    role="group"
+                                    aria-label={`${idea}, ${count}`}
+                                  >
+                                    <button
+                                      type="button"
+                                      className="create-cart-step"
+                                      aria-label="Меньше"
+                                      onClick={() => {
+                                        const next = count - 1
+                                        patchDay(
+                                          kind === 'puzzle'
+                                            ? {
+                                                puzzlePieces: next,
+                                                createKinds:
+                                                  createKindsFromPieces(
+                                                    next,
+                                                    day.legoPieces,
+                                                  ),
+                                              }
+                                            : {
+                                                legoPieces: next,
+                                                createKinds:
+                                                  createKindsFromPieces(
+                                                    day.puzzlePieces,
+                                                    next,
+                                                  ),
+                                              },
+                                        )
+                                      }}
+                                    >
+                                      −
+                                    </button>
+                                    <span className="create-cart-label">
+                                      {idea}: {count}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      className="create-cart-step"
+                                      aria-label="Больше"
+                                      disabled={count >= CREATE_PIECE_MAX}
+                                      onClick={() => {
+                                        const next = Math.min(
+                                          CREATE_PIECE_MAX,
+                                          count + 1,
+                                        )
+                                        patchDay(
+                                          kind === 'puzzle'
+                                            ? {
+                                                puzzlePieces: next,
+                                                createKinds:
+                                                  createKindsFromPieces(
+                                                    next,
+                                                    day.legoPieces,
+                                                  ),
+                                              }
+                                            : {
+                                                legoPieces: next,
+                                                createKinds:
+                                                  createKindsFromPieces(
+                                                    day.puzzlePieces,
+                                                    next,
+                                                  ),
+                                              },
+                                        )
+                                      }}
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                )
+                              }
+                              return (
+                                <button
+                                  key={idea}
+                                  type="button"
+                                  className="chip"
+                                  onClick={() =>
+                                    patchDay(
+                                      kind === 'puzzle'
+                                        ? {
+                                            puzzlePieces: 1,
+                                            createKinds: createKindsFromPieces(
+                                              1,
+                                              day.legoPieces,
+                                            ),
+                                          }
+                                        : {
+                                            legoPieces: 1,
+                                            createKinds: createKindsFromPieces(
+                                              day.puzzlePieces,
+                                              1,
+                                            ),
+                                          },
+                                    )
+                                  }
+                                >
+                                  {idea}
+                                </button>
+                              )
+                            }
+                            const active = day.createIdeas.includes(idea)
+                            return (
+                              <button
+                                key={idea}
+                                type="button"
+                                className={active ? 'chip active' : 'chip'}
+                                onClick={() =>
+                                  patchDay({
+                                    createIdeas: toggleCreateIdea(
+                                      day.createIdeas,
+                                      idea,
+                                    ),
+                                  })
+                                }
+                              >
+                                {idea}
+                              </button>
+                            )
+                          })}
+                        </div>
+                        <label className="field">
+                          <span>Или своё</span>
+                          <input
+                            value={day.createNote}
+                            onChange={(e) =>
+                              patchDay({ createNote: e.target.value })
+                            }
+                            placeholder="Напиши сам"
+                          />
+                        </label>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <ElectiveSchedule
+          electives={data.electives ?? []}
+          done={day.electiveDone ?? {}}
+          date={key}
+          onToggleDone={toggleElective}
+        />
+      </section>
+
+      {key >= SCHOOL_GRADES_START ? (
+        <SchoolGradesCard
+          data={data}
+          onChange={onChange}
+          date={key}
+          readOnly
+        />
+      ) : null}
 
       <section className="card">
         <div className="card-title-row">
@@ -578,8 +827,6 @@ export function TodayScreen({
           ) : null}
         </div>
       </section>
-
-      <ReminderSection data={data} onChange={onChange} />
     </div>
   )
 }

@@ -1,29 +1,31 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   EXTRA_TASK_IDEAS,
-  MED_SLOT_ITEMS,
-  MUST_DO_ITEMS,
   formatCreatePieceLabel,
   activeExercises,
-  applyMedSlotFlags,
   applyMustDoFlags,
   chewDurationSec,
   controlsForDate,
   formatPlayTime,
-  formatPlayTimeWithOvertime,
   formatTimeOfDay,
   clearExercisesCredit,
-  isRobloxEnabled,
   markAllExercisesDone,
   markExercisesPartialCredit,
-  medicationLabel,
-  medicationsForSlot,
   normalizeDayLog,
-  normalizeRobloxLimitMin,
+  optionalMustDoItems,
+  requiredMustDoItems,
+  schoolDayPlanFromData,
+  schoolRestLabel,
+  isRestDay,
+  isWeekendDate,
+  NEW_DAY_PLAN_START,
+  SCHOOL_GRADES_START,
+  toggleSchoolBreakDay,
   todayKey,
   uid,
   workoutDurationSec,
 } from './data'
+import { ElectiveEditor, ElectiveSchedule } from './ElectiveSchedule'
 import { loadParentLabel } from './parentAlerts'
 import {
   bookTitleKey,
@@ -32,12 +34,8 @@ import {
   shiftDayKey,
   stampPerfectAt,
 } from './progress'
-import {
-  ReminderSection,
-  TodayTimedReminderBanner,
-} from './ReminderSection'
 import { SchoolGradesCard } from './SchoolGradesCard'
-import type { AppData, MedSlotId, MustDoId } from './types'
+import type { AppData, Elective, MustDoId } from './types'
 
 type Props = {
   data: AppData
@@ -53,7 +51,9 @@ type CalCell = {
   isToday: boolean
   isFuture: boolean
   stars: number
+  need: number
   perfect: boolean
+  rest?: boolean
 }
 
 const WEEKDAYS = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс']
@@ -85,6 +85,7 @@ function buildMonthCells(year: number, month: number, today: string): CalCell[] 
       isToday: date === today,
       isFuture: date > today,
       stars: 0,
+      need: 0,
       perfect: false,
     })
   }
@@ -98,6 +99,7 @@ function buildMonthCells(year: number, month: number, today: string): CalCell[] 
       isToday: date === today,
       isFuture: date > today,
       stars: 0,
+      need: 0,
       perfect: false,
     })
   }
@@ -113,6 +115,7 @@ function buildMonthCells(year: number, month: number, today: string): CalCell[] 
       isToday: date === today,
       isFuture: date > today,
       stars: 0,
+      need: 0,
       perfect: false,
     })
   }
@@ -251,7 +254,12 @@ export function CalendarScreen({
   const canEditSelected = Boolean(
     canEditMustDo && onChange && selected <= today,
   )
-  const medications = data.medications ?? []
+  const plan = useMemo(
+    () => schoolDayPlanFromData(data),
+    [data.extraBreakDates, data.extraSchoolDates],
+  )
+  const restLabel = schoolRestLabel(selected, plan)
+  const selectedIsRest = isRestDay(selected, plan)
 
   useEffect(() => {
     setMarkingForChild(false)
@@ -263,6 +271,7 @@ export function CalendarScreen({
     const next = stampPerfectAt(
       day,
       normalizeDayLog(selected, { ...day, ...partial }),
+      plan,
     )
     onChange({
       ...data,
@@ -281,6 +290,7 @@ export function CalendarScreen({
       const marked = stampPerfectAt(
         day,
         markAllExercisesDone(day, data.exercises),
+        plan,
       )
       onChange({
         ...data,
@@ -292,7 +302,7 @@ export function CalendarScreen({
       return
     }
     if (id === 'exercise' && !nextChecked) {
-      const cleared = stampPerfectAt(day, clearExercisesCredit(day))
+      const cleared = stampPerfectAt(day, clearExercisesCredit(day), plan)
       onChange({
         ...data,
         days: {
@@ -319,15 +329,9 @@ export function CalendarScreen({
       ...data,
       days: {
         ...data.days,
-        [selected]: stampPerfectAt(day, next),
+        [selected]: stampPerfectAt(day, next, plan),
       },
     })
-  }
-
-  function toggleMedSlot(id: MedSlotId) {
-    if (!canEditSelected || !onChange) return
-    const day = normalizeDayLog(selected, data.days[selected])
-    patchSelected(applyMedSlotFlags(day, { [id]: !day.medSlots[id] }))
   }
 
   function addExtraTask(text: string) {
@@ -372,6 +376,26 @@ export function CalendarScreen({
       deletedExtraTaskIds: day.deletedExtraTaskIds.includes(id)
         ? day.deletedExtraTaskIds
         : [...day.deletedExtraTaskIds, id],
+    })
+  }
+
+  function toggleElective(id: string) {
+    if (!canEditSelected) return
+    const day = normalizeDayLog(selected, data.days[selected])
+    patchSelected({
+      electiveDone: {
+        ...day.electiveDone,
+        [id]: !day.electiveDone[id],
+      },
+    })
+  }
+
+  function saveElectives(next: Elective[]) {
+    if (!onChange) return
+    onChange({
+      ...data,
+      electives: next,
+      electivesUpdatedAt: Date.now(),
     })
   }
 
@@ -425,14 +449,25 @@ export function CalendarScreen({
     const raw = buildMonthCells(cursor.year, cursor.month, today)
     return raw.map((cell) => {
       const log = normalizeDayLog(cell.date, data.days[cell.date])
-      const stars = dayStars(log)
+      const stars = dayStars(log, plan)
+      const need = requiredMustDoItems(cell.date, plan).length
       return {
         ...cell,
         stars,
-        perfect: stars === MUST_DO_ITEMS.length,
+        need,
+        perfect: isPerfectDay(log, plan),
+        rest: isRestDay(cell.date, plan),
       }
     })
-  }, [cursor.year, cursor.month, data.days, today])
+  }, [
+    cursor.year,
+    cursor.month,
+    data.days,
+    data.extraBreakDates,
+    data.extraSchoolDates,
+    plan,
+    today,
+  ])
 
   const detail = useMemo(() => {
     const day = normalizeDayLog(selected, data.days[selected])
@@ -448,8 +483,8 @@ export function CalendarScreen({
     const dayControls = controlsForDate(data.exerciseControls, selected)
     return {
       day,
-      stars: dayStars(day),
-      perfect: isPerfectDay(day),
+      stars: dayStars(day, plan),
+      perfect: isPerfectDay(day, plan),
       exerciseTotal,
       exerciseDone,
       workoutSec: workoutDurationSec(day),
@@ -457,13 +492,21 @@ export function CalendarScreen({
       chewFood: chewEntry?.food ?? null,
       chewSec: chewEntry ? chewDurationSec(chewEntry) : null,
       chewSavedAt: chewEntry?.createdAt ?? null,
-      robloxUsed: day.screens.roblox.usedSec,
-      robloxOvertime: day.screens.roblox.overtimeSec ?? 0,
-      robloxBonusMin: day.robloxBonusMin ?? 0,
       extraDone,
       dayControls,
     }
-  }, [data, selected])
+  }, [data, plan, selected])
+
+  const selectedRequired = requiredMustDoItems(selected, plan)
+  const selectedOptional = optionalMustDoItems(selected, plan)
+
+  function setGradeDate(next: string) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(next)) return
+    const date = next < SCHOOL_GRADES_START ? SCHOOL_GRADES_START : next
+    setSelected(date)
+    const [y, m] = date.split('-').map(Number)
+    if (y && m) setCursor({ year: y, month: m - 1 })
+  }
 
   function shiftMonth(delta: number) {
     setCursor((prev) => {
@@ -472,10 +515,15 @@ export function CalendarScreen({
     })
   }
 
-  const canGoNext =
-    cursor.year < Number(today.slice(0, 4)) ||
-    (cursor.year === Number(today.slice(0, 4)) &&
-      cursor.month < Number(today.slice(5, 7)) - 1)
+  const canGoNext = (() => {
+    const limit = new Date(
+      Number(today.slice(0, 4)),
+      Number(today.slice(5, 7)) - 1 + 18,
+      1,
+    )
+    const cursorDate = new Date(cursor.year, cursor.month, 1)
+    return cursorDate < limit
+  })()
 
   return (
     <div className="screen">
@@ -484,12 +532,8 @@ export function CalendarScreen({
           <p className="eyebrow">Родитель</p>
         </div>
         <h1>Дни</h1>
-        <p className="sub">Сводка и планы</p>
+        <p className="sub">Сводка, оценки и планы</p>
       </header>
-
-      {onChange ? (
-        <TodayTimedReminderBanner data={data} onChange={onChange} asParent />
-      ) : null}
 
       <details className="parent-calendar-fold">
         <summary className="parent-calendar-fold-head">
@@ -528,28 +572,27 @@ export function CalendarScreen({
 
           <div className="calendar-grid">
             {cells.map((cell) => {
-              const disabled = cell.isFuture
               return (
                 <button
                   key={cell.date}
                   type="button"
-                  disabled={disabled}
                   className={[
                     'calendar-day',
                     cell.inMonth ? '' : 'out',
                     cell.isToday ? 'today' : '',
                     selected === cell.date ? 'selected' : '',
                     cell.perfect ? 'perfect' : '',
-                    disabled ? 'future' : '',
+                    cell.rest ? 'rest' : '',
+                    cell.isFuture ? 'future' : '',
                   ]
                     .filter(Boolean)
                     .join(' ')}
                   onClick={() => setSelected(cell.date)}
                 >
                   <span className="calendar-day-num">{cell.dayNum}</span>
-                  {cell.inMonth && !cell.isFuture ? (
+                  {cell.inMonth ? (
                     <span className="calendar-day-stars" aria-hidden>
-                      {MUST_DO_ITEMS.map((_, i) => (
+                      {Array.from({ length: cell.need }, (_, i) => (
                         <span
                           key={i}
                           className={i < cell.stars ? 'on' : 'off'}
@@ -567,6 +610,17 @@ export function CalendarScreen({
           </div>
         </section>
       </details>
+
+      {onChange && selected >= SCHOOL_GRADES_START ? (
+        <SchoolGradesCard
+          data={data}
+          onChange={onChange}
+          date={selected}
+          onDateChange={setGradeDate}
+          diary
+          readOnly={!canEditSelected}
+        />
+      ) : null}
 
       <section className="card">
         <div className="card-title-row calendar-detail-head">
@@ -589,13 +643,41 @@ export function CalendarScreen({
           <span className={detail.perfect ? 'pill' : 'pill muted'}>
             {detail.perfect
               ? 'идеальный'
-              : `${detail.stars}/${MUST_DO_ITEMS.length}`}
+              : `${detail.stars}/${requiredMustDoItems(selected, plan).length}`}
           </span>
         </div>
 
+        {selected >= NEW_DAY_PLAN_START ? (
+          isWeekendDate(selected) ? (
+            <p className="hint" style={{ marginTop: 10 }}>
+              Выходной · домашки и рюкзака нет, план как в субботу
+            </p>
+          ) : onChange ? (
+            <label className="check-row" style={{ marginTop: 10 }}>
+              <input
+                type="checkbox"
+                checked={selectedIsRest}
+                onChange={() => onChange(toggleSchoolBreakDay(data, selected))}
+              />
+              <span>
+                Каникулы
+                <span className="hint">
+                  {restLabel
+                    ? ` · ${restLabel}, домашки и рюкзака нет`
+                    : ' — план как в выходной, без домашки и рюкзака'}
+                </span>
+              </span>
+            </label>
+          ) : restLabel ? (
+            <p className="hint" style={{ marginTop: 10 }}>
+              {restLabel} · домашки и рюкзака нет
+            </p>
+          ) : null
+        ) : null}
+
         {markingForChild && canEditSelected ? (
           <ul className="check-list" style={{ marginTop: 10 }}>
-            {MUST_DO_ITEMS.map((item) => (
+            {selectedRequired.map((item) => (
               <li key={item.id}>
                 <label className="check-row">
                   <input
@@ -633,90 +715,13 @@ export function CalendarScreen({
             ))}
           </ul>
         ) : (
-          MUST_DO_ITEMS.map((item) => (
+          selectedRequired.map((item) => (
             <div key={item.id} className="calendar-detail-block">
               <h3>{item.label}</h3>
               <p className="hint">{mustDoStatusHint(item.id, detail)}</p>
             </div>
           ))
         )}
-
-        {onChange ? (
-          <SchoolGradesCard
-            data={data}
-            onChange={onChange}
-            date={selected}
-            readOnly={!canEditSelected}
-            embedded
-          />
-        ) : null}
-
-        <div className="calendar-detail-block">
-          <h3>Таблетки</h3>
-          {medications.length === 0 ? (
-            <p className="hint" style={{ marginTop: 8 }}>
-              Расписание препаратов настраивается в «Ещё».
-            </p>
-          ) : (
-            <ul className="check-list med-day-list" style={{ marginTop: 10 }}>
-              {MED_SLOT_ITEMS.map((item) => {
-                const slotMeds = medicationsForSlot(medications, item.id)
-                if (slotMeds.length === 0) return null
-                const at = detail.day.medSlotsAt[item.id]
-                const checked = Boolean(detail.day.medSlots[item.id])
-                const chips = (
-                  <span
-                    className="med-slot-chips"
-                    aria-label={`Препараты: ${item.label}`}
-                  >
-                    {slotMeds.map((med) => (
-                      <span key={med.id} className="med-chip">
-                        {medicationLabel(med)}
-                      </span>
-                    ))}
-                  </span>
-                )
-                return (
-                  <li key={item.id}>
-                    {canEditSelected ? (
-                      <label className="check-row med-check-row">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleMedSlot(item.id)}
-                        />
-                        <span className="med-check-body">
-                          <span className="med-check-title">
-                            {item.label}
-                            {at != null ? (
-                              <span className="hint">
-                                {' '}
-                                — в {formatTimeOfDay(at)}
-                              </span>
-                            ) : null}
-                          </span>
-                          {chips}
-                        </span>
-                      </label>
-                    ) : (
-                      <div className="med-check-row med-check-readonly">
-                        <p className="hint" style={{ margin: 0 }}>
-                          {item.label}
-                          {checked
-                            ? at != null
-                              ? ` ✓ ${formatTimeOfDay(at)}`
-                              : ' ✓'
-                            : ' —'}
-                        </p>
-                        {chips}
-                      </div>
-                    )}
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </div>
 
         {detail.dayControls.length > 0 ? (
           <div className="calendar-detail-block">
@@ -736,27 +741,64 @@ export function CalendarScreen({
             </ul>
           </div>
         ) : null}
-
-        <div className="calendar-detail-block">
-          <h3>Roblox</h3>
-          <p className="hint">
-            {!isRobloxEnabled(data) && selected === today
-              ? 'Сейчас запрещён родителем'
-              : detail.robloxUsed > 0 || detail.robloxOvertime > 0
-                ? `Сыграно ${formatPlayTimeWithOvertime(
-                    detail.robloxUsed,
-                    detail.robloxOvertime,
-                  )} из ${
-                    normalizeRobloxLimitMin(data.robloxLimitMin) +
-                    detail.robloxBonusMin
-                  } мин`
-                : 'Не запускал'}
-            {detail.robloxBonusMin > 0
-              ? ` · бонус +${detail.robloxBonusMin} мин`
-              : ''}
-          </p>
-        </div>
       </section>
+
+      <section className="card">
+        <div className="card-title-row">
+          <h2>Роскошный максимум</h2>
+          <span className="pill muted">не в звёзды</span>
+        </div>
+        {markingForChild && canEditSelected && selectedOptional.length ? (
+          <ul className="check-list" style={{ marginTop: 10 }}>
+            {selectedOptional.map((item) => (
+              <li key={item.id}>
+                <label className="check-row">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(detail.day.mustDo[item.id])}
+                    onChange={() => toggleMust(item.id)}
+                  />
+                  <span>
+                    {item.label}
+                    <span className="hint">
+                      {' '}
+                      — {mustDoStatusHint(item.id, detail)}
+                    </span>
+                  </span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          selectedOptional.map((item) => (
+            <div key={item.id} className="calendar-detail-block">
+              <h3>{item.label}</h3>
+              <p className="hint">{mustDoStatusHint(item.id, detail)}</p>
+            </div>
+          ))
+        )}
+        <ElectiveSchedule
+          electives={data.electives ?? []}
+          done={detail.day.electiveDone ?? {}}
+          date={selected}
+          onToggleDone={canEditSelected ? toggleElective : undefined}
+        />
+      </section>
+
+      {canEditMustDo && onChange ? (
+        <section className="card">
+          <div className="card-title-row">
+            <h2>Расписание факультативов</h2>
+          </div>
+          <p className="hint" style={{ marginTop: 6 }}>
+            Ребёнок видит занятия только в нужный день
+          </p>
+          <ElectiveEditor
+            electives={data.electives ?? []}
+            onChange={saveElectives}
+          />
+        </section>
+      ) : null}
 
       {canEditMustDo && onChange ? (
         <>
@@ -861,8 +903,6 @@ export function CalendarScreen({
             ) : null}
           </section>
 
-          <ReminderSection data={data} onChange={onChange} asParent />
-
           <section className="card">
             <div className="card-title-row">
               <h2>Книги</h2>
@@ -950,39 +990,19 @@ export function CalendarScreen({
             )}
           </section>
         </>
-      ) : detail.day.extraTasks.length > 0 ||
-        detail.day.reminders.length > 0 ? (
-        <>
-          {detail.day.extraTasks.length > 0 ? (
-            <div className="card">
-              <div className="calendar-detail-block" style={{ marginTop: 0 }}>
-                <h3>Планы на день</h3>
-                <ul className="calendar-exercise-list">
-                  {detail.day.extraTasks.map((t) => (
-                    <li key={t.id} className={t.done ? 'done' : ''}>
-                      {t.done ? '✓' : '·'} {t.text}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          ) : null}
-          {detail.day.reminders.length > 0 ? (
-            <div className="card">
-              <div className="calendar-detail-block" style={{ marginTop: 0 }}>
-                <h3>Не забудь</h3>
-                <ul className="calendar-exercise-list">
-                  {detail.day.reminders.map((r) => (
-                    <li key={r.id}>
-                      · {r.time ? `${r.time} · ` : ''}
-                      {r.text}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          ) : null}
-        </>
+      ) : detail.day.extraTasks.length > 0 ? (
+        <div className="card">
+          <div className="calendar-detail-block" style={{ marginTop: 0 }}>
+            <h3>Планы на день</h3>
+            <ul className="calendar-exercise-list">
+              {detail.day.extraTasks.map((t) => (
+                <li key={t.id} className={t.done ? 'done' : ''}>
+                  {t.done ? '✓' : '·'} {t.text}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
       ) : null}
     </div>
   )

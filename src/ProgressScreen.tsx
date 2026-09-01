@@ -26,6 +26,7 @@ import {
   type Sticker,
   type StickerProgress,
 } from './progress'
+import { schoolDayPlanFromData } from './data'
 import type { AppData } from './types'
 
 type Props = {
@@ -170,9 +171,10 @@ export function ProgressScreen({ data, onChange }: Props) {
   }, [equipped, data, onChange])
 
   const stats = useMemo(() => {
-    const stars = countStars(data.days)
+    const plan = schoolDayPlanFromData(data)
+    const stars = countStars(data.days, plan)
     const { level, intoLevel, need } = levelFromStars(stars)
-    const perfectMonth = perfectDaysInMonth(data.days)
+    const perfectMonth = perfectDaysInMonth(data.days, new Date(), plan)
     const stickers = unlockedStickers(progress)
     return {
       stars,

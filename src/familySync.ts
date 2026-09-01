@@ -21,7 +21,6 @@ import type {
   FinishedBook,
   ReadingBook,
   SchoolGrade,
-  StudioSprintState,
   UserRole,
 } from './types'
 import { getFirebaseAuth, getFirebaseDb, isFirebaseConfigured } from './firebase'
@@ -49,10 +48,13 @@ export type CloudPayload = {
   /** @deprecated migrated into medications */
   medicationName?: string
   medicationUpdatedAt?: number
+  electives?: AppData['electives']
+  electivesUpdatedAt?: number
   moneyBankRub?: number
   /** When bank balances last changed — pick newer side on merge */
   banksUpdatedAt?: number
   claimedStickerMoneyIds?: string[]
+  claimedStickerRobloxIds?: string[]
   dismissedGiftStickerIds?: string[]
   equippedStickerId?: string | null
   bestStreak?: number
@@ -61,9 +63,11 @@ export type CloudPayload = {
   currentBook?: string
   readingBooks?: ReadingBook[]
   finishedBooks?: FinishedBook[]
-  studioSprintStates?: Record<string, StudioSprintState>
   puzzleCount?: number
   legoCount?: number
+  extraBreakDates?: string[]
+  extraSchoolDates?: string[]
+  schoolCalendarUpdatedAt?: number
   updatedAt: number
 }
 
@@ -200,18 +204,23 @@ export function toCloudPayload(data: AppData, updatedAt = Date.now()): CloudPayl
     robloxSettingsUpdatedAt: data.robloxSettingsUpdatedAt ?? 0,
     medications: data.medications ?? [],
     medicationUpdatedAt: data.medicationUpdatedAt ?? 0,
+    electives: data.electives ?? [],
+    electivesUpdatedAt: data.electivesUpdatedAt ?? 0,
     moneyBankRub: data.moneyBankRub ?? 0,
     banksUpdatedAt: data.banksUpdatedAt ?? 0,
     claimedStickerMoneyIds: data.claimedStickerMoneyIds ?? [],
+    claimedStickerRobloxIds: data.claimedStickerRobloxIds ?? [],
     dismissedGiftStickerIds: data.dismissedGiftStickerIds ?? [],
     equippedStickerId: data.equippedStickerId ?? null,
     bestStreak: data.bestStreak ?? 0,
     bestParentTasks: data.bestParentTasks ?? 0,
     readingBooks: data.readingBooks ?? [],
     finishedBooks: data.finishedBooks ?? [],
-    studioSprintStates: data.studioSprintStates ?? {},
     puzzleCount: data.puzzleCount ?? 0,
     legoCount: data.legoCount ?? 0,
+    extraBreakDates: data.extraBreakDates ?? [],
+    extraSchoolDates: data.extraSchoolDates ?? [],
+    schoolCalendarUpdatedAt: data.schoolCalendarUpdatedAt ?? 0,
     updatedAt,
   }
 }
@@ -269,9 +278,12 @@ export async function joinFamily(rawCode: string): Promise<CloudPayload> {
     medications: remote.medications,
     medicationName: remote.medicationName,
     medicationUpdatedAt: remote.medicationUpdatedAt,
+    electives: remote.electives,
+    electivesUpdatedAt: remote.electivesUpdatedAt,
     moneyBankRub: remote.moneyBankRub,
     // Keep undefined when absent so clients can seed legacy families.
     claimedStickerMoneyIds: remote.claimedStickerMoneyIds,
+    claimedStickerRobloxIds: remote.claimedStickerRobloxIds,
     dismissedGiftStickerIds: remote.dismissedGiftStickerIds,
     equippedStickerId: remote.equippedStickerId ?? null,
     bestStreak: remote.bestStreak ?? 0,
@@ -279,9 +291,11 @@ export async function joinFamily(rawCode: string): Promise<CloudPayload> {
     readingBooks: remote.readingBooks,
     currentBook: remote.currentBook,
     finishedBooks: remote.finishedBooks ?? [],
-    studioSprintStates: remote.studioSprintStates ?? {},
     puzzleCount: remote.puzzleCount ?? 0,
     legoCount: remote.legoCount ?? 0,
+    extraBreakDates: remote.extraBreakDates ?? [],
+    extraSchoolDates: remote.extraSchoolDates ?? [],
+    schoolCalendarUpdatedAt: remote.schoolCalendarUpdatedAt ?? 0,
     updatedAt: remote.updatedAt ?? Date.now(),
   }
 }
@@ -330,9 +344,12 @@ export function subscribeFamily(
         medications: remote.medications,
         medicationName: remote.medicationName,
         medicationUpdatedAt: remote.medicationUpdatedAt,
+        electives: remote.electives,
+        electivesUpdatedAt: remote.electivesUpdatedAt,
         moneyBankRub: remote.moneyBankRub,
         banksUpdatedAt: remote.banksUpdatedAt,
         claimedStickerMoneyIds: remote.claimedStickerMoneyIds,
+        claimedStickerRobloxIds: remote.claimedStickerRobloxIds,
         dismissedGiftStickerIds: remote.dismissedGiftStickerIds,
         equippedStickerId: remote.equippedStickerId ?? null,
         bestStreak: remote.bestStreak ?? 0,
@@ -340,9 +357,11 @@ export function subscribeFamily(
         readingBooks: remote.readingBooks,
         currentBook: remote.currentBook,
         finishedBooks: remote.finishedBooks ?? [],
-        studioSprintStates: remote.studioSprintStates ?? {},
         puzzleCount: remote.puzzleCount ?? 0,
         legoCount: remote.legoCount ?? 0,
+        extraBreakDates: remote.extraBreakDates ?? [],
+        extraSchoolDates: remote.extraSchoolDates ?? [],
+        schoolCalendarUpdatedAt: remote.schoolCalendarUpdatedAt ?? 0,
         updatedAt: remote.updatedAt ?? Date.now(),
       })
     },

@@ -5,6 +5,7 @@ import type {
   DayExtraTask,
   DayLog,
   DayReminder,
+  Elective,
   Exercise,
   ExerciseControl,
   MedSlotId,
@@ -13,8 +14,6 @@ import type {
   SchoolGrade,
   SchoolMark,
   ScreenSlot,
-  StudioSprintState,
-  StudioSprintStatus,
   WorkoutSession,
 } from './types'
 
@@ -25,8 +24,324 @@ export const MUST_DO_ITEMS: { id: MustDoId; label: string }[] = [
   { id: 'exercise', label: 'Сделать зарядку' },
   { id: 'chew', label: 'Заполнить дневник жевания' },
   { id: 'read', label: 'Почитать книгу' },
+  { id: 'homework', label: 'Сделать домашнюю работу' },
+  { id: 'backpack', label: 'Собрать рюкзак на завтра' },
   { id: 'create', label: 'Заняться творчеством' },
 ]
+
+const MUST_DO_BY_ID = Object.fromEntries(
+  MUST_DO_ITEMS.map((item) => [item.id, item]),
+) as Record<MustDoId, { id: MustDoId; label: string }>
+
+function mustDoByIds(ids: MustDoId[]): { id: MustDoId; label: string }[] {
+  return ids.map((id) => MUST_DO_BY_ID[id])
+}
+
+/** Weekday vs weekend plan starts on this local date (YYYY-MM-DD). */
+export const NEW_DAY_PLAN_START = '2026-09-01'
+/** First school day with lessons: 1 Sep is линейка, marks from 2 Sep. */
+export const SCHOOL_GRADES_START = '2026-09-02'
+
+export type SchoolDayPlan = {
+  extraBreakDates: string[]
+  extraSchoolDates: string[]
+}
+
+export const EMPTY_SCHOOL_DAY_PLAN: SchoolDayPlan = {
+  extraBreakDates: [],
+  extraSchoolDates: [],
+}
+
+export function schoolDayPlanFromData(
+  data?: Pick<AppData, 'extraBreakDates' | 'extraSchoolDates'> | null,
+): SchoolDayPlan {
+  return {
+    extraBreakDates: data?.extraBreakDates ?? [],
+    extraSchoolDates: data?.extraSchoolDates ?? [],
+  }
+}
+
+export function normalizeDateKeys(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const item of raw) {
+    if (typeof item !== 'string') continue
+    const key = item.trim()
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(key) || seen.has(key)) continue
+    seen.add(key)
+    out.push(key)
+  }
+  return out.sort()
+}
+
+/**
+ * Рекомендации Минпросвещения на 2026/27 (четверти).
+ * Школа может сдвинуть даты — родитель правит галочкой в календаре.
+ */
+export const SCHOOL_BREAK_RANGES: { from: string; to: string; label: string }[] =
+  [
+    { from: '2026-10-26', to: '2026-11-04', label: 'Осенние каникулы' },
+    { from: '2026-12-31', to: '2027-01-10', label: 'Зимние каникулы' },
+    { from: '2027-03-27', to: '2027-04-04', label: 'Весенние каникулы' },
+    { from: '2027-05-27', to: '2027-08-31', label: 'Летние каникулы' },
+  ]
+
+/** 1 сентября, праздники РФ — в эти дни домашки и рюкзака в минимуме нет. */
+const PUBLIC_HOLIDAY_MD = new Set([
+  '01-01',
+  '01-02',
+  '01-03',
+  '01-04',
+  '01-05',
+  '01-06',
+  '01-07',
+  '01-08',
+  '02-23',
+  '03-08',
+  '05-01',
+  '05-09',
+  '06-12',
+  '09-01',
+  '11-04',
+])
+
+export function isWeekendDate(dateKey: string): boolean {
+  const [y, m, d] = dateKey.split('-').map(Number)
+  if (!y || !m || !d) return false
+  const weekday = new Date(y, m - 1, d).getDay()
+  return weekday === 0 || weekday === 6
+}
+
+export function isDefaultSchoolBreak(dateKey: string): boolean {
+  if (dateKey < NEW_DAY_PLAN_START) return false
+  if (PUBLIC_HOLIDAY_MD.has(dateKey.slice(5))) return true
+  return SCHOOL_BREAK_RANGES.some(
+    (range) => dateKey >= range.from && dateKey <= range.to,
+  )
+}
+
+/** Выходной, каникулы или 1 сентября — план как в субботу, без домашки и рюкзака. */
+export function isRestDay(
+  dateKey: string,
+  plan: SchoolDayPlan = EMPTY_SCHOOL_DAY_PLAN,
+): boolean {
+  if (isWeekendDate(dateKey)) return true
+  if (plan.extraSchoolDates.includes(dateKey)) return false
+  if (plan.extraBreakDates.includes(dateKey)) return true
+  return isDefaultSchoolBreak(dateKey)
+}
+
+function addDaysKey(dateKey: string, delta: number): string {
+  const [y, m, d] = dateKey.split('-').map(Number)
+  const dt = new Date(y, m - 1, d + delta)
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`
+}
+
+const WEEKDAY_ACCUSATIVE = [
+  'воскресенье',
+  'понедельник',
+  'вторник',
+  'среду',
+  'четверг',
+  'пятницу',
+  'субботу',
+]
+
+/** Next weekday that is not a rest day — Friday usually lands on Monday. */
+export function nextSchoolDateKey(
+  dateKey: string,
+  plan: SchoolDayPlan = EMPTY_SCHOOL_DAY_PLAN,
+): string {
+  let cursor = addDaysKey(dateKey, 1)
+  for (let i = 0; i < 16; i++) {
+    if (!isRestDay(cursor, plan)) return cursor
+    cursor = addDaysKey(cursor, 1)
+  }
+  return addDaysKey(dateKey, 1)
+}
+
+export function backpackMustDoLabel(
+  dateKey: string,
+  plan: SchoolDayPlan = EMPTY_SCHOOL_DAY_PLAN,
+): string {
+  const next = nextSchoolDateKey(dateKey, plan)
+  if (next === addDaysKey(dateKey, 1)) return 'Собрать рюкзак на завтра'
+  const [y, m, d] = next.split('-').map(Number)
+  const dow = new Date(y, m - 1, d).getDay()
+  return `Собрать рюкзак на ${WEEKDAY_ACCUSATIVE[dow] ?? 'завтра'}`
+}
+
+export function schoolRestLabel(
+  dateKey: string,
+  plan: SchoolDayPlan = EMPTY_SCHOOL_DAY_PLAN,
+): string | null {
+  if (dateKey < NEW_DAY_PLAN_START || !isRestDay(dateKey, plan)) return null
+  if (isWeekendDate(dateKey)) return 'выходной'
+  if (dateKey.slice(5) === '09-01') return '1 сентября'
+  const range = SCHOOL_BREAK_RANGES.find(
+    (item) => dateKey >= item.from && dateKey <= item.to,
+  )
+  if (range) return range.label
+  if (plan.extraBreakDates.includes(dateKey)) return 'каникулы'
+  return 'каникулы'
+}
+
+export function toggleSchoolBreakDay(data: AppData, dateKey: string): AppData {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || isWeekendDate(dateKey)) {
+    return data
+  }
+  const plan = schoolDayPlanFromData(data)
+  const rest = isRestDay(dateKey, plan)
+  const extraBreak = new Set(plan.extraBreakDates)
+  const extraSchool = new Set(plan.extraSchoolDates)
+  if (rest) {
+    extraBreak.delete(dateKey)
+    if (isDefaultSchoolBreak(dateKey)) extraSchool.add(dateKey)
+    else extraSchool.delete(dateKey)
+  } else {
+    extraSchool.delete(dateKey)
+    extraBreak.add(dateKey)
+  }
+  return {
+    ...data,
+    extraBreakDates: [...extraBreak].sort(),
+    extraSchoolDates: [...extraSchool].sort(),
+    schoolCalendarUpdatedAt: Date.now(),
+  }
+}
+
+/** Required for a perfect day on this date. August stays the old 5-item plan. */
+export function requiredMustDoItems(
+  dateKey: string,
+  plan: SchoolDayPlan = EMPTY_SCHOOL_DAY_PLAN,
+): { id: MustDoId; label: string }[] {
+  if (dateKey < NEW_DAY_PLAN_START) {
+    return mustDoByIds(['wash-am', 'exercise', 'chew', 'read', 'create'])
+  }
+  if (isRestDay(dateKey, plan)) {
+    return mustDoByIds(['wash-am', 'exercise', 'chew', 'read'])
+  }
+  return mustDoByIds([
+    'wash-am',
+    'exercise',
+    'chew',
+    'homework',
+    'backpack',
+  ]).map((item) =>
+    item.id === 'backpack'
+      ? { ...item, label: backpackMustDoLabel(dateKey, plan) }
+      : item,
+  )
+}
+
+/** Shown on the day, but does not affect stars or a perfect day. */
+export function optionalMustDoItems(
+  dateKey: string,
+  plan: SchoolDayPlan = EMPTY_SCHOOL_DAY_PLAN,
+): { id: MustDoId; label: string }[] {
+  if (dateKey < NEW_DAY_PLAN_START) return []
+  if (isRestDay(dateKey, plan)) return mustDoByIds(['create'])
+  return mustDoByIds(['read', 'create'])
+}
+
+/** Monday = 1 … Sunday = 7 */
+export const WEEKDAY_MON1: { id: number; short: string }[] = [
+  { id: 1, short: 'пн' },
+  { id: 2, short: 'вт' },
+  { id: 3, short: 'ср' },
+  { id: 4, short: 'чт' },
+  { id: 5, short: 'пт' },
+  { id: 6, short: 'сб' },
+  { id: 7, short: 'вс' },
+]
+
+export function dateWeekdayMon1(dateKey: string): number {
+  const [y, m, d] = dateKey.split('-').map(Number)
+  if (!y || !m || !d) return 1
+  const js = new Date(y, m - 1, d).getDay()
+  return js === 0 ? 7 : js
+}
+
+export const DEFAULT_ELECTIVES: Elective[] = [
+  {
+    id: 'elective-breakdance',
+    title: 'брейк-данс',
+    time: '19:30',
+    weekdays: [2, 4],
+  },
+  {
+    id: 'elective-guitar',
+    title: 'гитару',
+    time: '18:00',
+    weekdays: [7],
+  },
+  {
+    id: 'elective-code',
+    title: 'программирование',
+    time: '16:00',
+    weekdays: [5],
+  },
+]
+
+export function normalizeElectiveTime(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const trimmed = raw.trim()
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(trimmed)) return null
+  return trimmed
+}
+
+export function normalizeElectives(raw: unknown): Elective[] {
+  if (!Array.isArray(raw)) return DEFAULT_ELECTIVES.map((e) => ({ ...e }))
+  const out: Elective[] = []
+  const seen = new Set<string>()
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const row = item as Partial<Elective>
+    const title = typeof row.title === 'string' ? row.title : ''
+    const time = normalizeElectiveTime(row.time)
+    if (!time) continue
+    const id =
+      typeof row.id === 'string' && row.id.trim() ? row.id.trim() : uid()
+    if (seen.has(id)) continue
+    seen.add(id)
+    const days = Array.isArray(row.weekdays)
+      ? [...new Set(
+          row.weekdays.filter(
+            (n): n is number =>
+              typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= 7,
+          ),
+        )].sort((a, b) => a - b)
+      : []
+    if (days.length === 0) continue
+    out.push({ id, title, time, weekdays: days })
+  }
+  return out
+}
+
+export function electiveLabel(elective: Elective): string {
+  return `Сходить на ${elective.title} в ${elective.time}`
+}
+
+export function electiveWeekdayHint(elective: Elective): string {
+  return elective.weekdays
+    .map((id) => WEEKDAY_MON1.find((w) => w.id === id)?.short)
+    .filter(Boolean)
+    .join(', ')
+}
+
+export function electivesOnDate(
+  electives: Elective[],
+  dateKey: string,
+): Elective[] {
+  const weekday = dateWeekdayMon1(dateKey)
+  return electives
+    .filter((item) => item.weekdays.includes(weekday))
+    .sort(
+      (a, b) =>
+        a.time.localeCompare(b.time) || a.title.localeCompare(b.title, 'ru'),
+    )
+}
 
 export const MED_SLOT_ITEMS: { id: MedSlotId; label: string }[] = [
   { id: 'morning', label: 'Утро' },
@@ -120,11 +435,6 @@ export const SCHOOL_SUBJECTS = [
   'Литература',
   'Окружающий мир',
   'Английский язык',
-  'История',
-  'Биология',
-  'Физкультура',
-  'ИЗО',
-  'Музыка',
 ] as const
 
 /** Subjects with their own five-counter in the school album */
@@ -399,7 +709,7 @@ export function isRobloxEnabled(data: { robloxEnabled?: boolean }): boolean {
 }
 
 /** Must-do items that should look “main” in the checklist */
-export const MAIN_MUST_DO: MustDoId[] = ['exercise', 'chew']
+export const MAIN_MUST_DO: MustDoId[] = ['exercise', 'chew', 'homework']
 
 /** Checked only when completed inside the app — not by tapping the checkbox */
 export const APP_LOCKED_MUST_DO: MustDoId[] = ['exercise', 'chew']
@@ -857,6 +1167,19 @@ export function todayKey(d = new Date()): string {
   return `${y}-${m}-${day}`
 }
 
+/** Keep diary dates in [2 Sep … today]. Before school starts, only 2 Sep is selectable. */
+export function clampSchoolGradeDate(date: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return SCHOOL_GRADES_START
+  if (date < SCHOOL_GRADES_START) return SCHOOL_GRADES_START
+  const today = todayKey()
+  const cap = today < SCHOOL_GRADES_START ? SCHOOL_GRADES_START : today
+  return date > cap ? cap : date
+}
+
+export function canEnterSchoolGrade(date: string): boolean {
+  return date >= SCHOOL_GRADES_START && date <= todayKey()
+}
+
 export function emptyDayLog(date: string): DayLog {
   return {
     date,
@@ -883,6 +1206,7 @@ export function emptyDayLog(date: string): DayLog {
     puzzlePieces: 0,
     legoPieces: 0,
     createKinds: [],
+    electiveDone: {},
     robloxBonusMin: 0,
     screens: {
       roblox: emptyScreenSlot(SCREEN_LIMITS.roblox.seconds),
@@ -1003,6 +1327,7 @@ export function normalizeDayLog(date: string, raw?: Partial<DayLog> | null): Day
     puzzlePieces,
     legoPieces,
     createKinds: createKindsFromPieces(puzzlePieces, legoPieces),
+    electiveDone: normalizeBoolMap(raw.electiveDone),
     extraTasks: normalizeExtraTasks(raw.extraTasks).filter(
       (t) => !deletedTasks.has(t.id),
     ),
@@ -1140,6 +1465,7 @@ export function mergeDayLog(
   date: string,
   local?: Partial<DayLog> | null,
   remote?: Partial<DayLog> | null,
+  plan: SchoolDayPlan = EMPTY_SCHOOL_DAY_PLAN,
 ): DayLog {
   if (!local) return normalizeDayLog(date, remote)
   if (!remote) return normalizeDayLog(date, local)
@@ -1180,7 +1506,7 @@ export function mergeDayLog(
   )
   const mergedMustDo: Partial<Record<MustDoId, boolean>> = mustDo
   const mergedPerfect =
-    MUST_DO_ITEMS.every((item) => mergedMustDo[item.id]) &&
+    requiredMustDoItems(date, plan).every((item) => mergedMustDo[item.id]) &&
     perfectTimes.length > 0
       ? Math.min(...perfectTimes)
       : null
@@ -1231,6 +1557,7 @@ export function mergeDayLog(
       Math.max(a.puzzlePieces, b.puzzlePieces),
       Math.max(a.legoPieces, b.legoPieces),
     ),
+    electiveDone: mergeBoolMaps(a.electiveDone, b.electiveDone),
     robloxBonusMin: Math.max(a.robloxBonusMin, b.robloxBonusMin),
     screens: {
       roblox: mergeScreenSlots(a.screens.roblox, b.screens.roblox),
@@ -1238,77 +1565,15 @@ export function mergeDayLog(
   })
 }
 
-const STUDIO_SPRINT_STATUSES = new Set<StudioSprintStatus>([
-  'todo',
-  'submitted',
-  'needs_work',
-  'approved',
-])
-
-export function normalizeStudioSprintState(
-  raw: unknown,
-): StudioSprintState | null {
-  if (!raw || typeof raw !== 'object') return null
-  const row = raw as Partial<StudioSprintState>
-  const status = row.status
-  if (typeof status !== 'string' || !STUDIO_SPRINT_STATUSES.has(status as StudioSprintStatus)) {
-    return null
-  }
-  const updatedAt =
-    typeof row.updatedAt === 'number' && Number.isFinite(row.updatedAt)
-      ? Math.max(0, Math.floor(row.updatedAt))
-      : 0
-  const childNote =
-    typeof row.childNote === 'string' ? row.childNote.trim() : ''
-  const parentNote =
-    typeof row.parentNote === 'string' ? row.parentNote.trim() : ''
-  return {
-    status: status as StudioSprintStatus,
-    updatedAt,
-    ...(childNote ? { childNote } : {}),
-    ...(parentNote ? { parentNote } : {}),
-  }
-}
-
-export function normalizeStudioSprintStates(
-  raw: unknown,
-): Record<string, StudioSprintState> {
-  if (!raw || typeof raw !== 'object') return {}
-  const out: Record<string, StudioSprintState> = {}
-  for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
-    const key = id.trim()
-    if (!key) continue
-    const state = normalizeStudioSprintState(value)
-    if (state) out[key] = state
-  }
-  return out
-}
-
-/** Per-sprint last-write-wins by updatedAt. */
-export function mergeStudioSprintStates(
-  local: Record<string, StudioSprintState> | undefined,
-  remote: Record<string, StudioSprintState> | undefined,
-): Record<string, StudioSprintState> {
-  const a = normalizeStudioSprintStates(local)
-  const b = normalizeStudioSprintStates(remote)
-  const out: Record<string, StudioSprintState> = { ...a }
-  for (const [id, remoteState] of Object.entries(b)) {
-    const localState = out[id]
-    if (!localState || remoteState.updatedAt >= localState.updatedAt) {
-      out[id] = remoteState
-    }
-  }
-  return out
-}
-
 export function mergeDaysMaps(
   local: Record<string, DayLog>,
   remote: Record<string, DayLog>,
+  plan: SchoolDayPlan = EMPTY_SCHOOL_DAY_PLAN,
 ): Record<string, DayLog> {
   const keys = new Set([...Object.keys(local), ...Object.keys(remote)])
   const out: Record<string, DayLog> = {}
   for (const key of keys) {
-    out[key] = mergeDayLog(key, local[key], remote[key])
+    out[key] = mergeDayLog(key, local[key], remote[key], plan)
   }
   return out
 }
@@ -1648,17 +1913,22 @@ export function defaultAppData(): AppData {
     moneyBankRub: 0,
     banksUpdatedAt: 0,
     claimedStickerMoneyIds: [],
+    claimedStickerRobloxIds: [],
     dismissedGiftStickerIds: [],
     equippedStickerId: null,
     bestStreak: 0,
     bestParentTasks: 0,
     readingBooks: [],
     finishedBooks: [],
-    studioSprintStates: {},
     puzzleCount: 0,
     legoCount: 0,
     schoolGrades: [],
     deletedSchoolGradeIds: [],
+    extraBreakDates: [],
+    extraSchoolDates: [],
+    schoolCalendarUpdatedAt: 0,
+    electives: DEFAULT_ELECTIVES.map((e) => ({ ...e })),
+    electivesUpdatedAt: 0,
   }
 }
 

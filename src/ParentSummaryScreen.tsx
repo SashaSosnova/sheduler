@@ -1,27 +1,18 @@
-import { useEffect, useState } from 'react'
-import {
-  ROBLOX_LIMIT_PRESETS,
-  flushScreenOvertime,
-  formatPlayTimeWithOvertime,
-  isRobloxEnabled,
-  normalizeDayLog,
-  normalizeRobloxLimitMin,
-  screenOvertimeSec,
-  todayKey,
-} from './data'
+import { useState } from 'react'
+import { clampSchoolGradeDate, todayKey } from './data'
+import { SchoolGradesCard } from './SchoolGradesCard'
 import {
   dismissGiftSticker,
   giftMoneyBankRub,
   giftRobloxBankMinutes,
-  patchRobloxSettings,
   payoutMoneyBankRub,
+  payoutRobloxBankMinutes,
   pendingGiftStickers,
-  robloxLimitSeconds,
-  stampPerfectAt,
 } from './progress'
 import type { AppData } from './types'
 
 const PARENT_BANK_GIFTS = [5, 10, 15, 30] as const
+const PARENT_BANK_PAYOUTS = [10, 15, 20, 30] as const
 const PARENT_MONEY_GIFTS = [100, 200, 300] as const
 const PARENT_MONEY_PAYOUTS = [100, 200, 300, 500] as const
 
@@ -31,73 +22,13 @@ type Props = {
 }
 
 export function ParentSummaryScreen({ data, onChange }: Props) {
-  const key = todayKey()
-  const day = normalizeDayLog(key, data.days[key])
-
-  const roblox = day.screens.roblox
-  const allowed = isRobloxEnabled(data)
-  const limitMin = normalizeRobloxLimitMin(data.robloxLimitMin)
-  const limitSec = robloxLimitSeconds(data, key)
-  const running = Boolean(roblox.endsAt && !roblox.finished)
-  const [now, setNow] = useState(Date.now())
-  const [customLimit, setCustomLimit] = useState(String(limitMin))
-
-  useEffect(() => {
-    setCustomLimit(String(limitMin))
-  }, [limitMin])
-
-  const timedOut =
-    !roblox.finished && !running && roblox.remainingSec <= 0 && roblox.usedSec > 0
-  const overtimeTicking = timedOut && roblox.overtimeStartedAt != null
-
-  useEffect(() => {
-    if (!running && !overtimeTicking) return
-    const id = window.setInterval(() => setNow(Date.now()), 1000)
-    return () => window.clearInterval(id)
-  }, [running, overtimeTicking])
-
-  const livePlayed =
-    running && roblox.endsAt
-      ? Math.max(
-          0,
-          Math.floor((now - (roblox.endsAt - roblox.remainingSec * 1000)) / 1000),
-        )
-      : 0
-  const displayUsed =
-    limitSec > 0
-      ? Math.min(limitSec, roblox.usedSec + livePlayed)
-      : roblox.usedSec + livePlayed
-  const overtimeLive = screenOvertimeSec(roblox, now)
-  const statusLabel = !allowed
-    ? 'запрещён'
-    : roblox.finished
-      ? 'лимит закрыт'
-      : running
-        ? 'сейчас играет'
-        : timedOut
-          ? overtimeLive > 0 || overtimeTicking
-            ? 'доигрывает сверх лимита'
-            : 'время вышло'
-          : roblox.usedSec > 0
-            ? 'пауза'
-            : 'ещё не играл'
-
-  function patchDay(partial: Partial<typeof day>) {
-    const next = stampPerfectAt(
-      day,
-      normalizeDayLog(key, { ...day, ...partial }),
-    )
-    onChange({
-      ...data,
-      days: {
-        ...data.days,
-        [key]: next,
-      },
-    })
-  }
+  const [gradeDate, setGradeDate] = useState(() =>
+    clampSchoolGradeDate(todayKey()),
+  )
 
   const pendingGifts = pendingGiftStickers(data)
   const moneyBank = Math.floor(data.moneyBankRub ?? 0)
+  const robloxBankMin = Math.floor(data.robloxBonusBankMin ?? 0)
 
   return (
     <div className="screen">
@@ -106,100 +37,25 @@ export function ParentSummaryScreen({ data, onChange }: Props) {
           <p className="eyebrow">Родитель</p>
         </div>
         <h1>Награды</h1>
-        <p className="sub">Roblox и копилка</p>
+        <p className="sub">Оценки, Roblox и копилка</p>
       </header>
 
-      <section className="card parent-screen-card">
+      <SchoolGradesCard
+        data={data}
+        onChange={onChange}
+        date={clampSchoolGradeDate(gradeDate)}
+        onDateChange={setGradeDate}
+        diary
+      />
+
+      <section className="card">
         <div className="card-title-row">
           <h2>Roblox</h2>
-          <span
-            className={
-              !allowed || roblox.finished || running ? 'pill' : 'pill muted'
-            }
-          >
-            {statusLabel}
+          <span className={robloxBankMin > 0 ? 'pill' : 'pill muted'}>
+            {robloxBankMin} мин
           </span>
         </div>
-
-        <label className="check-row" style={{ marginTop: 10 }}>
-          <input
-            type="checkbox"
-            checked={allowed}
-            onChange={(e) =>
-              onChange(
-                patchRobloxSettings(data, { enabled: e.target.checked }),
-              )
-            }
-          />
-          <span>Разрешить Roblox</span>
-        </label>
-
-        <div
-          className={`parent-roblox-limit${allowed ? '' : ' is-disabled'}`}
-          style={{ marginTop: 12 }}
-        >
-          <p className="hint" style={{ margin: '0 0 8px' }}>
-            Базовый лимит в день
-          </p>
-          <div className="row-gap">
-            {ROBLOX_LIMIT_PRESETS.map((n) => (
-              <button
-                key={n}
-                type="button"
-                className={n === limitMin ? 'btn' : 'btn ghost'}
-                disabled={!allowed}
-                onClick={() =>
-                  onChange(patchRobloxSettings(data, { limitMin: n }))
-                }
-              >
-                {n} мин
-              </button>
-            ))}
-          </div>
-          <label className="field" style={{ marginTop: 10 }}>
-            <span>Своё (1–120 мин)</span>
-            <div className="row-gap">
-              <input
-                type="number"
-                min={1}
-                max={120}
-                value={customLimit}
-                disabled={!allowed}
-                onChange={(e) => setCustomLimit(e.target.value)}
-                style={{ maxWidth: 120 }}
-              />
-              <button
-                type="button"
-                className="btn ghost"
-                disabled={!allowed}
-                onClick={() => {
-                  const n = Number(customLimit)
-                  if (!Number.isFinite(n)) return
-                  onChange(patchRobloxSettings(data, { limitMin: n }))
-                }}
-              >
-                Применить
-              </button>
-            </div>
-          </label>
-          <p className="hint" style={{ marginTop: 8 }}>
-            Бонусы из копилки добавляются сверху к базовому лимиту.
-          </p>
-        </div>
-
-        <p className="parent-play-time" style={{ marginTop: 14 }}>
-          {formatPlayTimeWithOvertime(displayUsed, overtimeLive)}
-        </p>
-        <p className="hint">
-          {allowed
-            ? `из ${Math.round(limitSec / 60)} мин на сегодня`
-            : 'игра запрещена'}
-        </p>
         <div className="parent-roblox-bank">
-          <p className="hint">
-            Копилка бонусов:{' '}
-            <strong>{Math.floor(data.robloxBonusBankMin ?? 0)} мин</strong>
-          </p>
           <div className="row-gap">
             {PARENT_BANK_GIFTS.map((n) => (
               <button
@@ -212,64 +68,30 @@ export function ParentSummaryScreen({ data, onChange }: Props) {
               </button>
             ))}
           </div>
-        </div>
-        {allowed && limitSec > 0 ? (
-          <div className="play-bar" aria-hidden>
-            <div
-              className="play-bar-fill"
-              style={{
-                width: `${Math.min(100, (displayUsed / limitSec) * 100)}%`,
-              }}
-            />
-          </div>
-        ) : null}
-        {overtimeLive > 0 || overtimeTicking || (timedOut && !roblox.finished) ? (
-          <div className="row-gap" style={{ marginTop: 12 }}>
-            {overtimeLive > 0 || overtimeTicking ? (
-              <button
-                type="button"
-                className="btn ghost"
-                onClick={() =>
-                  patchDay({
-                    screens: {
-                      ...day.screens,
-                      roblox: {
-                        ...flushScreenOvertime(roblox),
-                        overtimeSec: 0,
-                        overtimeStartedAt: null,
-                      },
-                    },
-                  })
-                }
-              >
-                Сбросить превышение
-              </button>
-            ) : null}
-            {!roblox.finished ? (
+          {robloxBankMin > 0 ? (
+            <div className="row-gap" style={{ marginTop: 10 }}>
+              {PARENT_BANK_PAYOUTS.filter((n) => n <= robloxBankMin).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  className="btn ghost"
+                  onClick={() => onChange(payoutRobloxBankMinutes(data, n))}
+                >
+                  Выдать {n} мин
+                </button>
+              ))}
               <button
                 type="button"
                 className="btn"
                 onClick={() =>
-                  patchDay({
-                    screens: {
-                      ...day.screens,
-                      roblox: {
-                        ...flushScreenOvertime(roblox),
-                        endsAt: null,
-                        remainingSec: 0,
-                        finished: true,
-                        overtimeSec: 0,
-                        overtimeStartedAt: null,
-                      },
-                    },
-                  })
+                  onChange(payoutRobloxBankMinutes(data, robloxBankMin))
                 }
               >
-                Закрыть день без превышения
+                Выдать всё
               </button>
-            ) : null}
-          </div>
-        ) : null}
+            </div>
+          ) : null}
+        </div>
       </section>
 
       <section className="card piggy-bank-card">

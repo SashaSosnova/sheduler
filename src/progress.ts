@@ -1,5 +1,4 @@
 import {
-  MUST_DO_ITEMS,
   SCHOOL_QUARTER_MIN_GRADES,
   isRobloxEnabled,
   isSchoolQuarterEnded,
@@ -9,10 +8,13 @@ import {
   flushScreenOvertime,
   normalizeDayLog,
   parseTimerRounds,
+  requiredMustDoItems,
+  schoolDayPlanFromData,
   schoolQuarterKey,
   schoolSubjectKey,
   todayKey,
   workoutDurationSec,
+  type SchoolDayPlan,
 } from './data'
 import type {
   AppData,
@@ -45,21 +47,36 @@ export const ROBLOX_STREAK_REWARDS: { streak: number; minutes: number }[] = [
   { streak: 21, minutes: 20 },
 ]
 
-export function dayStars(log: DayLog | undefined): number {
+export function dayStars(
+  log: DayLog | undefined,
+  plan?: SchoolDayPlan,
+): number {
   if (!log) return 0
-  return MUST_DO_ITEMS.filter((i) => log.mustDo[i.id]).length
+  return requiredMustDoItems(log.date, plan).filter((i) => log.mustDo[i.id])
+    .length
 }
 
-export function isPerfectDay(log: DayLog | undefined): boolean {
-  return dayStars(log) === MUST_DO_ITEMS.length
+export function isPerfectDay(
+  log: DayLog | undefined,
+  plan?: SchoolDayPlan,
+): boolean {
+  if (!log) return false
+  const need = requiredMustDoItems(log.date, plan)
+  return need.length > 0 && need.every((i) => Boolean(log.mustDo[i.id]))
 }
 
-export function countStars(days: Record<string, DayLog>): number {
-  return Object.values(days).reduce((sum, log) => sum + dayStars(log), 0)
+export function countStars(
+  days: Record<string, DayLog>,
+  plan?: SchoolDayPlan,
+): number {
+  return Object.values(days).reduce((sum, log) => sum + dayStars(log, plan), 0)
 }
 
-export function countPerfectDays(days: Record<string, DayLog>): number {
-  return Object.values(days).filter((log) => isPerfectDay(log)).length
+export function countPerfectDays(
+  days: Record<string, DayLog>,
+  plan?: SchoolDayPlan,
+): number {
+  return Object.values(days).filter((log) => isPerfectDay(log, plan)).length
 }
 
 export function levelFromStars(stars: number): {
@@ -77,10 +94,11 @@ export function levelFromStars(stars: number): {
 export function currentStreak(
   days: Record<string, DayLog>,
   today = todayKey(),
+  plan?: SchoolDayPlan,
 ): number {
-  let cursor = isPerfectDay(days[today]) ? today : shiftDayKey(today, -1)
+  let cursor = isPerfectDay(days[today], plan) ? today : shiftDayKey(today, -1)
   let streak = 0
-  while (isPerfectDay(days[cursor])) {
+  while (isPerfectDay(days[cursor], plan)) {
     streak++
     cursor = shiftDayKey(cursor, -1)
   }
@@ -90,10 +108,11 @@ export function currentStreak(
 export function perfectDaysInMonth(
   days: Record<string, DayLog>,
   ref = new Date(),
+  plan?: SchoolDayPlan,
 ): number {
   const prefix = `${ref.getFullYear()}-${String(ref.getMonth() + 1).padStart(2, '0')}`
   return Object.values(days).filter(
-    (log) => log.date.startsWith(prefix) && isPerfectDay(log),
+    (log) => log.date.startsWith(prefix) && isPerfectDay(log, plan),
   ).length
 }
 
@@ -654,90 +673,6 @@ export const STICKERS: Sticker[] = [
     giftHint: 'Награда: хромакей со стойкой для фотофона',
   },
   {
-    id: 'streak-isagi',
-    kind: 'art',
-    track: 'streak',
-    needStreak: 40,
-    image: './stickers/isagi.png',
-    label: 'Исаги',
-    quote: 'Эта пьеса — моя',
-    detail: 'Синяя тюрьма',
-  },
-  {
-    id: 'streak-bachira',
-    kind: 'art',
-    track: 'streak',
-    needStreak: 48,
-    image: './stickers/bachira.png',
-    label: 'Батира',
-    quote: 'Поиграй со мной!',
-    detail: 'Синяя тюрьма',
-  },
-  {
-    id: 'streak-kaiser',
-    kind: 'art',
-    track: 'streak',
-    needStreak: 60,
-    image: './stickers/kaiser.png',
-    label: 'Кайзер',
-    quote: 'Импакт Кайзера',
-    detail: 'Синяя тюрьма',
-    moneyRub: 100,
-  },
-  {
-    id: 'streak-barou',
-    kind: 'art',
-    track: 'streak',
-    needStreak: 75,
-    image: './stickers/barou.png',
-    label: 'Бароу',
-    quote: 'Это моя площадь',
-    detail: 'Синяя тюрьма',
-    moneyRub: 200,
-  },
-  {
-    id: 'exercise-rudo',
-    kind: 'art',
-    track: 'exercise',
-    needExerciseDays: 36,
-    image: './stickers/rudo.png',
-    label: 'Рудо',
-    quote: 'Я всё заберу обратно',
-    detail: 'Гачиакута',
-  },
-  {
-    id: 'exercise-enjin',
-    kind: 'art',
-    track: 'exercise',
-    needExerciseDays: 44,
-    image: './stickers/enjin.png',
-    label: 'Энджин',
-    quote: 'Добро пожаловать в яму',
-    detail: 'Гачиакута',
-  },
-  {
-    id: 'exercise-riyo',
-    kind: 'art',
-    track: 'exercise',
-    needExerciseDays: 58,
-    image: './stickers/riyo.png',
-    label: 'Риё',
-    quote: 'Разрежем!',
-    detail: 'Гачиакута',
-    moneyRub: 100,
-  },
-  {
-    id: 'exercise-zanka',
-    kind: 'art',
-    track: 'exercise',
-    needExerciseDays: 72,
-    image: './stickers/zanka.png',
-    label: 'Занка',
-    quote: 'Не позорь отряд',
-    detail: 'Гачиакута',
-    moneyRub: 200,
-  },
-  {
     id: 'feat-secret-roblox-bonus',
     kind: 'art',
     track: 'secret',
@@ -976,6 +911,7 @@ export const STICKERS: Sticker[] = [
     track: 'school' as const,
     needSubject: hero.subject,
     needSubjectFives: hero.n,
+    moneyRub: ({ 3: 100, 7: 200, 10: 300, 15: 500 } as const)[hero.n],
     image: hero.image,
     label: hero.label,
     quote: hero.quote,
@@ -983,43 +919,50 @@ export const STICKERS: Sticker[] = [
   })),
   {
     id: 'school-comenius',
-    kind: 'art',
+    kind: 'gift',
     track: 'school',
     needCleanQuarters: 1,
     image: './stickers/comenius.png',
     label: 'Коменский',
     quote: 'Учить всех всему',
     detail: 'Четверти',
+    robloxExtraMin: 40,
+    giftHint: 'Награда: донат на 400 ₽ в Roblox',
   },
   {
     id: 'school-ushinsky',
-    kind: 'art',
+    kind: 'gift',
     track: 'school',
     needCleanQuarters: 2,
     image: './stickers/ushinsky.png',
     label: 'Ушинский',
     quote: 'Родное слово',
     detail: 'Четверти',
+    robloxExtraMin: 40,
+    giftHint: 'Награда: донат на 400 ₽ в Roblox',
   },
   {
     id: 'school-montessori',
-    kind: 'art',
+    kind: 'gift',
     track: 'school',
     needExcellentQuarters: 1,
     image: './stickers/montessori.png',
     label: 'Монтессори',
     quote: 'Помоги мне сделать самому',
     detail: 'Четверти',
+    giftHint: 'Награда: путешествие',
   },
   {
     id: 'school-vygotsky',
-    kind: 'art',
+    kind: 'gift',
     track: 'school',
     needCleanQuarters: 3,
     image: './stickers/vygotsky.png',
     label: 'Выготский',
     quote: 'Учимся вместе',
     detail: 'Четверти',
+    robloxExtraMin: 40,
+    giftHint: 'Награда: донат на 400 ₽ в Roblox',
   },
 ]
 
@@ -1473,12 +1416,13 @@ export function hasChewMaxEntry(
 export function stampPerfectAt(
   prev: DayLog | undefined,
   next: DayLog,
+  plan?: SchoolDayPlan,
 ): DayLog {
-  if (!isPerfectDay(next)) {
+  if (!isPerfectDay(next, plan)) {
     return next.perfectAt == null ? next : { ...next, perfectAt: null }
   }
   if (next.perfectAt != null) return next
-  if (prev && isPerfectDay(prev) && prev.perfectAt != null) {
+  if (prev && isPerfectDay(prev, plan) && prev.perfectAt != null) {
     return { ...next, perfectAt: prev.perfectAt }
   }
   return { ...next, perfectAt: Date.now() }
@@ -1488,8 +1432,9 @@ export function stampPerfectAt(
 export function isPerfectByHourSecret(
   day: DayLog,
   perfectBeforeHour = 20,
+  plan?: SchoolDayPlan,
 ): boolean {
-  if (!isPerfectDay(day)) return false
+  if (!isPerfectDay(day, plan)) return false
   if (day.perfectAt == null) return false
   const perfect = new Date(day.perfectAt)
   if (todayKey(perfect) !== day.date) return false
@@ -1499,9 +1444,10 @@ export function isPerfectByHourSecret(
 export function hasPerfectByHourSecret(
   days: Record<string, DayLog>,
   perfectBeforeHour = 20,
+  plan?: SchoolDayPlan,
 ): boolean {
   return Object.values(days).some((day) =>
-    isPerfectByHourSecret(day, perfectBeforeHour),
+    isPerfectByHourSecret(day, perfectBeforeHour, plan),
   )
 }
 
@@ -1513,8 +1459,9 @@ export function isDayRhythmSecret(
   day: DayLog,
   workoutBeforeHour = 10,
   perfectBeforeHour = 20,
+  plan?: SchoolDayPlan,
 ): boolean {
-  if (!isPerfectByHourSecret(day, perfectBeforeHour)) return false
+  if (!isPerfectByHourSecret(day, perfectBeforeHour, plan)) return false
   if (day.workoutFinishedAt == null) return false
   const workout = new Date(day.workoutFinishedAt)
   if (todayKey(workout) !== day.date) return false
@@ -1525,9 +1472,10 @@ export function hasDayRhythmSecret(
   days: Record<string, DayLog>,
   workoutBeforeHour = 10,
   perfectBeforeHour = 20,
+  plan?: SchoolDayPlan,
 ): boolean {
   return Object.values(days).some((day) =>
-    isDayRhythmSecret(day, workoutBeforeHour, perfectBeforeHour),
+    isDayRhythmSecret(day, workoutBeforeHour, perfectBeforeHour, plan),
   )
 }
 
@@ -1542,8 +1490,11 @@ export function countOwnTasksDone(days: Record<string, DayLog>): number {
 }
 
 /** Perfect day with no Roblox session started or played. */
-export function isNoRobloxPerfectDay(day: DayLog): boolean {
-  if (!isPerfectDay(day)) return false
+export function isNoRobloxPerfectDay(
+  day: DayLog,
+  plan?: SchoolDayPlan,
+): boolean {
+  if (!isPerfectDay(day, plan)) return false
   // Need a modern tracked workout day — old perfect checkmarks alone are not enough.
   if (day.workoutFinishedAt == null) return false
   const slot = day.screens?.roblox
@@ -1570,11 +1521,14 @@ export function firstTrackedRobloxPlayDate(
  * real tracked play — otherwise usedSec=0 on old perfect days is meaningless.
  * Days before the first tracked play never count.
  */
-export function hasNoRobloxPerfectDay(days: Record<string, DayLog>): boolean {
+export function hasNoRobloxPerfectDay(
+  days: Record<string, DayLog>,
+  plan?: SchoolDayPlan,
+): boolean {
   const from = firstTrackedRobloxPlayDate(days)
   if (!from) return false
   return Object.values(days).some(
-    (day) => day.date >= from && isNoRobloxPerfectDay(day),
+    (day) => day.date >= from && isNoRobloxPerfectDay(day, plan),
   )
 }
 
@@ -1622,12 +1576,13 @@ export function resolveRobloxBonusEarnedMin(data: AppData): number {
 }
 
 export function stickerProgressFromData(data: AppData): StickerProgress {
-  const streak = currentStreak(data.days)
+  const plan = schoolDayPlanFromData(data)
+  const streak = currentStreak(data.days, todayKey(), plan)
   const parentNow = countParentTasksDone(data.days)
   const finishedBooks = data.finishedBooks ?? []
   const exercises = activeExercises(data.exercises)
   const progress: StickerProgress = {
-    perfectTotal: countPerfectDays(data.days),
+    perfectTotal: countPerfectDays(data.days, plan),
     streak,
     bestStreak: Math.max(data.bestStreak ?? 0, streak),
     qualityWorkouts: countQualityWorkouts(data.days, exercises),
@@ -1639,9 +1594,9 @@ export function stickerProgressFromData(data: AppData): StickerProgress {
     tomSawyerFinished: isTomSawyerInFinishedBooks(finishedBooks),
     ownTasks: countOwnTasksDone(data.days),
     secretShortcut: hasShortcutWorkout(data.days, exercises),
-    secretNoRoblox: hasNoRobloxPerfectDay(data.days),
-    secretPerfectByHour: hasPerfectByHourSecret(data.days, 20),
-    secretDayRhythm: hasDayRhythmSecret(data.days, 10, 20),
+    secretNoRoblox: hasNoRobloxPerfectDay(data.days, plan),
+    secretPerfectByHour: hasPerfectByHourSecret(data.days, 20, plan),
+    secretDayRhythm: hasDayRhythmSecret(data.days, 10, 20, plan),
     achievementRobloxMin: 0,
     puzzles: resolvePuzzleCount(data),
     legos: resolveLegoCount(data),
@@ -1896,7 +1851,7 @@ export function stickerUnlockHint(
     return `${n} идеальных ${ruDays(n)} подряд${frac}`
   }
   if (sticker.needPerfect === 1) {
-    return '1 идеальный день (все 5 пунктов минимума)'
+    return '1 идеальный день (весь обязательный минимум)'
   }
   if (sticker.needPerfect != null) {
     const n = sticker.needPerfect
@@ -1999,9 +1954,7 @@ export function stickerOpenedHint(sticker: Sticker): string {
 export function stickerRewardText(sticker: Sticker): string | null {
   const parts: string[] = []
   if (sticker.robloxExtraMin) {
-    parts.push(
-      `Награда: +${sticker.robloxExtraMin} мин Roblox в копилку (можно потратить в любой день)`,
-    )
+    parts.push(`Награда: +${sticker.robloxExtraMin} мин Roblox в копилку`)
   }
   if (sticker.moneyRub) {
     parts.push(`Награда: +${sticker.moneyRub} ₽ в копилку`)
@@ -2316,9 +2269,10 @@ export function patchRobloxSettings(
 function streakTipDay(
   days: Record<string, DayLog>,
   today = todayKey(),
+  plan?: SchoolDayPlan,
 ): string | null {
-  const tip = isPerfectDay(days[today]) ? today : shiftDayKey(today, -1)
-  return isPerfectDay(days[tip]) ? tip : null
+  const tip = isPerfectDay(days[today], plan) ? today : shiftDayKey(today, -1)
+  return isPerfectDay(days[tip], plan) ? tip : null
 }
 
 /**
@@ -2356,6 +2310,50 @@ export function seedClaimedStickerMoneyIds(data: AppData): string[] {
   ).map((s) => s.id)
 }
 
+/**
+ * Streak 7/14/21 already pay minutes via ROBLOX_STREAK_REWARDS.
+ * Other stickers with robloxExtraMin credit the bank on unlock.
+ */
+export function stickerPaysRobloxBank(sticker: Sticker): boolean {
+  if (sticker.robloxExtraMin == null || sticker.robloxExtraMin <= 0) return false
+  if (
+    sticker.needStreak != null &&
+    ROBLOX_STREAK_REWARDS.some((r) => r.streak === sticker.needStreak)
+  ) {
+    return false
+  }
+  return true
+}
+
+/** Credit robloxBonusBankMin for newly unlocked stickers with robloxExtraMin. */
+export function applyPendingStickerRobloxRewards(data: AppData): AppData {
+  const progress = stickerProgressFromData(data)
+  const claimed = new Set(data.claimedStickerRobloxIds ?? [])
+  const newly = STICKERS.filter(
+    (s) =>
+      stickerPaysRobloxBank(s) &&
+      isStickerUnlocked(s, progress) &&
+      !claimed.has(s.id),
+  )
+  if (newly.length === 0) return data
+
+  const add = newly.reduce((sum, s) => sum + (s.robloxExtraMin ?? 0), 0)
+  const earnedFloor = resolveRobloxBonusEarnedMin(data)
+  return {
+    ...data,
+    claimedStickerRobloxIds: [...claimed, ...newly.map((s) => s.id)],
+    robloxBonusBankMin: Math.max(0, Math.floor(data.robloxBonusBankMin ?? 0)) + add,
+    robloxBonusEarnedMin: earnedFloor + add,
+  }
+}
+
+export function seedClaimedStickerRobloxIds(data: AppData): string[] {
+  const progress = stickerProgressFromData(data)
+  return STICKERS.filter(
+    (s) => stickerPaysRobloxBank(s) && isStickerUnlocked(s, progress),
+  ).map((s) => s.id)
+}
+
 /** Parent gift: add rubles to the shared money bank. */
 export function giftMoneyBankRub(data: AppData, rub: number): AppData {
   const add = Math.max(0, Math.floor(rub))
@@ -2389,6 +2387,20 @@ export function pendingGiftStickers(data: AppData): Sticker[] {
   )
 }
 
+/** Roblox donate rewards live on the extras card, not the piggy bank. */
+export function isRobloxDonateGift(sticker: Sticker): boolean {
+  const hint = sticker.giftHint ?? ''
+  return /донат/i.test(hint) && /roblox/i.test(hint)
+}
+
+export function pendingPhysicalGiftStickers(data: AppData): Sticker[] {
+  return pendingGiftStickers(data).filter((s) => !isRobloxDonateGift(s))
+}
+
+export function pendingRobloxDonateStickers(data: AppData): Sticker[] {
+  return pendingGiftStickers(data).filter(isRobloxDonateGift)
+}
+
 /** Legacy upgrade: treat already-unlocked gifts as already given. */
 export function seedDismissedGiftStickerIds(data: AppData): string[] {
   const progress = stickerProgressFromData(data)
@@ -2417,7 +2429,8 @@ export function applyPendingRobloxStreakRewards(
   data: AppData,
   today = todayKey(),
 ): AppData {
-  const streak = currentStreak(data.days, today)
+  const plan = schoolDayPlanFromData(data)
+  const streak = currentStreak(data.days, today, plan)
   const claimed = new Set(data.claimedRobloxStreaks ?? [])
   const bestStreak = Math.max(data.bestStreak ?? 0, streak)
   const newly = ROBLOX_STREAK_REWARDS.filter(
@@ -2440,7 +2453,7 @@ export function applyPendingRobloxStreakRewards(
   if (newly.length === 0) return next
 
   // Only credit the bank when the streak tip day exists (same gate as before).
-  if (!streakTipDay(data.days, today)) return next
+  if (!streakTipDay(data.days, today, plan)) return next
 
   const bonusMin = newly.reduce((sum, r) => sum + r.minutes, 0)
   return {
@@ -2462,6 +2475,20 @@ export function giftRobloxBankMinutes(data: AppData, minutes: number): AppData {
     ...data,
     robloxBonusBankMin: Math.max(0, Math.floor(data.robloxBonusBankMin ?? 0)) + add,
     robloxBonusEarnedMin: earned + add,
+  }
+}
+
+/** Parent marks bonus minutes as handed over on the computer. */
+export function payoutRobloxBankMinutes(
+  data: AppData,
+  minutes: number,
+): AppData {
+  const bank = Math.max(0, Math.floor(data.robloxBonusBankMin ?? 0))
+  const take = Math.min(bank, Math.max(0, Math.floor(minutes)))
+  if (take <= 0) return data
+  return {
+    ...data,
+    robloxBonusBankMin: bank - take,
   }
 }
 
@@ -2551,10 +2578,11 @@ export function buildDayHistory(
   const exercises = activeExercises(data.exercises)
   const exerciseTotal = exercises.length
   const items: DayHistoryItem[] = []
+  const plan = schoolDayPlanFromData(data)
 
   for (const date of dates) {
     const day = normalizeDayLog(date, data.days[date])
-    const stars = dayStars(day)
+    const stars = dayStars(day, plan)
     const exerciseDone = exercises.filter((e) => day.exercisesDone[e.id]).length
     const chewEntry = (data.chewEntries ?? [])
       .filter((e) => e.date === date)
@@ -2572,7 +2600,7 @@ export function buildDayHistory(
       date,
       isToday: date === today,
       stars,
-      perfect: stars === MUST_DO_ITEMS.length,
+      perfect: isPerfectDay(day, plan),
       exerciseDone,
       exerciseTotal,
       workoutSec: workoutDurationSec(day),

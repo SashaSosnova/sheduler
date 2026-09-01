@@ -20,6 +20,7 @@ import {
   moveExerciseToPosition,
   normalizeDayLog,
   parseTimerRounds,
+  schoolDayPlanFromData,
   todayKey,
   uid,
   workoutDurationSec,
@@ -100,6 +101,7 @@ export function ExercisesScreen({
     const next = stampPerfectAt(
       day,
       normalizeDayLog(key, { ...day, ...partial }),
+      schoolDayPlanFromData(data),
     )
     onChange({
       ...data,
@@ -937,7 +939,14 @@ function ParentExerciseScreen({
                     : markExercisesPartialCredit(day)
                 onChange({
                   ...data,
-                  days: { ...data.days, [dayKey]: stampPerfectAt(day, next) },
+                  days: {
+                    ...data.days,
+                    [dayKey]: stampPerfectAt(
+                      day,
+                      next,
+                      schoolDayPlanFromData(data),
+                    ),
+                  },
                 })
               }}
             />

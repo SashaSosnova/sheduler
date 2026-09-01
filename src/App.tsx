@@ -15,7 +15,6 @@ import { TodayScreen } from './TodayScreen'
 import type { TabId, UserRole } from './types'
 import { useAppData } from './useAppData'
 import { useChildTaskAlerts } from './useChildTaskAlerts'
-import { useFamilyBackgroundSync } from './useFamilyBackgroundSync'
 import { useNotifications } from './useNotifications'
 import { useParentAlerts } from './useParentAlerts'
 import { usePushBridge } from './usePushBridge'
@@ -37,12 +36,6 @@ function App() {
   const parentAlerts = useParentAlerts(role, data, family.connected)
   const childTaskAlerts = useChildTaskAlerts(role, data, family.connected)
   usePushBridge(role, family.code)
-  useFamilyBackgroundSync(
-    role,
-    family.code,
-    parentAlerts.childName,
-    role === 'parent' ? parentAlerts.enabled : childTaskAlerts.enabled,
-  )
   const [tab, setTab] = useState<TabId>(() =>
     role === 'parent' ? 'calendar' : 'today',
   )
@@ -119,7 +112,7 @@ function App() {
           <ProgressScreen data={data} onChange={setData} />
         ) : null}
         {tab === 'rewards' ? (
-          <RewardsScreen data={data} onChange={setData} />
+          <RewardsScreen data={data} />
         ) : null}
         {tab === 'calendar' ? (
           <CalendarScreen
@@ -146,8 +139,6 @@ function App() {
         {tab === 'settings' ? (
           <SettingsScreen
             role={role}
-            data={data}
-            onChange={setData}
             family={family}
             firebaseReady={firebaseReady}
             notificationsEnabled={notifications.enabled}

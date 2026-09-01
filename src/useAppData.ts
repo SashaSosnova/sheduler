@@ -4,6 +4,7 @@ import {
   defaultAppData,
   isRobloxEnabled,
   migrateLegacyMedicationName,
+  normalizeElectives,
   normalizeMedications,
   normalizeRobloxLimitMin,
   mergeChewEntries,
@@ -11,11 +12,12 @@ import {
   mergeExerciseControls,
   mergeExercises,
   mergeSchoolGrades,
-  mergeStudioSprintStates,
   normalizeExerciseControls,
   normalizeSchoolGrades,
-  normalizeStudioSprintStates,
+  normalizeDateKeys,
   resolveExercises,
+  schoolDayPlanFromData,
+  todayKey,
 } from './data'
 import {
   createFamily,
@@ -29,12 +31,12 @@ import {
   type CloudPayload,
   type FamilyStatus,
 } from './familySync'
-import { stopFamilyBackgroundAlerts } from './familyAlertsNative'
 import { isFirebaseConfigured } from './firebase'
 import {
   ROBLOX_STREAK_REWARDS,
   applyPendingRobloxStreakRewards,
   applyPendingStickerMoneyRewards,
+  applyPendingStickerRobloxRewards,
   countParentTasksDone,
   currentStreak,
   normalizeFinishedBooks,
@@ -45,6 +47,7 @@ import {
   resolvePuzzleCount,
   resolveRobloxBonusEarnedMin,
   seedClaimedStickerMoneyIds,
+  seedClaimedStickerRobloxIds,
   seedDismissedGiftStickerIds,
 } from './progress'
 import type {
@@ -54,7 +57,6 @@ import type {
   FinishedBook,
   ReadingBook,
   SchoolGrade,
-  StudioSprintState,
 } from './types'
 
 const STORAGE_KEY = 'vacation-planner-v2'
@@ -79,9 +81,12 @@ type StoredData = {
   /** @deprecated migrated into medications */
   medicationName?: string
   medicationUpdatedAt?: number
+  electives?: unknown
+  electivesUpdatedAt?: number
   moneyBankRub?: number
   banksUpdatedAt?: number
   claimedStickerMoneyIds?: string[]
+  claimedStickerRobloxIds?: string[]
   dismissedGiftStickerIds?: string[]
   equippedStickerId?: string | null
   bestStreak?: number
@@ -90,9 +95,11 @@ type StoredData = {
   currentBook?: string
   readingBooks?: ReadingBook[]
   finishedBooks?: FinishedBook[]
-  studioSprintStates?: Record<string, StudioSprintState>
   puzzleCount?: number
   legoCount?: number
+  extraBreakDates?: string[]
+  extraSchoolDates?: string[]
+  schoolCalendarUpdatedAt?: number
   exercises?: unknown
   exerciseControls?: unknown
 }
@@ -132,18 +139,23 @@ function toStoredData(data: AppData): StoredData {
     robloxSettingsUpdatedAt: data.robloxSettingsUpdatedAt ?? 0,
     medications: data.medications ?? [],
     medicationUpdatedAt: data.medicationUpdatedAt ?? 0,
+    electives: data.electives ?? [],
+    electivesUpdatedAt: data.electivesUpdatedAt ?? 0,
     moneyBankRub: data.moneyBankRub ?? 0,
     banksUpdatedAt: data.banksUpdatedAt ?? 0,
     claimedStickerMoneyIds: data.claimedStickerMoneyIds ?? [],
+    claimedStickerRobloxIds: data.claimedStickerRobloxIds ?? [],
     dismissedGiftStickerIds: data.dismissedGiftStickerIds ?? [],
     equippedStickerId: data.equippedStickerId ?? null,
     bestStreak: data.bestStreak ?? 0,
     bestParentTasks: data.bestParentTasks ?? 0,
     readingBooks: data.readingBooks ?? [],
     finishedBooks: data.finishedBooks ?? [],
-    studioSprintStates: data.studioSprintStates ?? {},
     puzzleCount: data.puzzleCount ?? 0,
     legoCount: data.legoCount ?? 0,
+    extraBreakDates: data.extraBreakDates ?? [],
+    extraSchoolDates: data.extraSchoolDates ?? [],
+    schoolCalendarUpdatedAt: data.schoolCalendarUpdatedAt ?? 0,
   }
 }
 
@@ -164,6 +176,12 @@ function localAheadOfRemote(local: AppData, remote: CloudPayload): boolean {
   const remoteGrades = new Set((remote.schoolGrades ?? []).map((e) => e.id))
   for (const grade of local.schoolGrades ?? []) {
     if (!remoteGrades.has(grade.id)) return true
+  }
+  if (
+    (local.schoolCalendarUpdatedAt ?? 0) >
+    (remote.schoolCalendarUpdatedAt ?? 0)
+  ) {
+    return true
   }
   for (const [date, day] of Object.entries(local.days ?? {})) {
     const remoteDay = remote.days?.[date]
@@ -202,6 +220,16 @@ function schoolGradesChanged(prev: AppData, next: AppData): boolean {
   const db = next.deletedSchoolGradeIds ?? []
   if (da.length !== db.length) return true
   return da.join() !== db.join()
+}
+
+function schoolCalendarChanged(prev: AppData, next: AppData): boolean {
+  return (
+    (prev.schoolCalendarUpdatedAt ?? 0) !==
+      (next.schoolCalendarUpdatedAt ?? 0) ||
+    (prev.extraBreakDates ?? []).join() !==
+      (next.extraBreakDates ?? []).join() ||
+    (prev.extraSchoolDates ?? []).join() !== (next.extraSchoolDates ?? []).join()
+  )
 }
 
 function normalizeStringIds(raw: unknown): string[] {
@@ -245,6 +273,19 @@ function medicationsSignature(
   )
 }
 
+function electivesSignature(
+  list: ReturnType<typeof normalizeElectives>,
+): string {
+  return JSON.stringify(
+    list.map((e) => ({
+      id: e.id,
+      title: e.title,
+      time: e.time,
+      weekdays: [...e.weekdays],
+    })),
+  )
+}
+
 function normalizeStreakInts(raw: unknown): number[] {
   if (!Array.isArray(raw)) return []
   return raw
@@ -278,6 +319,7 @@ function hydrateAppData(
     [],
   )
   return applyPendingStickerMoneyRewards(
+    applyPendingStickerRobloxRewards(
     applyPendingRobloxStreakRewards({
       ...base,
       ...partial,
@@ -286,6 +328,11 @@ function hydrateAppData(
       chewEntries: partial.chewEntries ?? [],
       schoolGrades: school.grades,
       deletedSchoolGradeIds: school.deletedIds,
+      extraBreakDates: normalizeDateKeys(partial.extraBreakDates),
+      extraSchoolDates: normalizeDateKeys(partial.extraSchoolDates),
+      schoolCalendarUpdatedAt: normalizeNonNegInt(
+        partial.schoolCalendarUpdatedAt,
+      ),
       exerciseControls: normalizeExerciseControls(
         partial.exerciseControls ?? base.exerciseControls,
       ),
@@ -315,6 +362,9 @@ function hydrateAppData(
       moneyBankRub: normalizeNonNegInt(partial.moneyBankRub),
       banksUpdatedAt: normalizeNonNegInt(partial.banksUpdatedAt),
       claimedStickerMoneyIds: normalizeStringIds(partial.claimedStickerMoneyIds),
+      claimedStickerRobloxIds: normalizeStringIds(
+        partial.claimedStickerRobloxIds,
+      ),
       dismissedGiftStickerIds: pruneUnearnedBookGiftIds(
         normalizeStringIds(partial.dismissedGiftStickerIds),
         finishedBooks.length,
@@ -327,7 +377,6 @@ function hydrateAppData(
       bestParentTasks,
       readingBooks,
       finishedBooks,
-      studioSprintStates: normalizeStudioSprintStates(partial.studioSprintStates),
       puzzleCount: resolvePuzzleCount({
         ...base,
         ...partial,
@@ -340,7 +389,10 @@ function hydrateAppData(
         days: partial.days ?? base.days,
         legoCount: normalizeNonNegInt(partial.legoCount),
       } as AppData),
+      electives: normalizeElectives(partial.electives),
+      electivesUpdatedAt: normalizeNonNegInt(partial.electivesUpdatedAt),
     }),
+    ),
   )
 }
 
@@ -353,7 +405,10 @@ function load(): AppData {
 
     const parsed = JSON.parse(source) as StoredData
     const days = parsed.days ?? {}
-    const streak = currentStreak(days)
+    const extraBreakDates = normalizeDateKeys(parsed.extraBreakDates)
+    const extraSchoolDates = normalizeDateKeys(parsed.extraSchoolDates)
+    const plan = schoolDayPlanFromData({ extraBreakDates, extraSchoolDates })
+    const streak = currentStreak(days, todayKey(), plan)
     // Legacy saves had no claim list — mark already-reached tiers as claimed
     // so upgrade doesn't dump a huge catch-up Roblox bonus in one day.
     const claimedRobloxStreaks = Array.isArray(parsed.claimedRobloxStreaks)
@@ -387,6 +442,20 @@ function load(): AppData {
       parsed.readingBooks,
       parsed.currentBook,
     )
+    const claimedStickerRobloxIds = Array.isArray(
+      parsed.claimedStickerRobloxIds,
+    )
+      ? normalizeStringIds(parsed.claimedStickerRobloxIds)
+      : seedClaimedStickerRobloxIds({
+          ...defaultAppData(),
+          days,
+          chewEntries,
+          schoolGrades: normalizeSchoolGrades(parsed.schoolGrades),
+          finishedBooks,
+          readingBooks,
+          bestParentTasks,
+          bestStreak,
+        })
     // Legacy: already-unlocked gift stickers count as already given.
     const dismissedGiftStickerIds = Array.isArray(
       parsed.dismissedGiftStickerIds,
@@ -425,15 +494,22 @@ function load(): AppData {
       moneyBankRub: normalizeNonNegInt(parsed.moneyBankRub),
       banksUpdatedAt: normalizeNonNegInt(parsed.banksUpdatedAt),
       claimedStickerMoneyIds,
+      claimedStickerRobloxIds,
       dismissedGiftStickerIds,
       equippedStickerId: normalizeEquippedStickerId(parsed.equippedStickerId),
       bestStreak,
       bestParentTasks,
       readingBooks,
       finishedBooks,
-      studioSprintStates: normalizeStudioSprintStates(parsed.studioSprintStates),
       puzzleCount: normalizeNonNegInt(parsed.puzzleCount),
       legoCount: normalizeNonNegInt(parsed.legoCount),
+      extraBreakDates,
+      extraSchoolDates,
+      schoolCalendarUpdatedAt: normalizeNonNegInt(
+        parsed.schoolCalendarUpdatedAt,
+      ),
+      electives: parsed.electives as AppData['electives'] | undefined,
+      electivesUpdatedAt: parsed.electivesUpdatedAt,
     })
   } catch {
     return defaultAppData()
@@ -459,6 +535,19 @@ function resolveClaimedStickerMoneyIds(
   return normalizeStringIds(raw)
 }
 
+function resolveClaimedStickerRobloxIds(
+  raw: unknown,
+  seedFrom: Partial<AppData>,
+): string[] {
+  if (!Array.isArray(raw)) {
+    return seedClaimedStickerRobloxIds({
+      ...defaultAppData(),
+      ...seedFrom,
+    })
+  }
+  return normalizeStringIds(raw)
+}
+
 function resolveDismissedGiftStickerIds(
   raw: unknown,
   seedFrom: Partial<AppData>,
@@ -473,8 +562,33 @@ function resolveDismissedGiftStickerIds(
 }
 
 function applyCloud(prev: AppData, payload: CloudPayload): AppData {
-  const days = mergeDaysMaps(prev.days ?? {}, payload.days ?? {})
-  const streak = currentStreak(days)
+  const remoteCalAt = normalizeNonNegInt(payload.schoolCalendarUpdatedAt)
+  const localCalAt = normalizeNonNegInt(prev.schoolCalendarUpdatedAt)
+  let extraBreakDates: string[]
+  let extraSchoolDates: string[]
+  let schoolCalendarUpdatedAt: number
+  if (remoteCalAt === 0 && localCalAt === 0) {
+    extraBreakDates = normalizeDateKeys([
+      ...(prev.extraBreakDates ?? []),
+      ...(payload.extraBreakDates ?? []),
+    ])
+    extraSchoolDates = normalizeDateKeys([
+      ...(prev.extraSchoolDates ?? []),
+      ...(payload.extraSchoolDates ?? []),
+    ])
+    schoolCalendarUpdatedAt = 0
+  } else if (remoteCalAt >= localCalAt) {
+    extraBreakDates = normalizeDateKeys(payload.extraBreakDates)
+    extraSchoolDates = normalizeDateKeys(payload.extraSchoolDates)
+    schoolCalendarUpdatedAt = remoteCalAt
+  } else {
+    extraBreakDates = normalizeDateKeys(prev.extraBreakDates)
+    extraSchoolDates = normalizeDateKeys(prev.extraSchoolDates)
+    schoolCalendarUpdatedAt = localCalAt
+  }
+  const plan = schoolDayPlanFromData({ extraBreakDates, extraSchoolDates })
+  const days = mergeDaysMaps(prev.days ?? {}, payload.days ?? {}, plan)
+  const streak = currentStreak(days, todayKey(), plan)
   const claimedRobloxStreaks =
     payload.claimedRobloxStreaks ??
     prev.claimedRobloxStreaks ??
@@ -519,6 +633,22 @@ function applyCloud(prev: AppData, payload: CloudPayload): AppData {
     prev.deletedSchoolGradeIds ?? [],
     payload.deletedSchoolGradeIds ?? [],
   )
+  const remoteClaimedRoblox = resolveClaimedStickerRobloxIds(
+    payload.claimedStickerRobloxIds,
+    {
+      days,
+      chewEntries,
+      schoolGrades: school.grades,
+      finishedBooks,
+      readingBooks,
+      bestParentTasks,
+      bestStreak,
+    },
+  )
+  const claimedRoblox = new Set([
+    ...(prev.claimedStickerRobloxIds ?? []),
+    ...remoteClaimedRoblox,
+  ])
   const remoteDismissed = resolveDismissedGiftStickerIds(
     payload.dismissedGiftStickerIds,
     {
@@ -548,6 +678,9 @@ function applyCloud(prev: AppData, payload: CloudPayload): AppData {
   const remoteMedAt = normalizeNonNegInt(payload.medicationUpdatedAt)
   const localMedAt = normalizeNonNegInt(prev.medicationUpdatedAt)
   const preferRemoteMed = remoteMedAt >= localMedAt
+  const remoteElectivesAt = normalizeNonNegInt(payload.electivesUpdatedAt)
+  const localElectivesAt = normalizeNonNegInt(prev.electivesUpdatedAt)
+  const preferRemoteElectives = remoteElectivesAt >= localElectivesAt
   // Remote order wins (parent add/reorder); see mergeExercises.
   const exercises = mergeExercises(
     prev.exercises ?? [],
@@ -563,6 +696,9 @@ function applyCloud(prev: AppData, payload: CloudPayload): AppData {
     chewEntries,
     schoolGrades: school.grades,
     deletedSchoolGradeIds: school.deletedIds,
+    extraBreakDates,
+    extraSchoolDates,
+    schoolCalendarUpdatedAt,
     exercises,
     exerciseControls,
     cookingLeft: payload.cookingLeft ?? prev.cookingLeft,
@@ -590,11 +726,14 @@ function applyCloud(prev: AppData, payload: CloudPayload): AppData {
       ? resolveMedications(payload.medications, payload.medicationName)
       : resolveMedications(prev.medications, undefined),
     medicationUpdatedAt: Math.max(remoteMedAt, localMedAt),
+    electives: preferRemoteElectives ? payload.electives : prev.electives,
+    electivesUpdatedAt: Math.max(remoteElectivesAt, localElectivesAt),
     moneyBankRub: preferRemoteBanks
       ? normalizeNonNegInt(payload.moneyBankRub ?? prev.moneyBankRub)
       : normalizeNonNegInt(prev.moneyBankRub),
     banksUpdatedAt: Math.max(remoteBanksAt, localBanksAt),
     claimedStickerMoneyIds: [...claimedMoney],
+    claimedStickerRobloxIds: [...claimedRoblox],
     dismissedGiftStickerIds: [...dismissedGifts],
     equippedStickerId:
       payload.equippedStickerId !== undefined
@@ -604,10 +743,6 @@ function applyCloud(prev: AppData, payload: CloudPayload): AppData {
     bestParentTasks,
     readingBooks,
     finishedBooks,
-    studioSprintStates: mergeStudioSprintStates(
-      prev.studioSprintStates,
-      payload.studioSprintStates,
-    ),
     puzzleCount: Math.max(
       resolvePuzzleCount(prev),
       normalizeNonNegInt(payload.puzzleCount),
@@ -637,7 +772,10 @@ function mergeReadingBooks(
 /** Replace local state with cloud on family join (no merge with previous family). */
 function replaceFromCloud(payload: CloudPayload): AppData {
   const days = payload.days ?? {}
-  const streak = currentStreak(days)
+  const extraBreakDates = normalizeDateKeys(payload.extraBreakDates)
+  const extraSchoolDates = normalizeDateKeys(payload.extraSchoolDates)
+  const plan = schoolDayPlanFromData({ extraBreakDates, extraSchoolDates })
+  const streak = currentStreak(days, todayKey(), plan)
   const parentNow = countParentTasksDone(days)
   const bestStreak = Math.max(payload.bestStreak ?? 0, streak)
   const bestParentTasks = Math.max(payload.bestParentTasks ?? 0, parentNow)
@@ -652,6 +790,11 @@ function replaceFromCloud(payload: CloudPayload): AppData {
     chewEntries,
     schoolGrades: payload.schoolGrades,
     deletedSchoolGradeIds: payload.deletedSchoolGradeIds,
+    extraBreakDates,
+    extraSchoolDates,
+    schoolCalendarUpdatedAt: normalizeNonNegInt(
+      payload.schoolCalendarUpdatedAt,
+    ),
     exercises: resolveExercises(payload.exercises),
     exerciseControls: normalizeExerciseControls(payload.exerciseControls),
     cookingLeft: payload.cookingLeft ?? 5,
@@ -668,6 +811,8 @@ function replaceFromCloud(payload: CloudPayload): AppData {
       payload.medicationName,
     ),
     medicationUpdatedAt: normalizeNonNegInt(payload.medicationUpdatedAt),
+    electives: payload.electives,
+    electivesUpdatedAt: normalizeNonNegInt(payload.electivesUpdatedAt),
     moneyBankRub: payload.moneyBankRub ?? 0,
     banksUpdatedAt: normalizeNonNegInt(
       payload.banksUpdatedAt ?? payload.updatedAt,
@@ -677,6 +822,18 @@ function replaceFromCloud(payload: CloudPayload): AppData {
       days,
       bestParentTasks,
       bestStreak,
+    ),
+    claimedStickerRobloxIds: resolveClaimedStickerRobloxIds(
+      payload.claimedStickerRobloxIds,
+      {
+        days,
+        chewEntries,
+        schoolGrades: normalizeSchoolGrades(payload.schoolGrades),
+        finishedBooks,
+        readingBooks,
+        bestParentTasks,
+        bestStreak,
+      },
     ),
     dismissedGiftStickerIds: resolveDismissedGiftStickerIds(
       payload.dismissedGiftStickerIds,
@@ -694,7 +851,6 @@ function replaceFromCloud(payload: CloudPayload): AppData {
     bestParentTasks,
     readingBooks,
     finishedBooks,
-    studioSprintStates: normalizeStudioSprintStates(payload.studioSprintStates),
     puzzleCount: normalizeNonNegInt(payload.puzzleCount),
     legoCount: normalizeNonNegInt(payload.legoCount),
   })
@@ -851,12 +1007,29 @@ export function useAppData() {
             medicationUpdatedAt: Date.now(),
           }
         }
+        const electivesNext = normalizeElectives(withMeta.electives)
+        const electivesPrev = normalizeElectives(prev.electives)
+        if (
+          electivesSignature(electivesNext) !==
+            electivesSignature(electivesPrev) &&
+          normalizeNonNegInt(withMeta.electivesUpdatedAt) ===
+            normalizeNonNegInt(prev.electivesUpdatedAt)
+        ) {
+          withMeta = {
+            ...withMeta,
+            electives: electivesNext,
+            electivesUpdatedAt: Date.now(),
+          }
+        }
         const normalized = hydrateAppData(withMeta)
         persistLocal(normalized)
         schedulePush(
           normalized,
           chewEntriesChanged(prev, normalized) ||
-            schoolGradesChanged(prev, normalized) ? 0 : PUSH_DEBOUNCE_MS,
+            schoolGradesChanged(prev, normalized) ||
+            schoolCalendarChanged(prev, normalized)
+            ? 0
+            : PUSH_DEBOUNCE_MS,
         )
         return normalized
       })
@@ -1042,7 +1215,6 @@ export function useAppData() {
   const leaveFamilyCloud = useCallback(() => {
     const code = loadFamilyCode()
     void unregisterDeviceToken(code)
-    void stopFamilyBackgroundAlerts()
     leaveFamily()
     pendingPushRef.current = null
     savePendingSync(false)
