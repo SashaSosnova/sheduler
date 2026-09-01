@@ -1032,6 +1032,11 @@
   box-shadow: none;
 }
 
+.parent-fold-body {
+  padding: 0 14px 14px;
+  border-top: 1px solid var(--line);
+}
+
 .calendar-head {
   display: flex;
   align-items: center;

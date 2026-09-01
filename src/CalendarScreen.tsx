@@ -619,6 +619,7 @@ export function CalendarScreen({
           onDateChange={setGradeDate}
           diary
           readOnly={!canEditSelected}
+          collapsed
         />
       ) : null}
 
@@ -786,18 +787,29 @@ export function CalendarScreen({
       </section>
 
       {canEditMustDo && onChange ? (
-        <section className="card">
-          <div className="card-title-row">
-            <h2>Расписание факультативов</h2>
+        <details className="parent-calendar-fold">
+          <summary className="parent-calendar-fold-head">
+            <span className="parent-calendar-fold-title">
+              Расписание факультативов
+            </span>
+            <span
+              className={
+                (data.electives ?? []).length ? 'pill' : 'pill muted'
+              }
+            >
+              {(data.electives ?? []).length}
+            </span>
+          </summary>
+          <div className="parent-fold-body">
+            <p className="hint">
+              Ребёнок видит занятия только в нужный день
+            </p>
+            <ElectiveEditor
+              electives={data.electives ?? []}
+              onChange={saveElectives}
+            />
           </div>
-          <p className="hint" style={{ marginTop: 6 }}>
-            Ребёнок видит занятия только в нужный день
-          </p>
-          <ElectiveEditor
-            electives={data.electives ?? []}
-            onChange={saveElectives}
-          />
-        </section>
+        </details>
       ) : null}
 
       {canEditMustDo && onChange ? (

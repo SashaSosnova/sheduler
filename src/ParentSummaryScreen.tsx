@@ -46,6 +46,7 @@ export function ParentSummaryScreen({ data, onChange }: Props) {
         date={clampSchoolGradeDate(gradeDate)}
         onDateChange={setGradeDate}
         diary
+        collapsed
       />
 
       <section className="card">

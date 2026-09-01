@@ -23,6 +23,8 @@ type Props = {
   /** Full diary: date picker + history of all marks */
   diary?: boolean
   onDateChange?: (date: string) => void
+  /** Parent screens: start collapsed behind a summary row */
+  collapsed?: boolean
 }
 
 function formatDiaryDate(key: string): string {
@@ -90,6 +92,7 @@ export function SchoolGradesCard({
   embedded = false,
   diary = false,
   onDateChange,
+  collapsed = false,
 }: Props) {
   const grades = data.schoolGrades ?? []
   const today = todayKey()
@@ -147,17 +150,21 @@ export function SchoolGradesCard({
           ? `Пятёрки: ${fiveCounts}`
           : `Пятёрки: ${fiveCounts}. Для четверти без троек пиши все оценки, не только 5.`
 
+  const pill = todayGrades.length ? (
+    <span className="pill">{todayGrades.length}</span>
+  ) : (
+    <span className="pill muted">оценки</span>
+  )
+
   const body = (
     <>
-      <div className="card-title-row">
-        {embedded ? <h3>{title}</h3> : <h2>{title}</h2>}
-        {todayGrades.length ? (
-          <span className="pill">{todayGrades.length}</span>
-        ) : (
-          <span className="pill muted">оценки</span>
-        )}
-      </div>
-      <p className="hint" style={{ marginTop: 8 }}>
+      {collapsed ? null : (
+        <div className="card-title-row">
+          {embedded ? <h3>{title}</h3> : <h2>{title}</h2>}
+          {pill}
+        </div>
+      )}
+      <p className="hint" style={{ marginTop: collapsed ? 0 : 8 }}>
         {hint}
       </p>
 
@@ -247,6 +254,17 @@ export function SchoolGradesCard({
     </>
   )
 
+  if (collapsed) {
+    return (
+      <details className="parent-calendar-fold">
+        <summary className="parent-calendar-fold-head">
+          <span className="parent-calendar-fold-title">{title}</span>
+          {pill}
+        </summary>
+        <div className="parent-fold-body">{body}</div>
+      </details>
+    )
+  }
   if (embedded) {
     return <div className="calendar-detail-block">{body}</div>
   }
