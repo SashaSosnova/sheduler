@@ -6,7 +6,9 @@ import {
 import {
   deleteDoc,
   doc,
+  enableNetwork,
   getDoc,
+  getDocFromServer,
   onSnapshot,
   setDoc,
   type Unsubscribe,
@@ -187,6 +189,46 @@ export async function updateFamilyChildName(
   )
 }
 
+function incomingCloudPayload(remote: Partial<CloudPayload>): CloudPayload {
+  return {
+    days: remote.days ?? {},
+    chewEntries: remote.chewEntries ?? [],
+    schoolGrades: remote.schoolGrades ?? [],
+    deletedSchoolGradeIds: remote.deletedSchoolGradeIds ?? [],
+    cookingLeft: remote.cookingLeft ?? 5,
+    exercises: remote.exercises,
+    exerciseControls: remote.exerciseControls,
+    claimedRobloxStreaks: remote.claimedRobloxStreaks ?? [],
+    robloxBonusBankMin: remote.robloxBonusBankMin ?? 0,
+    robloxBonusEarnedMin: remote.robloxBonusEarnedMin,
+    robloxEnabled: remote.robloxEnabled,
+    robloxLimitMin: remote.robloxLimitMin,
+    robloxSettingsUpdatedAt: remote.robloxSettingsUpdatedAt,
+    medications: remote.medications,
+    medicationName: remote.medicationName,
+    medicationUpdatedAt: remote.medicationUpdatedAt,
+    electives: remote.electives,
+    electivesUpdatedAt: remote.electivesUpdatedAt,
+    moneyBankRub: remote.moneyBankRub,
+    banksUpdatedAt: remote.banksUpdatedAt,
+    claimedStickerMoneyIds: remote.claimedStickerMoneyIds,
+    claimedStickerRobloxIds: remote.claimedStickerRobloxIds,
+    dismissedGiftStickerIds: remote.dismissedGiftStickerIds,
+    equippedStickerId: remote.equippedStickerId ?? null,
+    bestStreak: remote.bestStreak ?? 0,
+    bestParentTasks: remote.bestParentTasks ?? 0,
+    readingBooks: remote.readingBooks,
+    currentBook: remote.currentBook,
+    finishedBooks: remote.finishedBooks ?? [],
+    puzzleCount: remote.puzzleCount ?? 0,
+    legoCount: remote.legoCount ?? 0,
+    extraBreakDates: remote.extraBreakDates ?? [],
+    extraSchoolDates: remote.extraSchoolDates ?? [],
+    schoolCalendarUpdatedAt: remote.schoolCalendarUpdatedAt ?? 0,
+    updatedAt: remote.updatedAt ?? Date.now(),
+  }
+}
+
 export function toCloudPayload(data: AppData, updatedAt = Date.now()): CloudPayload {
   return {
     days: data.days,
@@ -261,43 +303,32 @@ export async function joinFamily(rawCode: string): Promise<CloudPayload> {
 
   // Cloud is the source of truth on join — never seed an empty family from
   // leftover local data (that would copy the previous family into this one).
-  return {
-    days: remote.days ?? {},
-    chewEntries: remote.chewEntries ?? [],
-    schoolGrades: remote.schoolGrades ?? [],
-    deletedSchoolGradeIds: remote.deletedSchoolGradeIds ?? [],
-    cookingLeft: remote.cookingLeft ?? 5,
-    exercises: remote.exercises,
-    exerciseControls: remote.exerciseControls,
-    claimedRobloxStreaks: remote.claimedRobloxStreaks ?? [],
-    robloxBonusBankMin: remote.robloxBonusBankMin ?? 0,
-    robloxBonusEarnedMin: remote.robloxBonusEarnedMin,
-    robloxEnabled: remote.robloxEnabled,
-    robloxLimitMin: remote.robloxLimitMin,
-    robloxSettingsUpdatedAt: remote.robloxSettingsUpdatedAt,
-    medications: remote.medications,
-    medicationName: remote.medicationName,
-    medicationUpdatedAt: remote.medicationUpdatedAt,
-    electives: remote.electives,
-    electivesUpdatedAt: remote.electivesUpdatedAt,
-    moneyBankRub: remote.moneyBankRub,
-    // Keep undefined when absent so clients can seed legacy families.
-    claimedStickerMoneyIds: remote.claimedStickerMoneyIds,
-    claimedStickerRobloxIds: remote.claimedStickerRobloxIds,
-    dismissedGiftStickerIds: remote.dismissedGiftStickerIds,
-    equippedStickerId: remote.equippedStickerId ?? null,
-    bestStreak: remote.bestStreak ?? 0,
-    bestParentTasks: remote.bestParentTasks ?? 0,
-    readingBooks: remote.readingBooks,
-    currentBook: remote.currentBook,
-    finishedBooks: remote.finishedBooks ?? [],
-    puzzleCount: remote.puzzleCount ?? 0,
-    legoCount: remote.legoCount ?? 0,
-    extraBreakDates: remote.extraBreakDates ?? [],
-    extraSchoolDates: remote.extraSchoolDates ?? [],
-    schoolCalendarUpdatedAt: remote.schoolCalendarUpdatedAt ?? 0,
-    updatedAt: remote.updatedAt ?? Date.now(),
+  return incomingCloudPayload(remote)
+}
+
+/** Wake the Firestore listen channel after an Android WebView pause. */
+export async function wakeFamilyConnection(): Promise<void> {
+  try {
+    await enableNetwork(getFirebaseDb())
+  } catch {
+    /* already enabled / offline */
   }
+}
+
+/** Fresh family doc from the server (falls back to cache if offline). */
+export async function fetchFamilyData(
+  code: string,
+): Promise<CloudPayload | null> {
+  await ensureAuth()
+  const ref = familyRef(code)
+  let snap
+  try {
+    snap = await getDocFromServer(ref)
+  } catch {
+    snap = await getDoc(ref)
+  }
+  if (!snap.exists()) return null
+  return incomingCloudPayload(snap.data() as CloudPayload)
 }
 
 export async function pushFamilyData(code: string, data: AppData): Promise<number> {
@@ -316,7 +347,10 @@ export async function pushFamilyData(code: string, data: AppData): Promise<numbe
 
 export function subscribeFamily(
   code: string,
-  onData: (payload: CloudPayload) => void,
+  onData: (
+    payload: CloudPayload,
+    meta: { fromCache: boolean },
+  ) => void,
   onError: (message: string) => void,
 ): Unsubscribe {
   return onSnapshot(
@@ -326,43 +360,8 @@ export function subscribeFamily(
         onError('Семья не найдена')
         return
       }
-      const remote = snap.data() as CloudPayload
-      onData({
-        days: remote.days ?? {},
-        chewEntries: remote.chewEntries ?? [],
-        schoolGrades: remote.schoolGrades ?? [],
-        deletedSchoolGradeIds: remote.deletedSchoolGradeIds ?? [],
-        cookingLeft: remote.cookingLeft ?? 5,
-        exercises: remote.exercises,
-        exerciseControls: remote.exerciseControls,
-        claimedRobloxStreaks: remote.claimedRobloxStreaks ?? [],
-        robloxBonusBankMin: remote.robloxBonusBankMin ?? 0,
-        robloxBonusEarnedMin: remote.robloxBonusEarnedMin,
-        robloxEnabled: remote.robloxEnabled,
-        robloxLimitMin: remote.robloxLimitMin,
-        robloxSettingsUpdatedAt: remote.robloxSettingsUpdatedAt,
-        medications: remote.medications,
-        medicationName: remote.medicationName,
-        medicationUpdatedAt: remote.medicationUpdatedAt,
-        electives: remote.electives,
-        electivesUpdatedAt: remote.electivesUpdatedAt,
-        moneyBankRub: remote.moneyBankRub,
-        banksUpdatedAt: remote.banksUpdatedAt,
-        claimedStickerMoneyIds: remote.claimedStickerMoneyIds,
-        claimedStickerRobloxIds: remote.claimedStickerRobloxIds,
-        dismissedGiftStickerIds: remote.dismissedGiftStickerIds,
-        equippedStickerId: remote.equippedStickerId ?? null,
-        bestStreak: remote.bestStreak ?? 0,
-        bestParentTasks: remote.bestParentTasks ?? 0,
-        readingBooks: remote.readingBooks,
-        currentBook: remote.currentBook,
-        finishedBooks: remote.finishedBooks ?? [],
-        puzzleCount: remote.puzzleCount ?? 0,
-        legoCount: remote.legoCount ?? 0,
-        extraBreakDates: remote.extraBreakDates ?? [],
-        extraSchoolDates: remote.extraSchoolDates ?? [],
-        schoolCalendarUpdatedAt: remote.schoolCalendarUpdatedAt ?? 0,
-        updatedAt: remote.updatedAt ?? Date.now(),
+      onData(incomingCloudPayload(snap.data() as CloudPayload), {
+        fromCache: snap.metadata.fromCache,
       })
     },
     (err) => {

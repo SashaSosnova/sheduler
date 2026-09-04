@@ -10,6 +10,11 @@ const config: CapacitorConfig = {
       presentationOptions: ['badge', 'sound', 'alert'],
     },
   },
+  cordova: {
+    preferences: {
+      KeepRunning: 'true',
+    },
+  },
 }
 
 export default config

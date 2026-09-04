@@ -21,6 +21,7 @@ import {
 } from './data'
 import {
   createFamily,
+  fetchFamilyData,
   joinFamily,
   leaveFamily,
   loadFamilyCode,
@@ -28,6 +29,7 @@ import {
   subscribeFamily,
   ensureAuth,
   unregisterDeviceToken,
+  wakeFamilyConnection,
   type CloudPayload,
   type FamilyStatus,
 } from './familySync'
@@ -63,6 +65,7 @@ const STORAGE_KEY = 'vacation-planner-v2'
 const PENDING_SYNC_KEY = 'vacation-planner-pending-sync'
 const PUSH_DEBOUNCE_MS = 400
 const PUSH_RETRY_MS = 2500
+const BACKGROUND_SYNC_MS = 25_000
 
 type StoredData = {
   days?: Record<string, DayLog>
@@ -180,6 +183,30 @@ function localAheadOfRemote(local: AppData, remote: CloudPayload): boolean {
   if (
     (local.schoolCalendarUpdatedAt ?? 0) >
     (remote.schoolCalendarUpdatedAt ?? 0)
+  ) {
+    return true
+  }
+  if (
+    normalizeNonNegInt(local.banksUpdatedAt) >
+    normalizeNonNegInt(remote.banksUpdatedAt ?? remote.updatedAt)
+  ) {
+    return true
+  }
+  if (
+    normalizeNonNegInt(local.robloxSettingsUpdatedAt) >
+    normalizeNonNegInt(remote.robloxSettingsUpdatedAt)
+  ) {
+    return true
+  }
+  if (
+    normalizeNonNegInt(local.medicationUpdatedAt) >
+    normalizeNonNegInt(remote.medicationUpdatedAt)
+  ) {
+    return true
+  }
+  if (
+    normalizeNonNegInt(local.electivesUpdatedAt) >
+    normalizeNonNegInt(remote.electivesUpdatedAt)
   ) {
     return true
   }
@@ -874,6 +901,8 @@ export function useAppData() {
   const pendingPushRef = useRef<AppData | null>(null)
   const pushInFlightRef = useRef(false)
   const pushAgainRef = useRef(false)
+  const pullInFlightRef = useRef(false)
+  const lastPullAt = useRef(0)
 
   useEffect(() => {
     dataRef.current = data
@@ -924,6 +953,8 @@ export function useAppData() {
       lastRemoteAt.current = updatedAt
       if (pendingPushRef.current === next) {
         pendingPushRef.current = null
+        savePendingSync(false)
+      } else if (pendingPushRef.current == null) {
         savePendingSync(false)
       }
       ok = true
@@ -1022,6 +1053,7 @@ export function useAppData() {
           }
         }
         const normalized = hydrateAppData(withMeta)
+        dataRef.current = normalized
         persistLocal(normalized)
         schedulePush(
           normalized,
@@ -1037,6 +1069,89 @@ export function useAppData() {
     [schedulePush],
   )
 
+  const ingestRemote = useCallback(
+    (
+      payload: CloudPayload,
+      options?: { force?: boolean; fromCache?: boolean },
+    ) => {
+      const remoteAt = payload.updatedAt || 0
+      const isEcho = remoteAt > 0 && remoteAt === lastRemoteAt.current
+      const isStaleCache =
+        Boolean(options?.fromCache) &&
+        remoteAt > 0 &&
+        remoteAt < lastRemoteAt.current
+      if (!options?.force && (isEcho || isStaleCache)) {
+        setFamily((f) => ({
+          ...f,
+          connected: true,
+          syncing: false,
+          lastSyncedAt: remoteAt || f.lastSyncedAt,
+          error: null,
+        }))
+        return
+      }
+      lastRemoteAt.current = Math.max(lastRemoteAt.current, remoteAt)
+      const rawBooks = payload.finishedBooks
+      const collapsedDuplicateBooks =
+        Array.isArray(rawBooks) &&
+        rawBooks.length > normalizeFinishedBooks(rawBooks).length
+      skipPushUntil.current = collapsedDuplicateBooks
+        ? 0
+        : Date.now() + 1200
+      setData((prev) => {
+        const next = applyCloud(prev, payload)
+        dataRef.current = next
+        persistLocal(next)
+        const shouldUpload =
+          collapsedDuplicateBooks ||
+          loadPendingSync() ||
+          pendingPushRef.current != null ||
+          localAheadOfRemote(next, payload)
+        if (shouldUpload) {
+          pendingPushRef.current = next
+          savePendingSync(true)
+          schedulePush(next, 0)
+        }
+        return next
+      })
+      setFamily((f) => ({
+        ...f,
+        connected: true,
+        syncing: false,
+        lastSyncedAt: remoteAt || f.lastSyncedAt,
+        error: null,
+      }))
+    },
+    [schedulePush],
+  )
+
+  const pullAndApply = useCallback(async (reason: 'start' | 'resume' = 'resume') => {
+    const code = loadFamilyCode()
+    if (!code || !isFirebaseConfigured()) return
+    if (pullInFlightRef.current) return
+    if (reason !== 'start' && Date.now() - lastPullAt.current < 800) return
+    pullInFlightRef.current = true
+    lastPullAt.current = Date.now()
+    setFamily((f) => ({ ...f, syncing: true, error: null }))
+    try {
+      await wakeFamilyConnection()
+      await ensureAuth()
+      const payload = await fetchFamilyData(code)
+      if (payload) ingestRemote(payload, { force: true })
+      else setFamily((f) => ({ ...f, syncing: false }))
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Ошибка синхронизации'
+      setFamily((f) => ({
+        ...f,
+        syncing: false,
+        error: message,
+      }))
+    } finally {
+      pullInFlightRef.current = false
+    }
+  }, [ingestRemote])
+
   useEffect(() => {
     if (!isFirebaseConfigured()) return
     const code = loadFamilyCode()
@@ -1050,56 +1165,14 @@ export function useAppData() {
       try {
         await ensureAuth()
         if (cancelled) return
-        // Upload anything left from a previous force-close before we listen,
-        // so a stale cloud snapshot cannot sit on top of an unsynced chew entry.
-        if (loadPendingSync() || pendingPushRef.current) {
-          pendingPushRef.current = pendingPushRef.current ?? dataRef.current
-          await flushPush('flush')
-        }
+        // Pull cloud first, then merge+upload. Pushing local-before-listen
+        // used to overwrite the child's newer day with a stale parent copy.
+        await pullAndApply('start')
         if (cancelled) return
         unsub = subscribeFamily(
           code,
-          (payload) => {
-            if (payload.updatedAt && payload.updatedAt <= lastRemoteAt.current) {
-              setFamily((f) => ({
-                ...f,
-                connected: true,
-                syncing: false,
-                lastSyncedAt: payload.updatedAt,
-              }))
-              return
-            }
-            lastRemoteAt.current = payload.updatedAt
-            const rawBooks = payload.finishedBooks
-            const collapsedDuplicateBooks =
-              Array.isArray(rawBooks) &&
-              rawBooks.length > normalizeFinishedBooks(rawBooks).length
-            skipPushUntil.current = collapsedDuplicateBooks
-              ? 0
-              : Date.now() + 1200
-            setData((prev) => {
-              const next = applyCloud(prev, payload)
-              persistLocal(next)
-              const shouldUpload =
-                collapsedDuplicateBooks ||
-                loadPendingSync() ||
-                pendingPushRef.current != null ||
-                localAheadOfRemote(next, payload)
-              if (shouldUpload) {
-                pendingPushRef.current = next
-                savePendingSync(true)
-                schedulePush(next)
-              }
-              return next
-            })
-            setFamily((f) => ({
-              ...f,
-              code,
-              connected: true,
-              syncing: false,
-              lastSyncedAt: payload.updatedAt,
-              error: null,
-            }))
+          (payload, meta) => {
+            ingestRemote(payload, { fromCache: meta.fromCache })
           },
           (message) => {
             setFamily((f) => ({
@@ -1121,39 +1194,61 @@ export function useAppData() {
       cancelled = true
       unsub()
     }
-  }, [family.code, schedulePush, flushPush])
+  }, [family.code, ingestRemote, pullAndApply])
 
   useEffect(() => {
+    let backgroundTick: number | null = null
+    const stopBackgroundTick = () => {
+      if (backgroundTick == null) return
+      window.clearInterval(backgroundTick)
+      backgroundTick = null
+    }
+    const startBackgroundTick = () => {
+      if (backgroundTick != null) return
+      backgroundTick = window.setInterval(() => {
+        void pullAndApply('resume')
+        if (pendingPushRef.current || loadPendingSync()) {
+          void flushPush('retry')
+        }
+      }, BACKGROUND_SYNC_MS)
+    }
     const onFlush = () => {
       if (!pendingPushRef.current && !loadPendingSync()) return
       clearPushTimers()
       void flushPush('flush')
     }
+    const onVisible = () => {
+      stopBackgroundTick()
+      void pullAndApply('resume')
+    }
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') {
         onFlush()
+        startBackgroundTick()
         return
       }
-      if (pendingPushRef.current || loadPendingSync()) {
-        void flushPush('retry')
-      }
+      onVisible()
     }
     const onOnline = () => {
-      if (pendingPushRef.current || loadPendingSync()) {
-        void flushPush('retry')
-      }
+      void pullAndApply('resume')
     }
+    if (document.visibilityState === 'hidden') startBackgroundTick()
     document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('focus', onVisible)
+    window.addEventListener('pageshow', onVisible)
     window.addEventListener('pagehide', onFlush)
     window.addEventListener('online', onOnline)
     document.addEventListener('freeze', onFlush)
     return () => {
+      stopBackgroundTick()
       document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('focus', onVisible)
+      window.removeEventListener('pageshow', onVisible)
       window.removeEventListener('pagehide', onFlush)
       window.removeEventListener('online', onOnline)
       document.removeEventListener('freeze', onFlush)
     }
-  }, [flushPush, clearPushTimers])
+  }, [flushPush, clearPushTimers, pullAndApply])
 
   const createFamilyCloud = useCallback(async () => {
     if (!isFirebaseConfigured()) {

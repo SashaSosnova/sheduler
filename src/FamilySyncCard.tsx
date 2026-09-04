@@ -56,7 +56,7 @@ export function FamilySyncCard({
           </p>
           <p className="hint">
             {family.connected ? 'Онлайн' : 'Подключаемся…'}
-            {family.syncing ? ' · сохраняем…' : ''}
+            {family.syncing ? ' · синхронизируем…' : ''}
           </p>
           {family.lastSyncedAt ? (
             <p className="hint">

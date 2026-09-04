@@ -4,4 +4,8 @@
     <string name="title_activity_main">Sheduler</string>
     <string name="package_name">com.sosnova.sheduler</string>
     <string name="custom_url_scheme">com.sosnova.sheduler</string>
+    <string name="sync_keepalive_channel">Синхронизация</string>
+    <string name="sync_keepalive_channel_desc">Короткое окно после сворачивания, чтобы облако успело обновиться</string>
+    <string name="sync_keepalive_title">Sheduler</string>
+    <string name="sync_keepalive_text">Облако ещё синхронизируется</string>
 </resources>
