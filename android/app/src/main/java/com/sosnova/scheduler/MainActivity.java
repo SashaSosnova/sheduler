@@ -32,7 +32,7 @@ public class MainActivity extends BridgeActivity {
     WebView webView = getBridge().getWebView();
     if (webView == null) return;
     webView.onResume();
-    WebView.resumeTimers();
+    webView.resumeTimers();
   }
 
   private void notifyJsResume() {
