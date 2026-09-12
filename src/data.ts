@@ -561,12 +561,12 @@ export function formatRubDelta(n: number): string {
   return '0 ₽'
 }
 
-/** Saturday that closes the school-money week containing `date`. Sunday starts the next week. */
+/** Saturday that closes the school-money week containing `date`. Sunday still belongs to that Saturday; next week starts Monday. */
 export function weekEndSaturday(date: string): string {
   const [y, m, d] = date.split('-').map(Number)
   const dt = new Date(y, m - 1, d)
   const dow = dt.getDay()
-  const add = dow === 0 ? 6 : 6 - dow
+  const add = dow === 0 ? -1 : 6 - dow
   dt.setDate(dt.getDate() + add)
   return todayKey(dt)
 }

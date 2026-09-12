@@ -7,6 +7,7 @@ type Props = {
   onCreate: () => Promise<void>
   onJoin: (code: string) => Promise<void>
   onLeave: () => void
+  onRefresh?: () => void
   /** Parent phone: emphasize joining child's family code */
   joinPreferred?: boolean
 }
@@ -17,6 +18,7 @@ export function FamilySyncCard({
   onCreate,
   onJoin,
   onLeave,
+  onRefresh,
   joinPreferred = false,
 }: Props) {
   const [joinCode, setJoinCode] = useState('')
@@ -58,6 +60,9 @@ export function FamilySyncCard({
             {family.connected ? 'Онлайн' : 'Подключаемся…'}
             {family.syncing ? ' · синхронизируем…' : ''}
           </p>
+          <p className="hint">
+            Если галочки ребёнка не видны — нажми «Обновить сейчас».
+          </p>
           {family.lastSyncedAt ? (
             <p className="hint">
               Обновлено:{' '}
@@ -70,6 +75,18 @@ export function FamilySyncCard({
             </p>
           ) : null}
           <div className="row-gap">
+            {onRefresh ? (
+              <button
+                type="button"
+                className="btn primary"
+                disabled={busy || family.syncing}
+                onClick={() => {
+                  onRefresh()
+                }}
+              >
+                {family.syncing ? 'Обновляем…' : 'Обновить сейчас'}
+              </button>
+            ) : null}
             <button
               type="button"
               className="btn ghost"

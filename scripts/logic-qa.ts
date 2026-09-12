@@ -18,7 +18,9 @@ import {
   emptyDayLog,
   isRestDay,
   isWeekendDate,
+  mergeChewEntries,
   mergeDayLog,
+  mergeDaysMaps,
   mergeSchoolGrades,
   mergeWeeklyGradeWeeks,
   nextSchoolDateKey,
@@ -355,6 +357,40 @@ ok(
   splitPerfect.perfectAt == null,
 )
 
+const parentStaleDays = {
+  '2026-09-12': normalizeDayLog('2026-09-12', {
+    mustDo: { 'wash-am': true },
+  }),
+}
+const childFreshDays = {
+  '2026-09-12': normalizeDayLog('2026-09-12', {
+    mustDo: { exercise: true, homework: true },
+  }),
+}
+const parentPushDays = mergeDaysMaps(childFreshDays, parentStaleDays)
+ok(
+  'parent stale days keep child exercise and homework',
+  parentPushDays['2026-09-12']?.mustDo.exercise === true &&
+    parentPushDays['2026-09-12']?.mustDo.homework === true &&
+    parentPushDays['2026-09-12']?.mustDo['wash-am'] === true,
+)
+ok(
+  'parent stale chew list keeps child entry',
+  mergeChewEntries(
+    [],
+    [
+      {
+        id: 'chew-1',
+        date: '2026-09-12',
+        food: 'яблоко',
+        left: [20, 20, 20, 20, 20],
+        right: [20, 20, 20, 20, 20],
+        createdAt: 4_000,
+      },
+    ],
+  ).some((e) => e.id === 'chew-1'),
+)
+
 // --- grades ---
 ok('grades start 2 Sep', SCHOOL_GRADES_START === '2026-09-02')
 ok('cannot enter grade on 1 Sep', !canEnterSchoolGrade('2026-09-01'))
@@ -458,7 +494,8 @@ eq('russian fives after delete of the 4', countFivesInSubject(mergedGrades.grade
 
 eq('Sat 12 Sep is week end', weekEndSaturday('2026-09-12'), '2026-09-12')
 eq('Mon 7 Sep closes Sat 12', weekEndSaturday('2026-09-07'), '2026-09-12')
-eq('Sun 13 Sep starts next week', weekEndSaturday('2026-09-13'), '2026-09-19')
+eq('Sun 13 Sep still Sat 12 week', weekEndSaturday('2026-09-13'), '2026-09-12')
+eq('Mon 14 Sep starts next week', weekEndSaturday('2026-09-14'), '2026-09-19')
 eq('week starts Monday', weekStartMonday('2026-09-12'), '2026-09-07')
 eq('weekly money 5+4+3+2', weeklyGradeMoney([5, 4, 3, 2]), 150)
 eq('two fives are 400', weeklyGradeMoney([5, 5]), 400)

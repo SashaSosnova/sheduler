@@ -69,7 +69,8 @@ const STORAGE_KEY = 'vacation-planner-v2'
 const PENDING_SYNC_KEY = 'vacation-planner-pending-sync'
 const PUSH_DEBOUNCE_MS = 400
 const PUSH_RETRY_MS = 2500
-const BACKGROUND_SYNC_MS = 25_000
+const FOREGROUND_SYNC_MS = 8_000
+const BACKGROUND_SYNC_MS = 15_000
 
 type StoredData = {
   days?: Record<string, DayLog>
@@ -941,6 +942,7 @@ export function useAppData() {
   const pushAgainRef = useRef(false)
   const pullInFlightRef = useRef(false)
   const lastPullAt = useRef(0)
+  const [listenEpoch, setListenEpoch] = useState(0)
 
   useEffect(() => {
     dataRef.current = data
@@ -987,8 +989,8 @@ export function useAppData() {
     let ok = false
     setFamily((f) => ({ ...f, syncing: true, error: null }))
     try {
-      const updatedAt = await pushFamilyData(code, next)
-      lastRemoteAt.current = updatedAt
+      const payload = await pushFamilyData(code, next)
+      lastRemoteAt.current = payload.updatedAt
       if (pendingPushRef.current === next) {
         pendingPushRef.current = null
         savePendingSync(false)
@@ -996,11 +998,17 @@ export function useAppData() {
         savePendingSync(false)
       }
       ok = true
+      setData((prev) => {
+        const applied = applyCloud(prev, payload)
+        dataRef.current = applied
+        persistLocal(applied)
+        return applied
+      })
       setFamily((f) => ({
         ...f,
         syncing: false,
         connected: true,
-        lastSyncedAt: updatedAt,
+        lastSyncedAt: payload.updatedAt,
         error: null,
       }))
     } catch (err) {
@@ -1111,20 +1119,28 @@ export function useAppData() {
   const ingestRemote = useCallback(
     (
       payload: CloudPayload,
-      options?: { force?: boolean; fromCache?: boolean },
+      options?: {
+        force?: boolean
+        fromCache?: boolean
+        hasPendingWrites?: boolean
+      },
     ) => {
       const remoteAt = payload.updatedAt || 0
-      const isEcho = remoteAt > 0 && remoteAt === lastRemoteAt.current
+      // Local unconfirmed writes are a partial view of the family doc.
+      // Wait for the server snapshot so the child's nested fields survive.
+      if (!options?.force && options?.hasPendingWrites) {
+        return
+      }
       const isStaleCache =
         Boolean(options?.fromCache) &&
         remoteAt > 0 &&
         remoteAt < lastRemoteAt.current
-      if (!options?.force && (isEcho || isStaleCache)) {
+      if (!options?.force && isStaleCache) {
         setFamily((f) => ({
           ...f,
           connected: true,
           syncing: false,
-          lastSyncedAt: remoteAt || f.lastSyncedAt,
+          lastSyncedAt: f.lastSyncedAt,
           error: null,
         }))
         return
@@ -1142,14 +1158,15 @@ export function useAppData() {
         dataRef.current = next
         persistLocal(next)
         const shouldUpload =
-          collapsedDuplicateBooks ||
-          loadPendingSync() ||
-          pendingPushRef.current != null ||
-          localAheadOfRemote(next, payload)
+          !options?.fromCache &&
+          (collapsedDuplicateBooks ||
+            loadPendingSync() ||
+            pendingPushRef.current != null ||
+            localAheadOfRemote(next, payload))
         if (shouldUpload) {
           pendingPushRef.current = next
           savePendingSync(true)
-          schedulePush(next, 0)
+          schedulePush(next, collapsedDuplicateBooks ? 0 : PUSH_DEBOUNCE_MS)
         }
         return next
       })
@@ -1164,16 +1181,18 @@ export function useAppData() {
     [schedulePush],
   )
 
-  const pullAndApply = useCallback(async (reason: 'start' | 'resume' = 'resume') => {
+  const pullAndApply = useCallback(async (reason: 'start' | 'resume' | 'poll' = 'resume') => {
     const code = loadFamilyCode()
     if (!code || !isFirebaseConfigured()) return
     if (pullInFlightRef.current) return
     if (reason !== 'start' && Date.now() - lastPullAt.current < 800) return
     pullInFlightRef.current = true
     lastPullAt.current = Date.now()
-    setFamily((f) => ({ ...f, syncing: true, error: null }))
+    if (reason !== 'poll') {
+      setFamily((f) => ({ ...f, syncing: true, error: null }))
+    }
     try {
-      await wakeFamilyConnection()
+      if (reason !== 'poll') await wakeFamilyConnection()
       await ensureAuth()
       const payload = await fetchFamilyData(code)
       if (payload) ingestRemote(payload, { force: true })
@@ -1211,7 +1230,10 @@ export function useAppData() {
         unsub = subscribeFamily(
           code,
           (payload, meta) => {
-            ingestRemote(payload, { fromCache: meta.fromCache })
+            ingestRemote(payload, {
+              fromCache: meta.fromCache,
+              hasPendingWrites: meta.hasPendingWrites,
+            })
           },
           (message) => {
             setFamily((f) => ({
@@ -1233,56 +1255,86 @@ export function useAppData() {
       cancelled = true
       unsub()
     }
-  }, [family.code, ingestRemote, pullAndApply])
+  }, [family.code, ingestRemote, listenEpoch, pullAndApply])
 
   useEffect(() => {
     let backgroundTick: number | null = null
+    let foregroundTick: number | null = null
     const stopBackgroundTick = () => {
       if (backgroundTick == null) return
       window.clearInterval(backgroundTick)
       backgroundTick = null
     }
+    const stopForegroundTick = () => {
+      if (foregroundTick == null) return
+      window.clearInterval(foregroundTick)
+      foregroundTick = null
+    }
+    const tick = (reason: 'resume' | 'poll') => {
+      void pullAndApply(reason)
+      if (pendingPushRef.current || loadPendingSync()) {
+        void flushPush('retry')
+      }
+    }
     const startBackgroundTick = () => {
       if (backgroundTick != null) return
-      backgroundTick = window.setInterval(() => {
-        void pullAndApply('resume')
-        if (pendingPushRef.current || loadPendingSync()) {
-          void flushPush('retry')
-        }
-      }, BACKGROUND_SYNC_MS)
+      backgroundTick = window.setInterval(() => tick('poll'), BACKGROUND_SYNC_MS)
+    }
+    const startForegroundTick = () => {
+      if (foregroundTick != null) return
+      foregroundTick = window.setInterval(() => tick('poll'), FOREGROUND_SYNC_MS)
     }
     const onFlush = () => {
       if (!pendingPushRef.current && !loadPendingSync()) return
       clearPushTimers()
       void flushPush('flush')
     }
-    const onVisible = () => {
-      stopBackgroundTick()
-      void pullAndApply('resume')
+    let lastReconnectAt = Date.now()
+    const reconnectListen = () => {
+      const now = Date.now()
+      if (now - lastReconnectAt < 1500) {
+        tick('poll')
+        return
+      }
+      lastReconnectAt = now
+      setListenEpoch((n) => n + 1)
     }
+    const onVisible = (reconnect: boolean) => {
+      stopBackgroundTick()
+      startForegroundTick()
+      if (reconnect) reconnectListen()
+      else tick('poll')
+    }
+    const onFocus = () => onVisible(false)
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') {
         onFlush()
+        stopForegroundTick()
         startBackgroundTick()
         return
       }
-      onVisible()
+      onVisible(true)
     }
     const onOnline = () => {
-      void pullAndApply('resume')
+      reconnectListen()
+    }
+    const onNativeResume = () => {
+      onVisible(true)
     }
     if (document.visibilityState === 'hidden') startBackgroundTick()
+    else startForegroundTick()
     document.addEventListener('visibilitychange', onVisibility)
-    window.addEventListener('focus', onVisible)
-    window.addEventListener('pageshow', onVisible)
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('sheduler-resume', onNativeResume)
     window.addEventListener('pagehide', onFlush)
     window.addEventListener('online', onOnline)
     document.addEventListener('freeze', onFlush)
     return () => {
       stopBackgroundTick()
+      stopForegroundTick()
       document.removeEventListener('visibilitychange', onVisibility)
-      window.removeEventListener('focus', onVisible)
-      window.removeEventListener('pageshow', onVisible)
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('sheduler-resume', onNativeResume)
       window.removeEventListener('pagehide', onFlush)
       window.removeEventListener('online', onOnline)
       document.removeEventListener('freeze', onFlush)
@@ -1369,6 +1421,9 @@ export function useAppData() {
     createFamilyCloud,
     joinFamilyCloud,
     leaveFamilyCloud,
+    refreshFamily: () => {
+      void pullAndApply('resume')
+    },
     firebaseReady: isFirebaseConfigured(),
   }
 }

@@ -27,6 +27,7 @@ type Props = {
   onCreateFamily: () => Promise<void>
   onJoinFamily: (code: string) => Promise<void>
   onLeaveFamily: () => void
+  onRefreshFamily?: () => void
   onChangeRole: (role: UserRole) => void
   onGoHome: () => void
 }
@@ -52,6 +53,7 @@ export function SettingsScreen({
   onCreateFamily,
   onJoinFamily,
   onLeaveFamily,
+  onRefreshFamily,
   onChangeRole,
   onGoHome,
 }: Props) {
@@ -253,6 +255,7 @@ export function SettingsScreen({
         onCreate={onCreateFamily}
         onJoin={onJoinFamily}
         onLeave={onLeaveFamily}
+        onRefresh={onRefreshFamily}
         joinPreferred={role === 'parent'}
       />
     </div>

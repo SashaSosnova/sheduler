@@ -28,6 +28,7 @@ function App() {
     createFamilyCloud,
     joinFamilyCloud,
     leaveFamilyCloud,
+    refreshFamily,
     firebaseReady,
   } = useAppData()
   const { role, setRole } = useUserRole()
@@ -160,6 +161,7 @@ function App() {
             onCreateFamily={createFamilyCloud}
             onJoinFamily={joinFamilyCloud}
             onLeaveFamily={leaveFamilyCloud}
+            onRefreshFamily={refreshFamily}
             onChangeRole={changeRole}
             onGoHome={() => setTab(homeTab)}
           />
