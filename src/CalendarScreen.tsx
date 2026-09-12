@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  EXTRA_TASK_IDEAS,
   formatCreatePieceLabel,
   activeExercises,
   applyMustDoFlags,
@@ -19,14 +18,12 @@ import {
   isRestDay,
   isWeekendDate,
   NEW_DAY_PLAN_START,
-  SCHOOL_GRADES_START,
   toggleSchoolBreakDay,
   todayKey,
   uid,
   workoutDurationSec,
 } from './data'
 import { ElectiveEditor, ElectiveSchedule } from './ElectiveSchedule'
-import { loadParentLabel } from './parentAlerts'
 import {
   bookTitleKey,
   dayStars,
@@ -34,7 +31,6 @@ import {
   shiftDayKey,
   stampPerfectAt,
 } from './progress'
-import { SchoolGradesCard } from './SchoolGradesCard'
 import type { AppData, Elective, MustDoId } from './types'
 
 type Props = {
@@ -246,8 +242,6 @@ export function CalendarScreen({
   })
   const [selected, setSelected] = useState<string>(today)
   const [markingForChild, setMarkingForChild] = useState(false)
-  const [extraDraft, setExtraDraft] = useState('')
-  const [extraOpen, setExtraOpen] = useState(false)
   const [bookDraft, setBookDraft] = useState('')
   const [addingBook, setAddingBook] = useState(false)
 
@@ -331,51 +325,6 @@ export function CalendarScreen({
         ...data.days,
         [selected]: stampPerfectAt(day, next, plan),
       },
-    })
-  }
-
-  function addExtraTask(text: string) {
-    if (!canEditSelected || !onChange) return
-    const trimmed = text.trim()
-    if (!trimmed) return
-    const day = normalizeDayLog(selected, data.days[selected])
-    const already = day.extraTasks.some(
-      (t) => t.text.toLowerCase() === trimmed.toLowerCase(),
-    )
-    if (already) return
-    patchSelected({
-      extraTasks: [
-        ...day.extraTasks,
-        {
-          id: uid(),
-          text: trimmed,
-          done: false,
-          fromParent: true,
-          fromParentAs: loadParentLabel(),
-        },
-      ],
-    })
-    setExtraDraft('')
-  }
-
-  function toggleExtraTask(id: string) {
-    if (!canEditSelected) return
-    const day = normalizeDayLog(selected, data.days[selected])
-    patchSelected({
-      extraTasks: day.extraTasks.map((t) =>
-        t.id === id ? { ...t, done: !t.done } : t,
-      ),
-    })
-  }
-
-  function removeExtraTask(id: string) {
-    if (!canEditSelected) return
-    const day = normalizeDayLog(selected, data.days[selected])
-    patchSelected({
-      extraTasks: day.extraTasks.filter((t) => t.id !== id),
-      deletedExtraTaskIds: day.deletedExtraTaskIds.includes(id)
-        ? day.deletedExtraTaskIds
-        : [...day.deletedExtraTaskIds, id],
     })
   }
 
@@ -479,7 +428,6 @@ export function CalendarScreen({
     const exerciseDone = active.filter((e) =>
       Boolean(day.exercisesDone[e.id]),
     ).length
-    const extraDone = day.extraTasks.filter((t) => t.done).length
     const dayControls = controlsForDate(data.exerciseControls, selected)
     return {
       day,
@@ -492,21 +440,12 @@ export function CalendarScreen({
       chewFood: chewEntry?.food ?? null,
       chewSec: chewEntry ? chewDurationSec(chewEntry) : null,
       chewSavedAt: chewEntry?.createdAt ?? null,
-      extraDone,
       dayControls,
     }
   }, [data, plan, selected])
 
   const selectedRequired = requiredMustDoItems(selected, plan)
   const selectedOptional = optionalMustDoItems(selected, plan)
-
-  function setGradeDate(next: string) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(next)) return
-    const date = next < SCHOOL_GRADES_START ? SCHOOL_GRADES_START : next
-    setSelected(date)
-    const [y, m] = date.split('-').map(Number)
-    if (y && m) setCursor({ year: y, month: m - 1 })
-  }
 
   function shiftMonth(delta: number) {
     setCursor((prev) => {
@@ -610,18 +549,6 @@ export function CalendarScreen({
           </div>
         </section>
       </details>
-
-      {onChange && selected >= SCHOOL_GRADES_START ? (
-        <SchoolGradesCard
-          data={data}
-          onChange={onChange}
-          date={selected}
-          onDateChange={setGradeDate}
-          diary
-          readOnly={!canEditSelected}
-          collapsed
-        />
-      ) : null}
 
       <section className="card">
         <div className="card-title-row calendar-detail-head">
@@ -816,107 +743,6 @@ export function CalendarScreen({
         <>
           <section className="card">
             <div className="card-title-row">
-              <h2>Планы на день</h2>
-              {detail.day.extraTasks.length ? (
-                <span className="pill">
-                  {detail.extraDone}/{detail.day.extraTasks.length}
-                </span>
-              ) : null}
-            </div>
-
-            {detail.day.extraTasks.length ? (
-              <ul className="check-list">
-                {detail.day.extraTasks.map((task) => (
-                  <li key={task.id}>
-                    <div className="check-row with-action">
-                      <label className="check-row-main">
-                        <input
-                          type="checkbox"
-                          checked={task.done}
-                          disabled={!canEditSelected}
-                          onChange={() => toggleExtraTask(task.id)}
-                        />
-                        <span className={task.done ? 'is-done' : undefined}>
-                          {task.text}
-                        </span>
-                      </label>
-                      {canEditSelected ? (
-                        <button
-                          type="button"
-                          className="icon-btn"
-                          aria-label="Удалить"
-                          onClick={() => removeExtraTask(task.id)}
-                        >
-                          ×
-                        </button>
-                      ) : null}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-
-            {canEditSelected ? (
-              <div className="extra-picker-box">
-                <button
-                  type="button"
-                  className="linkish"
-                  onClick={() => setExtraOpen((v) => !v)}
-                >
-                  {extraOpen ? 'Скрыть выбор' : 'Быстро добавить →'}
-                </button>
-                {extraOpen ? (
-                  <div className="create-picker">
-                    <div className="create-chip-grid">
-                      {EXTRA_TASK_IDEAS.map((idea) => {
-                        const exists = detail.day.extraTasks.some(
-                          (t) => t.text === idea,
-                        )
-                        return (
-                          <button
-                            key={idea}
-                            type="button"
-                            className={exists ? 'chip active' : 'chip'}
-                            disabled={exists}
-                            onClick={() => addExtraTask(idea)}
-                          >
-                            {idea}
-                          </button>
-                        )
-                      })}
-                    </div>
-                    <div className="add-row">
-                      <label className="field grow">
-                        <span>Своё дело</span>
-                        <input
-                          value={extraDraft}
-                          onChange={(e) => setExtraDraft(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault()
-                              addExtraTask(extraDraft)
-                            }
-                          }}
-                          placeholder="Например: пропылесосить"
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        className="btn primary"
-                        disabled={!extraDraft.trim()}
-                        onClick={() => addExtraTask(extraDraft)}
-                      >
-                        Добавить
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </section>
-
-          <section className="card">
-            <div className="card-title-row">
               <h2>Книги</h2>
               {finishedBooks.length || readingBooks.length ? (
                 <span className="pill">
@@ -1002,19 +828,6 @@ export function CalendarScreen({
             )}
           </section>
         </>
-      ) : detail.day.extraTasks.length > 0 ? (
-        <div className="card">
-          <div className="calendar-detail-block" style={{ marginTop: 0 }}>
-            <h3>Планы на день</h3>
-            <ul className="calendar-exercise-list">
-              {detail.day.extraTasks.map((t) => (
-                <li key={t.id} className={t.done ? 'done' : ''}>
-                  {t.done ? '✓' : '·'} {t.text}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
       ) : null}
     </div>
   )

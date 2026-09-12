@@ -1446,93 +1446,6 @@
   opacity: 1;
 }
 
-.school-soon {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: 8px 0 4px;
-}
-
-.school-soon-art-wrap {
-  position: relative;
-  width: 100%;
-  max-width: 320px;
-  border-radius: 16px;
-  overflow: hidden;
-  isolation: isolate;
-  box-shadow: 0 10px 28px color-mix(in srgb, #c2410c 22%, transparent);
-}
-
-.school-soon-art-wrap::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  background: radial-gradient(
-    circle at 78% 40%,
-    rgba(255, 214, 120, 0.55),
-    transparent 46%
-  );
-  mix-blend-mode: screen;
-  animation: school-soon-glow 4.8s ease-in-out infinite;
-}
-
-.school-soon-art {
-  display: block;
-  width: 100%;
-  height: auto;
-  transform-origin: 72% 40%;
-  animation: school-soon-drift 9s ease-in-out infinite;
-}
-
-.school-soon-title {
-  margin: 14px 0 0;
-  font-family: 'Source Serif 4', Georgia, serif;
-  font-size: 1.28rem;
-  font-weight: 700;
-  color: var(--heading);
-}
-
-.school-soon-sub {
-  margin: 4px 0 0;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--muted);
-}
-
-@keyframes school-soon-glow {
-  0%,
-  100% {
-    opacity: 0.4;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
-@keyframes school-soon-drift {
-  0%,
-  100% {
-    transform: scale(1.05) translate3d(0, 0, 0);
-  }
-  50% {
-    transform: scale(1.1) translate3d(-1.4%, 1.1%, 0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .school-soon-art,
-  .school-soon-art-wrap::before {
-    animation: none;
-  }
-
-  .school-soon-art {
-    transform: none;
-  }
-}
-
 .sticker {
   display: flex;
   flex-direction: column;
@@ -3331,6 +3244,73 @@ span.ex-timer-chip {
   font-size: 0.82rem;
   font-weight: 700;
   color: var(--muted);
+}
+
+.weekly-grade-range {
+  margin: 8px 0 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--heading);
+}
+
+.weekly-grade-rates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 8px 0 0;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--heading);
+}
+
+.weekly-grade-chips {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.weekly-grade-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px 6px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-deep);
+  font-weight: 700;
+}
+
+.weekly-grade-chip.is-five {
+  background: #e8f8ee;
+}
+
+.weekly-grade-chip.is-four {
+  background: #eef4ff;
+}
+
+.weekly-grade-chip.is-three {
+  background: #fff6e5;
+}
+
+.weekly-grade-chip.is-two {
+  background: #fdeeee;
+}
+
+.weekly-grade-total {
+  margin: 10px 0 0;
+  font-weight: 700;
+  color: var(--heading);
+}
+
+.weekly-grade-history-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0 0;
+  font-size: 0.9rem;
 }
 
 .card h3 {

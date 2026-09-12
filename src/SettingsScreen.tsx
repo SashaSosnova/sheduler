@@ -24,11 +24,6 @@ type Props = {
   onToggleParentAlerts: (enabled: boolean) => void
   onChangeChildName: (name: string) => void
   onChangeParentLabel: (label: string) => void
-  childTaskAlertsEnabled: boolean
-  childTaskAlertsBusy: boolean
-  childTaskAlertsDenied: boolean
-  childTaskAlertsSupported: boolean
-  onToggleChildTaskAlerts: (enabled: boolean) => void
   onCreateFamily: () => Promise<void>
   onJoinFamily: (code: string) => Promise<void>
   onLeaveFamily: () => void
@@ -54,11 +49,6 @@ export function SettingsScreen({
   onToggleParentAlerts,
   onChangeChildName,
   onChangeParentLabel,
-  childTaskAlertsEnabled,
-  childTaskAlertsBusy,
-  childTaskAlertsDenied,
-  childTaskAlertsSupported,
-  onToggleChildTaskAlerts,
   onCreateFamily,
   onJoinFamily,
   onLeaveFamily,
@@ -251,52 +241,6 @@ export function SettingsScreen({
                   : notificationsEnabled
                     ? 'Выключить напоминания'
                     : 'Включить напоминания'}
-              </button>
-            </div>
-          </section>
-
-          <section className="card">
-            <div className="card-title-row">
-              <h2>Задания от родителя</h2>
-              <span className={childTaskAlertsEnabled ? 'pill' : 'pill muted'}>
-                {childTaskAlertsEnabled ? 'вкл' : 'выкл'}
-              </span>
-            </div>
-            {!childTaskAlertsSupported ? (
-              <p className="hint" style={{ marginTop: 8 }}>
-                В браузере не работает — только в приложении на телефоне.
-              </p>
-            ) : null}
-            {childTaskAlertsDenied ? (
-              <p className="hint" style={{ marginTop: 8 }}>
-                Нет разрешения на уведомления. Включи их в настройках телефона для
-                приложения.
-              </p>
-            ) : null}
-            <ul className="status-list" style={{ marginTop: 10 }}>
-              <li>
-                <span className="status-mark" aria-hidden>
-                  ·
-                </span>
-                <span>Добавлено задание от мамы: Купить хлеб</span>
-              </li>
-            </ul>
-            <p className="hint" style={{ marginTop: 8 }}>
-              Приходит даже если приложение закрыто. На Samsung: батарея →
-              Sheduler → без ограничений.
-            </p>
-            <div className="row-gap">
-              <button
-                type="button"
-                className={childTaskAlertsEnabled ? 'btn' : 'btn primary'}
-                disabled={childTaskAlertsBusy || !childTaskAlertsSupported}
-                onClick={() => onToggleChildTaskAlerts(!childTaskAlertsEnabled)}
-              >
-                {childTaskAlertsBusy
-                  ? 'Секунду…'
-                  : childTaskAlertsEnabled
-                    ? 'Выключить уведомления'
-                    : 'Включить уведомления'}
               </button>
             </div>
           </section>

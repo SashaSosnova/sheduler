@@ -20,6 +20,7 @@ import {
   isWeekendDate,
   mergeDayLog,
   mergeSchoolGrades,
+  mergeWeeklyGradeWeeks,
   nextSchoolDateKey,
   normalizeDayLog,
   normalizeElectiveTime,
@@ -31,12 +32,17 @@ import {
   schoolQuarterKey,
   schoolSubjectShort,
   todayKey,
+  weekEndSaturday,
+  weekStartMonday,
+  weeklyGradeMoney,
 } from '../src/data'
 import {
   DEBUG_LOCK_ALL_STICKERS,
   DEBUG_UNLOCK_ALL_STICKERS,
+  STICKERS,
   applyPendingStickerMoneyRewards,
   applyPendingStickerRobloxRewards,
+  applyPendingWeeklyGradeSettlements,
   countCleanQuarters,
   countExcellentQuarters,
   countFives,
@@ -449,6 +455,115 @@ const mergedGrades = mergeSchoolGrades(
 ok('deleted grade stays dead', !mergedGrades.grades.some((g) => g.id === 'g2'))
 ok('remote grade kept', mergedGrades.grades.some((g) => g.id === 'g5'))
 eq('russian fives after delete of the 4', countFivesInSubject(mergedGrades.grades, 'Русский'), 2)
+
+eq('Sat 12 Sep is week end', weekEndSaturday('2026-09-12'), '2026-09-12')
+eq('Mon 7 Sep closes Sat 12', weekEndSaturday('2026-09-07'), '2026-09-12')
+eq('Sun 13 Sep starts next week', weekEndSaturday('2026-09-13'), '2026-09-19')
+eq('week starts Monday', weekStartMonday('2026-09-12'), '2026-09-07')
+eq('weekly money 5+4+3+2', weeklyGradeMoney([5, 4, 3, 2]), 150)
+eq('two fives are 400', weeklyGradeMoney([5, 5]), 400)
+
+const weekOpen = {
+  ...defaultAppData(),
+  moneyBankRub: 100,
+  weeklyGradeWeeks: [
+    {
+      weekEnd: '2026-09-12',
+      marks: [5, 4] as const,
+      updatedAt: 1,
+      settledAt: null,
+      moneyDelta: null,
+    },
+  ],
+}
+const stillSaturday = applyPendingWeeklyGradeSettlements(weekOpen, '2026-09-12')
+ok(
+  'Saturday does not auto-settle',
+  !stillSaturday.weeklyGradeWeeks[0]?.settledAt &&
+    stillSaturday.moneyBankRub === 100,
+)
+const sundayPay = applyPendingWeeklyGradeSettlements(weekOpen, '2026-09-13')
+ok(
+  'Sunday does not put grades in the piggy',
+  !sundayPay.weeklyGradeWeeks[0]?.settledAt &&
+    sundayPay.moneyBankRub === 100 &&
+    sundayPay.weeklyGradeWeeks[0]?.moneyDelta == null,
+)
+const clamped = applyPendingWeeklyGradeSettlements(
+  {
+    ...defaultAppData(),
+    moneyBankRub: 30,
+    weeklyGradeWeeks: [
+      {
+        weekEnd: '2026-09-12',
+        marks: [2],
+        updatedAt: 1,
+        settledAt: null,
+        moneyDelta: null,
+      },
+    ],
+  },
+  '2026-09-13',
+)
+ok('grades never change the piggy', clamped.moneyBankRub === 30)
+
+const mergedWeeks = mergeWeeklyGradeWeeks(
+  [
+    {
+      weekEnd: '2026-09-12',
+      marks: [5],
+      updatedAt: 20,
+      settledAt: null,
+      moneyDelta: null,
+    },
+  ],
+  [
+    {
+      weekEnd: '2026-09-12',
+      marks: [5, 4],
+      updatedAt: 10,
+      settledAt: 99,
+      moneyDelta: 150,
+    },
+  ],
+)
+ok(
+  'settled week wins over newer unsettled copy',
+  Boolean(mergedWeeks[0]?.settledAt) && mergedWeeks[0]?.moneyDelta === 150,
+)
+
+ok(
+  'streak 60 cinema sticker exists',
+  STICKERS.some((s) => s.id === 'hero-todoroki' && s.needStreak === 60),
+)
+ok(
+  'streak 67 pays roblox minutes',
+  STICKERS.some((s) => s.id === 'hero-uraraka' && s.robloxExtraMin === 30),
+)
+ok(
+  'streak 150 is another aquapark',
+  STICKERS.some(
+    (s) =>
+      s.id === 'hero-allmight' &&
+      s.needStreak === 150 &&
+      s.giftHint === 'Награда: поход в аквапарк',
+  ),
+)
+
+ok(
+  'exercise 60 pays roblox minutes',
+  STICKERS.some((s) => s.id === 'hero-nobara' && s.robloxExtraMin === 20),
+)
+ok(
+  'chew 75 is a roblox donate',
+  STICKERS.some(
+    (s) =>
+      s.id === 'hero-shinobu' &&
+      s.needChewDays === 75 &&
+      /донат/i.test(s.giftHint ?? '') &&
+      /roblox/i.test(s.giftHint ?? ''),
+  ),
+)
 
 // --- defaults / debug flags ---
 ok('plan start is 1 Sep', NEW_DAY_PLAN_START === '2026-09-01')

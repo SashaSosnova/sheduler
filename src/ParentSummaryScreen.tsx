@@ -1,6 +1,4 @@
-import { useState } from 'react'
-import { clampSchoolGradeDate, todayKey } from './data'
-import { SchoolGradesCard } from './SchoolGradesCard'
+import { WeeklyGradesCard } from './WeeklyGradesCard'
 import {
   dismissGiftSticker,
   giftMoneyBankRub,
@@ -22,10 +20,6 @@ type Props = {
 }
 
 export function ParentSummaryScreen({ data, onChange }: Props) {
-  const [gradeDate, setGradeDate] = useState(() =>
-    clampSchoolGradeDate(todayKey()),
-  )
-
   const pendingGifts = pendingGiftStickers(data)
   const moneyBank = Math.floor(data.moneyBankRub ?? 0)
   const robloxBankMin = Math.floor(data.robloxBonusBankMin ?? 0)
@@ -37,17 +31,10 @@ export function ParentSummaryScreen({ data, onChange }: Props) {
           <p className="eyebrow">Родитель</p>
         </div>
         <h1>Награды</h1>
-        <p className="sub">Оценки, Roblox и копилка</p>
+        <p className="sub">Оценки за неделю, Roblox и копилка</p>
       </header>
 
-      <SchoolGradesCard
-        data={data}
-        onChange={onChange}
-        date={clampSchoolGradeDate(gradeDate)}
-        onDateChange={setGradeDate}
-        diary
-        collapsed
-      />
+      <WeeklyGradesCard data={data} onChange={onChange} collapsed />
 
       <section className="card">
         <div className="card-title-row">

@@ -24,6 +24,7 @@ import type {
   ReadingBook,
   SchoolGrade,
   UserRole,
+  WeeklyGradeWeek,
 } from './types'
 import { getFirebaseAuth, getFirebaseDb, isFirebaseConfigured } from './firebase'
 
@@ -36,6 +37,7 @@ export type CloudPayload = {
   chewEntries: ChewEntry[]
   schoolGrades?: SchoolGrade[]
   deletedSchoolGradeIds?: string[]
+  weeklyGradeWeeks?: WeeklyGradeWeek[]
   cookingLeft: number
   exercises?: Exercise[]
   exerciseControls?: ExerciseControl[]
@@ -195,6 +197,7 @@ function incomingCloudPayload(remote: Partial<CloudPayload>): CloudPayload {
     chewEntries: remote.chewEntries ?? [],
     schoolGrades: remote.schoolGrades ?? [],
     deletedSchoolGradeIds: remote.deletedSchoolGradeIds ?? [],
+    weeklyGradeWeeks: remote.weeklyGradeWeeks ?? [],
     cookingLeft: remote.cookingLeft ?? 5,
     exercises: remote.exercises,
     exerciseControls: remote.exerciseControls,
@@ -235,6 +238,7 @@ export function toCloudPayload(data: AppData, updatedAt = Date.now()): CloudPayl
     chewEntries: data.chewEntries ?? [],
     schoolGrades: data.schoolGrades ?? [],
     deletedSchoolGradeIds: data.deletedSchoolGradeIds ?? [],
+    weeklyGradeWeeks: data.weeklyGradeWeeks ?? [],
     cookingLeft: data.cookingLeft,
     exercises: data.exercises ?? [],
     exerciseControls: data.exerciseControls ?? [],

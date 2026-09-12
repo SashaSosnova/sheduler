@@ -13,6 +13,7 @@ import type {
   MustDoId,
   SchoolGrade,
   SchoolMark,
+  WeeklyGradeWeek,
   ScreenSlot,
   WorkoutSession,
 } from './types'
@@ -448,6 +449,16 @@ export const SCHOOL_TRACK_SUBJECTS = [
 
 export const SCHOOL_MARKS: SchoolMark[] = [5, 4, 3, 2]
 
+/** Rubles paid in cash for one weekly mark (not the piggy bank). */
+export const WEEKLY_GRADE_RUB: Record<SchoolMark, number> = {
+  5: 200,
+  4: 100,
+  3: -50,
+  2: -100,
+}
+
+const WEEKLY_GRADE_MAX_MARKS = 40
+
 /** At least this many marks before a finished quarter can unlock. */
 export const SCHOOL_QUARTER_MIN_GRADES = 3
 
@@ -538,6 +549,171 @@ export function mergeSchoolGrades(
     grades: [...byId.values()].sort((a, b) => a.createdAt - b.createdAt),
     deletedIds,
   }
+}
+
+export function weeklyGradeMoney(marks: SchoolMark[]): number {
+  return marks.reduce((sum, mark) => sum + WEEKLY_GRADE_RUB[mark], 0)
+}
+
+export function formatRubDelta(n: number): string {
+  if (n > 0) return `+${n} ₽`
+  if (n < 0) return `−${Math.abs(n)} ₽`
+  return '0 ₽'
+}
+
+/** Saturday that closes the school-money week containing `date`. Sunday starts the next week. */
+export function weekEndSaturday(date: string): string {
+  const [y, m, d] = date.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
+  const dow = dt.getDay()
+  const add = dow === 0 ? 6 : 6 - dow
+  dt.setDate(dt.getDate() + add)
+  return todayKey(dt)
+}
+
+export function weekStartMonday(weekEnd: string): string {
+  const [y, m, d] = weekEnd.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
+  dt.setDate(dt.getDate() - 5)
+  return todayKey(dt)
+}
+
+export function formatWeekRange(weekEnd: string): string {
+  const start = weekStartMonday(weekEnd)
+  const fmt = (key: string) => {
+    const [y, mo, day] = key.split('-').map(Number)
+    return new Date(y, mo - 1, day).toLocaleDateString('ru-RU', {
+      day: 'numeric',
+      month: 'short',
+    })
+  }
+  return `${fmt(start)} – ${fmt(weekEnd)}`
+}
+
+function emptyWeeklyGradeWeek(weekEnd: string): WeeklyGradeWeek {
+  return {
+    weekEnd,
+    marks: [],
+    updatedAt: 0,
+    settledAt: null,
+    moneyDelta: null,
+  }
+}
+
+export function normalizeWeeklyGradeWeeks(raw: unknown): WeeklyGradeWeek[] {
+  if (!Array.isArray(raw)) return []
+  const byEnd = new Map<string, WeeklyGradeWeek>()
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const row = item as Partial<WeeklyGradeWeek>
+    const weekEnd =
+      typeof row.weekEnd === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(row.weekEnd)
+        ? row.weekEnd
+        : ''
+    if (!weekEnd) continue
+    const marks: SchoolMark[] = []
+    if (Array.isArray(row.marks)) {
+      for (const mark of row.marks) {
+        const n = normalizeSchoolMark(mark)
+        if (n != null) marks.push(n)
+      }
+    }
+    const updatedAt =
+      typeof row.updatedAt === 'number' && Number.isFinite(row.updatedAt)
+        ? Math.max(0, Math.floor(row.updatedAt))
+        : 0
+    const settledAt =
+      typeof row.settledAt === 'number' && Number.isFinite(row.settledAt)
+        ? Math.max(0, Math.floor(row.settledAt))
+        : null
+    const moneyDelta =
+      typeof row.moneyDelta === 'number' && Number.isFinite(row.moneyDelta)
+        ? Math.floor(row.moneyDelta)
+        : null
+    byEnd.set(weekEnd, {
+      weekEnd,
+      marks,
+      updatedAt,
+      settledAt,
+      moneyDelta,
+    })
+  }
+  return [...byEnd.values()].sort((a, b) => b.weekEnd.localeCompare(a.weekEnd))
+}
+
+/** Settled week wins over an unsettled copy so money is not credited twice. */
+export function mergeWeeklyGradeWeeks(
+  local: WeeklyGradeWeek[],
+  remote: WeeklyGradeWeek[],
+): WeeklyGradeWeek[] {
+  const byEnd = new Map<string, WeeklyGradeWeek>()
+  for (const week of [
+    ...normalizeWeeklyGradeWeeks(local),
+    ...normalizeWeeklyGradeWeeks(remote),
+  ]) {
+    const prev = byEnd.get(week.weekEnd)
+    if (!prev) {
+      byEnd.set(week.weekEnd, week)
+      continue
+    }
+    const prevSettled = Boolean(prev.settledAt)
+    const nextSettled = Boolean(week.settledAt)
+    if (prevSettled && !nextSettled) continue
+    if (!prevSettled && nextSettled) {
+      byEnd.set(week.weekEnd, week)
+      continue
+    }
+    if (week.updatedAt >= prev.updatedAt) byEnd.set(week.weekEnd, week)
+  }
+  return [...byEnd.values()].sort((a, b) => b.weekEnd.localeCompare(a.weekEnd))
+}
+
+export function currentWeeklyGradeWeek(
+  data: Pick<AppData, 'weeklyGradeWeeks'>,
+  today = todayKey(),
+): WeeklyGradeWeek {
+  const weekEnd = weekEndSaturday(today)
+  return (
+    normalizeWeeklyGradeWeeks(data.weeklyGradeWeeks).find(
+      (w) => w.weekEnd === weekEnd,
+    ) ?? emptyWeeklyGradeWeek(weekEnd)
+  )
+}
+
+export function addWeeklyGradeMark(
+  data: AppData,
+  mark: SchoolMark,
+  today = todayKey(),
+): AppData {
+  const weekEnd = weekEndSaturday(today)
+  const weeks = [...normalizeWeeklyGradeWeeks(data.weeklyGradeWeeks)]
+  const i = weeks.findIndex((w) => w.weekEnd === weekEnd)
+  const cur = i >= 0 ? weeks[i] : emptyWeeklyGradeWeek(weekEnd)
+  if (cur.marks.length >= WEEKLY_GRADE_MAX_MARKS) return data
+  const nextWeek: WeeklyGradeWeek = {
+    ...cur,
+    marks: [...cur.marks, mark],
+    updatedAt: Date.now(),
+  }
+  if (i >= 0) weeks[i] = nextWeek
+  else weeks.push(nextWeek)
+  return { ...data, weeklyGradeWeeks: weeks }
+}
+
+export function removeWeeklyGradeMark(
+  data: AppData,
+  index: number,
+  today = todayKey(),
+): AppData {
+  const weekEnd = weekEndSaturday(today)
+  const weeks = [...normalizeWeeklyGradeWeeks(data.weeklyGradeWeeks)]
+  const i = weeks.findIndex((w) => w.weekEnd === weekEnd)
+  if (i < 0) return data
+  const cur = weeks[i]
+  if (index < 0 || index >= cur.marks.length) return data
+  const marks = cur.marks.filter((_, n) => n !== index)
+  weeks[i] = { ...cur, marks, updatedAt: Date.now() }
+  return { ...data, weeklyGradeWeeks: weeks }
 }
 
 /**
@@ -674,16 +850,6 @@ export function normalizeCreateKinds(
   if (fromNote) add(fromNote)
   return out
 }
-
-/** Quick-add chips for one-off chores (parent or child) */
-export const EXTRA_TASK_IDEAS: string[] = [
-  'Убрать в комнате',
-  'Пропылесосить',
-  'Помыть посуду',
-  'Вынести мусор',
-  'Помочь на кухне',
-  'Разобрать стол',
-]
 
 export const SCREEN_LIMITS = {
   roblox: { label: 'Roblox', seconds: 40 * 60 },
@@ -1924,6 +2090,7 @@ export function defaultAppData(): AppData {
     legoCount: 0,
     schoolGrades: [],
     deletedSchoolGradeIds: [],
+    weeklyGradeWeeks: [],
     extraBreakDates: [],
     extraSchoolDates: [],
     schoolCalendarUpdatedAt: 0,

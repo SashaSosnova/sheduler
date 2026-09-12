@@ -211,6 +211,18 @@ export type SchoolGrade = {
   createdAt: number
 }
 
+/** One school week's marks, settled into the piggy bank after Saturday. */
+export type WeeklyGradeWeek = {
+  /** Saturday YYYY-MM-DD that closes this week */
+  weekEnd: string
+  marks: SchoolMark[]
+  updatedAt: number
+  /** Unix ms when the week's money was credited; null = still open */
+  settledAt: number | null
+  /** Sum of mark values at settle time (may be negative) */
+  moneyDelta: number | null
+}
+
 export type AppData = {
   exercises: Exercise[]
   days: Record<string, DayLog>
@@ -279,6 +291,8 @@ export type AppData = {
   schoolGrades: SchoolGrade[]
   /** Ids removed on any device — merge must not resurrect them */
   deletedSchoolGradeIds: string[]
+  /** Weekly school marks for cash payout (not the piggy bank) */
+  weeklyGradeWeeks: WeeklyGradeWeek[]
   /**
    * Extra no-school days the parent marked (каникулы / отмена уроков).
    * Weekends and built-in holidays do not need to be listed.

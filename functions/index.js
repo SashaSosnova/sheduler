@@ -92,31 +92,14 @@ function collectChildAlerts(before, after) {
   const oldDays = daysMap(before)
   const newDays = daysMap(after)
 
-  const oldTaskIds = new Set()
   const oldReminderIds = new Set()
   for (const day of Object.values(oldDays)) {
-    for (const task of asArray(day?.extraTasks)) {
-      if (task?.fromParent && task.id) oldTaskIds.add(task.id)
-    }
     for (const reminder of asArray(day?.reminders)) {
       if (reminder?.fromParent && reminder.id) oldReminderIds.add(reminder.id)
     }
   }
 
   for (const [date, day] of Object.entries(newDays)) {
-    for (const task of asArray(day?.extraTasks)) {
-      if (!task?.fromParent || !task.id || oldTaskIds.has(task.id)) continue
-      const label =
-        typeof task.fromParentAs === 'string' && task.fromParentAs.trim()
-          ? task.fromParentAs.trim()
-          : 'родителя'
-      alerts.push({
-        eventKey: `parent-task:${task.id}`,
-        title: `Добавлено задание от ${label}: ${task.text || 'задание'}`,
-        body: 'Открой «Сегодня», чтобы отметить',
-        channelId: CHILD_CHANNEL,
-      })
-    }
     for (const reminder of asArray(day?.reminders)) {
       if (!reminder?.fromParent || !reminder.id || oldReminderIds.has(reminder.id)) {
         continue

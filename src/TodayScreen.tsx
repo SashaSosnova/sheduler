@@ -6,7 +6,6 @@ import {
   CREATE_KIND_BY_IDEA,
   CREATE_PIECE_MAX,
   createKindsFromPieces,
-  EXTRA_TASK_IDEAS,
   formatCreatePieceLabel,
   toggleCreateIdea,
   MAIN_MUST_DO,
@@ -19,14 +18,11 @@ import {
   requiredMustDoItems,
   schoolDayPlanFromData,
   schoolRestLabel,
-  SCHOOL_GRADES_START,
   todayKey,
-  uid,
   workoutDurationSec,
 } from './data'
 import { ElectiveSchedule } from './ElectiveSchedule'
 import { stampPerfectAt } from './progress'
-import { SchoolGradesCard } from './SchoolGradesCard'
 import { playDing } from './sound'
 import type { AppData, MustDoId } from './types'
 
@@ -61,9 +57,6 @@ export function TodayScreen({
   const exerciseComplete =
     exerciseTotal > 0 && exerciseDone === exerciseTotal
   const chewComplete = Boolean(chewToday)
-  const extraDone = day.extraTasks.filter((t) => t.done).length
-  const [extraDraft, setExtraDraft] = useState('')
-  const [extraOpen, setExtraOpen] = useState(false)
   const [celebrate, setCelebrate] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const prevDoneRef = useRef(doneCount)
@@ -141,38 +134,6 @@ export function TodayScreen({
     return false
   }
 
-  function addExtraTask(text: string) {
-    const trimmed = text.trim()
-    if (!trimmed) return
-    const already = day.extraTasks.some(
-      (t) => t.text.toLowerCase() === trimmed.toLowerCase(),
-    )
-    if (already) return
-    patchDay({
-      extraTasks: [...day.extraTasks, { id: uid(), text: trimmed, done: false }],
-    })
-    setExtraDraft('')
-  }
-
-  function toggleExtraTask(id: string) {
-    patchDay({
-      extraTasks: day.extraTasks.map((t) =>
-        t.id === id ? { ...t, done: !t.done } : t,
-      ),
-    })
-  }
-
-  function removeExtraTask(id: string) {
-    const task = day.extraTasks.find((t) => t.id === id)
-    if (task?.fromParent) return
-    patchDay({
-      extraTasks: day.extraTasks.filter((t) => t.id !== id),
-      deletedExtraTaskIds: day.deletedExtraTaskIds.includes(id)
-        ? day.deletedExtraTaskIds
-        : [...day.deletedExtraTaskIds, id],
-    })
-  }
-
   function toggleElective(id: string) {
     patchDay({
       electiveDone: {
@@ -194,9 +155,6 @@ export function TodayScreen({
           Сделано {doneCount} из {requiredItems.length} · зарядка {exerciseDone}/
           {exerciseTotal || 0}
           {restLabel ? ` · ${restLabel}` : ''}
-          {day.extraTasks.length
-            ? ` · ещё ${extraDone}/${day.extraTasks.length}`
-            : ''}
         </p>
       </header>
 
@@ -711,121 +669,6 @@ export function TodayScreen({
           date={key}
           onToggleDone={toggleElective}
         />
-      </section>
-
-      {key >= SCHOOL_GRADES_START ? (
-        <SchoolGradesCard
-          data={data}
-          onChange={onChange}
-          date={key}
-          readOnly
-        />
-      ) : null}
-
-      <section className="card">
-        <div className="card-title-row">
-          <h2>Планы на день</h2>
-          {day.extraTasks.length ? (
-            <span className="pill">
-              {extraDone}/{day.extraTasks.length}
-            </span>
-          ) : null}
-        </div>
-
-        {day.extraTasks.length ? (
-          <ul className="check-list">
-            {day.extraTasks.map((task) => (
-              <li key={task.id}>
-                <div
-                  className={
-                    task.fromParent ? 'check-row' : 'check-row with-action'
-                  }
-                >
-                  <label className="check-row-main">
-                    <input
-                      type="checkbox"
-                      checked={task.done}
-                      onChange={() => toggleExtraTask(task.id)}
-                    />
-                    <span className={task.done ? 'is-done' : undefined}>
-                      {task.text}
-                      {task.fromParent ? (
-                        <span className="hint">
-                          {' '}
-                          · от {task.fromParentAs?.trim() || 'родителя'}
-                        </span>
-                      ) : null}
-                    </span>
-                  </label>
-                  {task.fromParent ? null : (
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      aria-label="Удалить"
-                      onClick={() => removeExtraTask(task.id)}
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-
-        <div className="extra-picker-box">
-          <button
-            type="button"
-            className="linkish"
-            onClick={() => setExtraOpen((v) => !v)}
-          >
-            {extraOpen ? 'Скрыть выбор' : 'Быстро добавить →'}
-          </button>
-          {extraOpen ? (
-            <div className="create-picker">
-              <div className="create-chip-grid">
-                {EXTRA_TASK_IDEAS.map((idea) => {
-                  const exists = day.extraTasks.some((t) => t.text === idea)
-                  return (
-                    <button
-                      key={idea}
-                      type="button"
-                      className={exists ? 'chip active' : 'chip'}
-                      disabled={exists}
-                      onClick={() => addExtraTask(idea)}
-                    >
-                      {idea}
-                    </button>
-                  )
-                })}
-              </div>
-              <div className="add-row">
-                <label className="field grow">
-                  <span>Своё дело</span>
-                  <input
-                    value={extraDraft}
-                    onChange={(e) => setExtraDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        addExtraTask(extraDraft)
-                      }
-                    }}
-                    placeholder="Например: разобрать стол"
-                  />
-                </label>
-                <button
-                  type="button"
-                  className="btn primary"
-                  disabled={!extraDraft.trim()}
-                  onClick={() => addExtraTask(extraDraft)}
-                >
-                  Добавить
-                </button>
-              </div>
-            </div>
-          ) : null}
-        </div>
       </section>
     </div>
   )

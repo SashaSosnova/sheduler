@@ -14,7 +14,6 @@ import { StickerUnlockOverlay } from './StickerUnlockOverlay'
 import { TodayScreen } from './TodayScreen'
 import type { TabId, UserRole } from './types'
 import { useAppData } from './useAppData'
-import { useChildTaskAlerts } from './useChildTaskAlerts'
 import { useNotifications } from './useNotifications'
 import { useParentAlerts } from './useParentAlerts'
 import { usePushBridge } from './usePushBridge'
@@ -34,7 +33,6 @@ function App() {
   const { role, setRole } = useUserRole()
   const notifications = useNotifications(role)
   const parentAlerts = useParentAlerts(role, data, family.connected)
-  const childTaskAlerts = useChildTaskAlerts(role, data, family.connected)
   usePushBridge(role, family.code)
   const [tab, setTab] = useState<TabId>(() =>
     role === 'parent' ? 'calendar' : 'today',
@@ -159,13 +157,6 @@ function App() {
             }}
             onChangeChildName={parentAlerts.setChildName}
             onChangeParentLabel={parentAlerts.setParentLabel}
-            childTaskAlertsEnabled={childTaskAlerts.enabled}
-            childTaskAlertsBusy={childTaskAlerts.busy}
-            childTaskAlertsDenied={childTaskAlerts.denied}
-            childTaskAlertsSupported={childTaskAlerts.supported}
-            onToggleChildTaskAlerts={(v) => {
-              void childTaskAlerts.setEnabled(v)
-            }}
             onCreateFamily={createFamilyCloud}
             onJoinFamily={joinFamilyCloud}
             onLeaveFamily={leaveFamilyCloud}

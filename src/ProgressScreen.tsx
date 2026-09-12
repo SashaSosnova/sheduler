@@ -202,8 +202,6 @@ export function ProgressScreen({ data, onChange }: Props) {
   const pageOpenCount = pageStickers.filter((s) =>
     isStickerUnlocked(s, progress),
   ).length
-  const showSchoolTeaser =
-    activePage?.id === 'school' && pageStickers.length === 0
 
   const selectedIndex = selectedId
     ? pageStickers.findIndex((s) => s.id === selectedId)
@@ -337,13 +335,9 @@ export function ProgressScreen({ data, onChange }: Props) {
             <p className="sticker-album-page-title">
               {activePage?.label ?? 'Достижения'}
             </p>
-            {showSchoolTeaser ? (
-              <span className="pill muted">скоро</span>
-            ) : (
-              <span className="pill muted">
-                {pageOpenCount}/{pageStickers.length}
-              </span>
-            )}
+            <span className="pill muted">
+              {pageOpenCount}/{pageStickers.length}
+            </span>
           </div>
           <div ref={albumRef} className="sticker-album">
             <div
@@ -355,14 +349,10 @@ export function ProgressScreen({ data, onChange }: Props) {
             >
               {pages.map((page) => {
                 const stickers = stickersForTrack(page.id)
-                const teaser = page.id === 'school' && stickers.length === 0
                 return (
                   <div key={page.id} className="sticker-album-page">
-                    {teaser ? (
-                      <SchoolSoonSplash />
-                    ) : (
-                      <div className="sticker-row">
-                        {stickers.map((s, i) => {
+                    <div className="sticker-row">
+                      {stickers.map((s, i) => {
                           const open = isStickerUnlocked(s, progress)
                           const selected = selectedId === s.id
                           return (
@@ -413,8 +403,7 @@ export function ProgressScreen({ data, onChange }: Props) {
                             </Fragment>
                           )
                         })}
-                      </div>
-                    )}
+                    </div>
                   </div>
                 )
               })}
@@ -484,23 +473,6 @@ export function ProgressScreen({ data, onChange }: Props) {
           </div>
         </div>
       ) : null}
-    </div>
-  )
-}
-
-function SchoolSoonSplash() {
-  return (
-    <div className="school-soon">
-      <div className="school-soon-art-wrap">
-        <img
-          className="school-soon-art"
-          src="./stickers/school-soon.png?v=4"
-          alt="1 сентября"
-          draggable={false}
-        />
-      </div>
-      <p className="school-soon-title">Скоро появится!</p>
-      <p className="school-soon-sub">Жди 1 сентября</p>
     </div>
   )
 }

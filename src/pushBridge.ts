@@ -30,8 +30,8 @@ async function ensurePushChannels(): Promise<void> {
     },
     {
       id: 'parent-tasks',
-      name: 'Задания от родителя',
-      description: 'Когда родитель добавил новое задание',
+      name: 'Напоминания от родителя',
+      description: 'Когда родитель добавил напоминание',
     },
   ]
   for (const ch of channels) {

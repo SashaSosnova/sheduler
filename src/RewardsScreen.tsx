@@ -3,6 +3,7 @@ import {
   pendingRobloxDonateStickers,
 } from './progress'
 import type { AppData } from './types'
+import { WeeklyGradesCard } from './WeeklyGradesCard'
 
 type Props = {
   data: AppData
@@ -30,6 +31,8 @@ export function RewardsScreen({ data }: Props) {
         <h1>Награды</h1>
         <p className="sub">Рубли, подарки и бонусы Roblox</p>
       </header>
+
+      <WeeklyGradesCard data={data} readOnly />
 
       <section className="card piggy-bank-card">
         <div className="card-title-row">

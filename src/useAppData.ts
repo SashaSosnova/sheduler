@@ -12,8 +12,10 @@ import {
   mergeExerciseControls,
   mergeExercises,
   mergeSchoolGrades,
+  mergeWeeklyGradeWeeks,
   normalizeExerciseControls,
   normalizeSchoolGrades,
+  normalizeWeeklyGradeWeeks,
   normalizeDateKeys,
   resolveExercises,
   schoolDayPlanFromData,
@@ -39,6 +41,7 @@ import {
   applyPendingRobloxStreakRewards,
   applyPendingStickerMoneyRewards,
   applyPendingStickerRobloxRewards,
+  applyPendingWeeklyGradeSettlements,
   countParentTasksDone,
   currentStreak,
   normalizeFinishedBooks,
@@ -59,6 +62,7 @@ import type {
   FinishedBook,
   ReadingBook,
   SchoolGrade,
+  WeeklyGradeWeek,
 } from './types'
 
 const STORAGE_KEY = 'vacation-planner-v2'
@@ -72,6 +76,7 @@ type StoredData = {
   chewEntries?: ChewEntry[]
   schoolGrades?: SchoolGrade[]
   deletedSchoolGradeIds?: string[]
+  weeklyGradeWeeks?: WeeklyGradeWeek[]
   cookingLeft?: number
   routineId?: string
   claimedRobloxStreaks?: number[]
@@ -130,6 +135,7 @@ function toStoredData(data: AppData): StoredData {
     chewEntries: data.chewEntries,
     schoolGrades: data.schoolGrades ?? [],
     deletedSchoolGradeIds: data.deletedSchoolGradeIds ?? [],
+    weeklyGradeWeeks: data.weeklyGradeWeeks ?? [],
     cookingLeft: data.cookingLeft,
     routineId: ROUTINE_ID,
     exercises: data.exercises ?? [],
@@ -180,6 +186,15 @@ function localAheadOfRemote(local: AppData, remote: CloudPayload): boolean {
   for (const grade of local.schoolGrades ?? []) {
     if (!remoteGrades.has(grade.id)) return true
   }
+  const remoteWeeks = new Map(
+    (remote.weeklyGradeWeeks ?? []).map((w) => [w.weekEnd, w]),
+  )
+  for (const week of local.weeklyGradeWeeks ?? []) {
+    const remoteWeek = remoteWeeks.get(week.weekEnd)
+    if (!remoteWeek) return true
+    if (week.updatedAt > (remoteWeek.updatedAt ?? 0)) return true
+    if (week.settledAt && !remoteWeek.settledAt) return true
+  }
   if (
     (local.schoolCalendarUpdatedAt ?? 0) >
     (remote.schoolCalendarUpdatedAt ?? 0)
@@ -229,6 +244,16 @@ function localAheadOfRemote(local: AppData, remote: CloudPayload): boolean {
 function chewEntriesChanged(prev: AppData, next: AppData): boolean {
   const a = prev.chewEntries ?? []
   const b = next.chewEntries ?? []
+  if (a.length !== b.length) return true
+  for (let i = 0; i < a.length; i++) {
+    if (JSON.stringify(a[i]) !== JSON.stringify(b[i])) return true
+  }
+  return false
+}
+
+function weeklyGradesChanged(prev: AppData, next: AppData): boolean {
+  const a = prev.weeklyGradeWeeks ?? []
+  const b = next.weeklyGradeWeeks ?? []
   if (a.length !== b.length) return true
   for (let i = 0; i < a.length; i++) {
     if (JSON.stringify(a[i]) !== JSON.stringify(b[i])) return true
@@ -345,7 +370,8 @@ function hydrateAppData(
     normalizeStringIds(partial.deletedSchoolGradeIds),
     [],
   )
-  return applyPendingStickerMoneyRewards(
+  return applyPendingWeeklyGradeSettlements(
+  applyPendingStickerMoneyRewards(
     applyPendingStickerRobloxRewards(
     applyPendingRobloxStreakRewards({
       ...base,
@@ -355,6 +381,10 @@ function hydrateAppData(
       chewEntries: partial.chewEntries ?? [],
       schoolGrades: school.grades,
       deletedSchoolGradeIds: school.deletedIds,
+      weeklyGradeWeeks: mergeWeeklyGradeWeeks(
+        normalizeWeeklyGradeWeeks(partial.weeklyGradeWeeks),
+        [],
+      ),
       extraBreakDates: normalizeDateKeys(partial.extraBreakDates),
       extraSchoolDates: normalizeDateKeys(partial.extraSchoolDates),
       schoolCalendarUpdatedAt: normalizeNonNegInt(
@@ -420,6 +450,7 @@ function hydrateAppData(
       electivesUpdatedAt: normalizeNonNegInt(partial.electivesUpdatedAt),
     }),
     ),
+  ),
   )
 }
 
@@ -502,6 +533,7 @@ function load(): AppData {
       chewEntries,
       schoolGrades: parsed.schoolGrades,
       deletedSchoolGradeIds: parsed.deletedSchoolGradeIds,
+      weeklyGradeWeeks: parsed.weeklyGradeWeeks,
       exercises: resolveExercises(parsed.exercises),
       exerciseControls: normalizeExerciseControls(parsed.exerciseControls),
       cookingLeft: parsed.cookingLeft ?? 5,
@@ -660,6 +692,10 @@ function applyCloud(prev: AppData, payload: CloudPayload): AppData {
     prev.deletedSchoolGradeIds ?? [],
     payload.deletedSchoolGradeIds ?? [],
   )
+  const weeklyGradeWeeks = mergeWeeklyGradeWeeks(
+    prev.weeklyGradeWeeks ?? [],
+    payload.weeklyGradeWeeks ?? [],
+  )
   const remoteClaimedRoblox = resolveClaimedStickerRobloxIds(
     payload.claimedStickerRobloxIds,
     {
@@ -723,6 +759,7 @@ function applyCloud(prev: AppData, payload: CloudPayload): AppData {
     chewEntries,
     schoolGrades: school.grades,
     deletedSchoolGradeIds: school.deletedIds,
+    weeklyGradeWeeks,
     extraBreakDates,
     extraSchoolDates,
     schoolCalendarUpdatedAt,
@@ -817,6 +854,7 @@ function replaceFromCloud(payload: CloudPayload): AppData {
     chewEntries,
     schoolGrades: payload.schoolGrades,
     deletedSchoolGradeIds: payload.deletedSchoolGradeIds,
+    weeklyGradeWeeks: payload.weeklyGradeWeeks,
     extraBreakDates,
     extraSchoolDates,
     schoolCalendarUpdatedAt: normalizeNonNegInt(
@@ -1059,6 +1097,7 @@ export function useAppData() {
           normalized,
           chewEntriesChanged(prev, normalized) ||
             schoolGradesChanged(prev, normalized) ||
+            weeklyGradesChanged(prev, normalized) ||
             schoolCalendarChanged(prev, normalized)
             ? 0
             : PUSH_DEBOUNCE_MS,
