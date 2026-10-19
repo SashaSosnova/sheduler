@@ -9,10 +9,11 @@ import {
 import {
   STICKERS,
   countStars,
+  equippedLevelRank,
   equippedRankSticker,
   isStickerUnlocked,
   levelFromStars,
-  levelRank,
+  unlockedLevelRanks,
   perfectDaysInMonth,
   stickerNeedText,
   stickerOpenedHint,
@@ -133,6 +134,7 @@ function bindAlbumSwipe(
 export function ProgressScreen({ data, onChange }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [rankPickerOpen, setRankPickerOpen] = useState(false)
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false)
   const [cols, setCols] = useState(3)
   const [pageIndex, setPageIndex] = useState(0)
   const detailRef = useRef<HTMLDivElement>(null)
@@ -169,6 +171,17 @@ export function ProgressScreen({ data, onChange }: Props) {
       onChange({ ...data, equippedStickerId: equipped.id })
     }
   }, [equipped, data, onChange])
+
+  useEffect(() => {
+    if (!data.equippedAvatarId) return
+    const { level } = levelFromStars(
+      countStars(data.days, schoolDayPlanFromData(data)),
+    )
+    if (unlockedLevelRanks(level).some((r) => r.id === data.equippedAvatarId)) {
+      return
+    }
+    onChange({ ...data, equippedAvatarId: null })
+  }, [data, onChange])
 
   const stats = useMemo(() => {
     const plan = schoolDayPlanFromData(data)
@@ -246,11 +259,16 @@ export function ProgressScreen({ data, onChange }: Props) {
   }
 
   const levelPct = Math.min(100, (stats.intoLevel / stats.need) * 100)
-  const rank = levelRank(stats.level)
+  const avatarOptions = unlockedLevelRanks(stats.level)
+  const avatar = equippedLevelRank(data.equippedAvatarId, stats.level)
+  const newestAvatarId = avatarOptions[avatarOptions.length - 1]?.id ?? null
   const rankTitle = equipped ? stickerNeedText(equipped) : null
+  const canPickAvatar = avatarOptions.length > 1
 
   return (
-    <div className={`screen ${rankPickerOpen ? 'screen-sheet-open' : ''}`}>
+    <div
+      className={`screen ${rankPickerOpen || avatarPickerOpen ? 'screen-sheet-open' : ''}`}
+    >
       <header className="screen-head rank-screen-head">
         <div className="screen-head-row">
           <p className="eyebrow">Достижения</p>
@@ -298,14 +316,33 @@ export function ProgressScreen({ data, onChange }: Props) {
             </div>
           </div>
         </div>
-        <div className="level-hero-art-wrap" aria-hidden>
-          <img
-            className="level-hero-art"
-            src={rank.image}
-            alt=""
-            draggable={false}
-          />
-        </div>
+        {canPickAvatar ? (
+          <button
+            type="button"
+            className="level-hero-art-wrap level-hero-art-btn"
+            aria-label="Выбрать аватар"
+            onClick={() => setAvatarPickerOpen(true)}
+          >
+            <img
+              className="level-hero-art"
+              src={avatar.image}
+              alt=""
+              draggable={false}
+            />
+            <span className="level-hero-edit" aria-hidden>
+              ✎
+            </span>
+          </button>
+        ) : (
+          <div className="level-hero-art-wrap" aria-hidden>
+            <img
+              className="level-hero-art"
+              src={avatar.image}
+              alt=""
+              draggable={false}
+            />
+          </div>
+        )}
       </section>
 
       <section className="progress-stats">
@@ -428,6 +465,60 @@ export function ProgressScreen({ data, onChange }: Props) {
           </div>
         </div>
       </section>
+
+      {avatarPickerOpen ? (
+        <div
+          className="action-sheet"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Выбрать аватар"
+        >
+          <div className="action-sheet-handle" />
+          <div className="action-sheet-head">
+            <h2>Аватар</h2>
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label="Закрыть"
+              onClick={() => setAvatarPickerOpen(false)}
+            >
+              ×
+            </button>
+          </div>
+          <div className="action-sheet-body">
+            <p className="hint">
+              Открытые аватары. Последний надевается сам, пока не выберешь
+              другой.
+            </p>
+            <ul className="avatar-picker-grid">
+              {avatarOptions.map((skin) => {
+                const active = (data.equippedAvatarId ?? newestAvatarId) === skin.id
+                return (
+                  <li key={skin.id}>
+                    <button
+                      type="button"
+                      className={`avatar-picker-item ${active ? 'is-active' : ''}`}
+                      aria-pressed={active}
+                      onClick={() => {
+                        onChange({
+                          ...data,
+                          equippedAvatarId:
+                            skin.id === newestAvatarId ? null : skin.id,
+                        })
+                        setAvatarPickerOpen(false)
+                      }}
+                    >
+                      <img src={skin.image} alt="" draggable={false} />
+                      <span className="avatar-picker-label">{skin.label}</span>
+                      <span className="avatar-picker-level">ур. {skin.level}</span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        </div>
+      ) : null}
 
       {rankPickerOpen ? (
         <div

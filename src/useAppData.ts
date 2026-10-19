@@ -98,6 +98,7 @@ type StoredData = {
   claimedStickerRobloxIds?: string[]
   dismissedGiftStickerIds?: string[]
   equippedStickerId?: string | null
+  equippedAvatarId?: string | null
   bestStreak?: number
   bestParentTasks?: number
   /** @deprecated use readingBooks */
@@ -157,6 +158,7 @@ function toStoredData(data: AppData): StoredData {
     claimedStickerRobloxIds: data.claimedStickerRobloxIds ?? [],
     dismissedGiftStickerIds: data.dismissedGiftStickerIds ?? [],
     equippedStickerId: data.equippedStickerId ?? null,
+    equippedAvatarId: data.equippedAvatarId ?? null,
     bestStreak: data.bestStreak ?? 0,
     bestParentTasks: data.bestParentTasks ?? 0,
     readingBooks: data.readingBooks ?? [],
@@ -428,6 +430,7 @@ function hydrateAppData(
         finishedBooks.length,
       ),
       equippedStickerId: normalizeEquippedStickerId(partial.equippedStickerId),
+      equippedAvatarId: normalizeEquippedStickerId(partial.equippedAvatarId),
       bestStreak:
         typeof partial.bestStreak === 'number' && Number.isFinite(partial.bestStreak)
           ? Math.max(0, Math.floor(partial.bestStreak))
@@ -557,6 +560,7 @@ function load(): AppData {
       claimedStickerRobloxIds,
       dismissedGiftStickerIds,
       equippedStickerId: normalizeEquippedStickerId(parsed.equippedStickerId),
+      equippedAvatarId: normalizeEquippedStickerId(parsed.equippedAvatarId),
       bestStreak,
       bestParentTasks,
       readingBooks,
@@ -804,6 +808,10 @@ function applyCloud(prev: AppData, payload: CloudPayload): AppData {
       payload.equippedStickerId !== undefined
         ? normalizeEquippedStickerId(payload.equippedStickerId)
         : normalizeEquippedStickerId(prev.equippedStickerId),
+    equippedAvatarId:
+      payload.equippedAvatarId !== undefined
+        ? normalizeEquippedStickerId(payload.equippedAvatarId)
+        : normalizeEquippedStickerId(prev.equippedAvatarId),
     bestStreak,
     bestParentTasks,
     readingBooks,
@@ -913,6 +921,7 @@ function replaceFromCloud(payload: CloudPayload): AppData {
       },
     ),
     equippedStickerId: normalizeEquippedStickerId(payload.equippedStickerId),
+    equippedAvatarId: normalizeEquippedStickerId(payload.equippedAvatarId),
     bestStreak,
     bestParentTasks,
     readingBooks,

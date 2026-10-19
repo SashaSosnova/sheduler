@@ -346,7 +346,7 @@ export function ExercisesScreen({
     <div className="screen ex-wizard-screen">
       <header className="screen-head">
         <div className="screen-head-row">
-          <p className="eyebrow">Зарядка · ДЗ №28</p>
+          <p className="eyebrow">Зарядка · ДЗ №34</p>
         </div>
         <h1>Комплекс упражнений</h1>
         <p className="sub">

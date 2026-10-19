@@ -819,40 +819,68 @@ export const STICKERS: Sticker[] = [
 /** Roblox avatar skin for the level card (separate from achievement stickers). */
 export type LevelRank = {
   id: string
-  /** Min player level for this skin (1…14) */
+  /** Min player level for this skin (1…19) */
   level: number
   image: string
+  label: string
 }
 
 /**
  * Roblox avatar skins by level.
  * Levels 1–8 build up gear on the classic noob look.
  * Levels 9–14 are prestige skins (distinct characters).
- * Levels above 14 keep the phantom skin.
+ * Levels 15–19 are anime skins on the same blocky body.
+ * Levels above 19 keep the Zenitsu skin.
  */
 export const LEVEL_RANKS: LevelRank[] = [
-  { id: 'nub', level: 1, image: './stickers/levels/nub.png?v=2' },
-  { id: 'cap', level: 2, image: './stickers/levels/cap.png?v=2' },
-  { id: 'fit', level: 3, image: './stickers/levels/fit.png?v=2' },
-  { id: 'sword', level: 4, image: './stickers/levels/sword.png?v=2' },
-  { id: 'warrior', level: 5, image: './stickers/levels/warrior.png?v=2' },
-  { id: 'wings', level: 6, image: './stickers/levels/wings.png?v=2' },
-  { id: 'dark', level: 7, image: './stickers/levels/dark.png?v=2' },
-  { id: 'legend', level: 8, image: './stickers/levels/legend.png?v=2' },
-  { id: 'gojo', level: 9, image: './stickers/levels/gojo.png?v=2' },
-  { id: 'demon', level: 10, image: './stickers/levels/demon.png?v=2' },
-  { id: 'shadow', level: 11, image: './stickers/levels/shadow.png?v=2' },
-  { id: 'cyber', level: 12, image: './stickers/levels/cyber.png?v=2' },
-  { id: 'overlord', level: 13, image: './stickers/levels/overlord.png?v=2' },
-  { id: 'phantom', level: 14, image: './stickers/levels/phantom.png?v=2' },
+  { id: 'nub', level: 1, label: 'Нуб', image: './stickers/levels/nub.png?v=2' },
+  { id: 'cap', level: 2, label: 'Кепка', image: './stickers/levels/cap.png?v=2' },
+  { id: 'fit', level: 3, label: 'Форма', image: './stickers/levels/fit.png?v=2' },
+  { id: 'sword', level: 4, label: 'Меч', image: './stickers/levels/sword.png?v=2' },
+  { id: 'warrior', level: 5, label: 'Воин', image: './stickers/levels/warrior.png?v=2' },
+  { id: 'wings', level: 6, label: 'Крылья', image: './stickers/levels/wings.png?v=2' },
+  { id: 'dark', level: 7, label: 'Тёмный', image: './stickers/levels/dark.png?v=2' },
+  { id: 'legend', level: 8, label: 'Легенда', image: './stickers/levels/legend.png?v=2' },
+  { id: 'gojo', level: 9, label: 'Годжо', image: './stickers/levels/gojo.png?v=2' },
+  { id: 'demon', level: 10, label: 'Демон', image: './stickers/levels/demon.png?v=2' },
+  { id: 'shadow', level: 11, label: 'Шедоу', image: './stickers/levels/shadow.png?v=2' },
+  { id: 'cyber', level: 12, label: 'Кибер', image: './stickers/levels/cyber.png?v=2' },
+  { id: 'overlord', level: 13, label: 'Повелитель', image: './stickers/levels/overlord.png?v=2' },
+  { id: 'phantom', level: 14, label: 'Фантом', image: './stickers/levels/phantom.png?v=2' },
+  { id: 'sukuna', level: 15, label: 'Сукуна', image: './stickers/levels/sukuna.png?v=1' },
+  { id: 'saitama', level: 16, label: 'Сайтама', image: './stickers/levels/saitama.png?v=1' },
+  { id: 'genos', level: 17, label: 'Генос', image: './stickers/levels/genos.png?v=1' },
+  { id: 'tanjiro', level: 18, label: 'Танджиро', image: './stickers/levels/tanjiro.png?v=1' },
+  { id: 'zenitsu', level: 19, label: 'Зеницу', image: './stickers/levels/zenitsu.png?v=1' },
 ]
+
+/** Skins the player has reached (level 1 through current). */
+export function unlockedLevelRanks(level: number): LevelRank[] {
+  const safe = Math.max(1, Math.floor(level))
+  return LEVEL_RANKS.filter((r) => r.level <= safe)
+}
 
 /** Skin shown for a player level (clamps to max rank). */
 export function levelRank(level: number): LevelRank {
-  const safe = Math.max(1, Math.floor(level))
-  const rank =
-    [...LEVEL_RANKS].reverse().find((r) => safe >= r.level) ?? LEVEL_RANKS[0]!
-  return rank
+  const unlocked = unlockedLevelRanks(level)
+  return unlocked[unlocked.length - 1] ?? LEVEL_RANKS[0]!
+}
+
+/**
+ * Avatar on the progress card.
+ * A saved id sticks while it stays unlocked. Empty selection follows the
+ * current level, so a new level puts on the newest skin by itself.
+ */
+export function equippedLevelRank(
+  equippedAvatarId: string | null | undefined,
+  level: number,
+): LevelRank {
+  const unlocked = unlockedLevelRanks(level)
+  if (equippedAvatarId) {
+    const selected = unlocked.find((r) => r.id === equippedAvatarId)
+    if (selected) return selected
+  }
+  return unlocked[unlocked.length - 1] ?? LEVEL_RANKS[0]!
 }
 
 function ruDays(n: number): string {
@@ -1039,11 +1067,22 @@ export function expectedWorkoutTimerSec(exercises: Exercise[]): number {
 export const QUALITY_WORKOUT_MIN_SEC = 20 * 60
 const QUALITY_WORKOUT_MIN_MIN = Math.round(QUALITY_WORKOUT_MIN_SEC / 60)
 
+/** Day was finished on an older exercise list (ids no longer in the catalog). */
+function isLegacyFullWorkout(day: DayLog, exercises: Exercise[]): boolean {
+  if (!day.mustDo.exercise || day.exercisePartial) return false
+  if (exercises.some((ex) => day.exercisesDone[ex.id])) return false
+  return Object.values(day.exercisesDone).some(Boolean)
+}
+
 export function isQualityWorkoutDay(
   day: DayLog,
   exercises: Exercise[],
 ): boolean {
   if (exercises.length === 0) return false
+  if (isLegacyFullWorkout(day, exercises)) {
+    const dur = workoutDurationSec(day)
+    return dur != null && dur >= QUALITY_WORKOUT_MIN_SEC
+  }
   if (!exercises.every((ex) => day.exercisesDone[ex.id])) return false
   const timed = exercises.filter((ex) => ex.durationSec > 0)
   if (timed.length === 0) return false

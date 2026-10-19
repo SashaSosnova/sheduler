@@ -18,7 +18,7 @@ import type {
   WorkoutSession,
 } from './types'
 
-export const ROUTINE_ID = 'daniil-hw-28-v5'
+export const ROUTINE_ID = 'daniil-hw-34-v1'
 
 export const MUST_DO_ITEMS: { id: MustDoId; label: string }[] = [
   { id: 'wash-am', label: 'Почистить зубы' },
@@ -944,17 +944,16 @@ export function formatPlayTimeWithOvertime(
   return `${base} (+${formatPlayTime(overtimeSec)} сверх лимита)`
 }
 
-const POSTURE = 'Гимнастика для осанки'
-const ARTIC_TRAINER = 'Артикуляционная гимнастика с трейнером'
+const POSTURE = 'Гимнастика для осанки (трейнер)'
 const ARTIC = 'Артикуляционная гимнастика'
 const SWALLOW = 'Глотание'
-const BREATH = 'Дыхательная гимнастика'
+const BREATH = 'Дыхательная гимнастика (трейнер)'
 
-/** Домашнее задание №28 для Даниила (капа / трейнер) */
+/** Домашнее задание №34 для Даниила. Капа снята с артикуляции. */
 export const DEFAULT_EXERCISES: Exercise[] = [
   // —— Осанка ——
   {
-    id: 'p-head',
+    id: 'hw34-p-head',
     name: 'Вращения головой',
     group: POSTURE,
     durationSec: 0,
@@ -962,7 +961,7 @@ export const DEFAULT_EXERCISES: Exercise[] = [
     notes: 'Спокойный темп.',
   },
   {
-    id: 'p-turtle',
+    id: 'hw34-p-turtle',
     name: 'Черепашка в домике',
     group: POSTURE,
     durationSec: 0,
@@ -970,23 +969,34 @@ export const DEFAULT_EXERCISES: Exercise[] = [
     notes: '',
   },
   {
-    id: 'p-swim',
-    name: 'Пловец',
+    id: 'hw34-p-heli',
+    name: 'Вертолёт',
     group: POSTURE,
     durationSec: 0,
-    reps: 'по 10 подходов',
-    notes: 'Вперёд; назад; одна рука вперёд / другая назад, потом меняем.',
+    reps: 'по 10 кругов в каждую сторону, затем другая рука',
+    notes:
+      'Одна рука прижата к груди, кисть второй — к плечу, локоть в сторону. Круговые вращения локтем.',
   },
   {
-    id: 'p-mech',
-    name: 'Механизм',
+    id: 'hw34-p-mech',
+    name: 'Механизм с приседом',
     group: POSTURE,
     durationSec: 0,
     reps: '20 раз',
-    notes: 'Руки в замке над головой ладошками вниз. Попеременно тянем локоть вниз, другую руку за голову.',
+    notes:
+      'Руки в замке над головой ладошками вниз. Попеременно тянем локоть вниз, другую руку за голову. Когда руки снова вверх — неглубокий присед.',
   },
   {
-    id: 'p-grow',
+    id: 'hw34-p-ring',
+    name: 'Колечко с приседом',
+    group: POSTURE,
+    durationSec: 0,
+    reps: '10 подходов',
+    notes:
+      'Руки в замке перед грудью. Поочерёдно сгибаем руку, тянем противоположное плечо в сторону, корпус скручиваем. На возвращение в исходное положение — присед.',
+  },
+  {
+    id: 'hw34-p-grow',
     name: 'Растём',
     group: POSTURE,
     durationSec: 0,
@@ -994,23 +1004,24 @@ export const DEFAULT_EXERCISES: Exercise[] = [
     notes: 'Руки в замке вверх к потолку, затем к груди — тянемся вперёд.',
   },
   {
-    id: 'p-hug',
-    name: 'Обнимашки',
+    id: 'hw34-p-dog',
+    name: 'Собака',
     group: POSTURE,
     durationSec: 0,
-    reps: '4 раза',
-    notes: '',
+    reps: '10 раз',
+    notes: 'Руки на поясе. Прогибаем грудь вперёд.',
   },
   {
-    id: 'p-stretch',
-    name: 'Потягушки',
+    id: 'hw34-p-stretch',
+    name: 'Потягушки 2',
     group: POSTURE,
     durationSec: 0,
-    reps: 'по 5 раз на каждую сторону',
-    notes: '',
+    reps: 'по 5 раз в каждую сторону',
+    notes:
+      'Ноги на ширине плеч. Наклон влево: левая рука тянется вправо снизу у пояса, правая — влево над головой. Затем другая сторона.',
   },
   {
-    id: 'p-lambada',
+    id: 'hw34-p-lambada',
     name: 'Ламбада',
     group: POSTURE,
     durationSec: 0,
@@ -1018,15 +1029,7 @@ export const DEFAULT_EXERCISES: Exercise[] = [
     notes: '',
   },
   {
-    id: 'p-torso',
-    name: 'Вращение корпусом',
-    group: POSTURE,
-    durationSec: 0,
-    reps: 'по 10 в каждую сторону',
-    notes: '',
-  },
-  {
-    id: 'p-palms',
+    id: 'hw34-p-palms',
     name: 'Ладошки',
     group: POSTURE,
     durationSec: 0,
@@ -1034,107 +1037,82 @@ export const DEFAULT_EXERCISES: Exercise[] = [
     notes: '',
   },
 
-  // —— Артикуляция с трейнером ——
+  // —— Артикуляция (без трейнера) ——
   {
-    id: 'a-smile',
+    id: 'hw34-a-smile',
     name: 'Удержание улыбки',
-    group: ARTIC_TRAINER,
+    group: ARTIC,
     durationSec: 60,
     reps: '',
     notes: 'Удержать мышцы губ 1 минуту.',
   },
   {
-    id: 'a-tongues',
-    name: 'Язычки здороваются',
-    group: ARTIC_TRAINER,
-    durationSec: 10,
-    reps: '3 подхода',
-    notes: 'Удерживать язык под счёт от 1 до 10.',
-  },
-  {
-    id: 'a-bagel',
-    name: 'Бублик с удержанием',
-    group: ARTIC_TRAINER,
-    durationSec: 60,
-    reps: '',
-    notes: 'Удержать мышцы губ 1 минуту.',
-  },
-  {
-    id: 'a-swing-lips',
-    name: 'Качели — губы',
-    group: ARTIC_TRAINER,
-    durationSec: 0,
-    reps: '10 раз',
-    notes: 'Раскачиваем закрытую улыбку влево–вправо.',
-  },
-  {
-    id: 'a-brush',
+    id: 'hw34-a-brush',
     name: 'Чистим зубы',
-    group: ARTIC_TRAINER,
+    group: ARTIC,
     durationSec: 0,
     reps: 'по 4 раза в каждую сторону',
-    notes: 'Кончиком языка по внутренней стороне трейнера по часовой и против.',
+    notes:
+      'Кончиком языка по внутренней стороне верхних зубов: по часовой и против.',
   },
   {
-    id: 'a-kiss',
-    name: 'Холодный поцелуй',
-    group: ARTIC_TRAINER,
+    id: 'hw34-a-bagel',
+    name: 'Бублик с удержанием',
+    group: ARTIC,
     durationSec: 60,
     reps: '',
-    notes: 'Удерживаем позу 1 минуту. Губы напряжены.',
+    notes: 'Удержать мышцы губ 1 минуту.',
   },
   {
-    id: 'a-koko',
+    id: 'hw34-a-koko',
     name: 'Ко-ко-ко',
-    group: ARTIC_TRAINER,
+    group: ARTIC,
     durationSec: 0,
     reps: '20 раз',
     notes: '',
   },
   {
-    id: 'a-hare-tiger',
-    name: 'Чередование «Заяц» — «Тигр»',
-    group: ARTIC_TRAINER,
-    durationSec: 0,
-    reps: '5 подходов',
-    notes: 'Чередуем положение губ.',
+    id: 'hw34-a-kiss',
+    name: 'Холодный поцелуй',
+    group: ARTIC,
+    durationSec: 60,
+    reps: '',
+    notes: 'Удерживаем позу 1 минуту. Губы напряжены.',
   },
   {
-    id: 'a-eights',
+    id: 'hw34-a-eights',
     name: 'Восьмёрки',
-    group: ARTIC_TRAINER,
+    group: ARTIC,
     durationSec: 0,
-    reps: '15–30 раз',
-    notes: 'Кончиком языка на твёрдом нёбе.',
+    reps: '15 раз',
+    notes: 'Рот открыт в улыбке. Кончиком языка на твёрдом нёбе.',
   },
   {
-    id: 'a-knot',
+    id: 'hw34-a-knot',
     name: 'Узелок',
-    group: ARTIC_TRAINER,
+    group: ARTIC,
     durationSec: 60,
     reps: '',
     notes: 'Удерживать 1 минуту.',
   },
   {
-    id: 'a-painter',
+    id: 'hw34-a-painter',
     name: 'Маляр',
-    group: ARTIC_TRAINER,
+    group: ARTIC,
     durationSec: 0,
     reps: '10 раз',
     notes: 'Спокойный темп.',
   },
   {
-    id: 'a-pig',
+    id: 'hw34-a-pig',
     name: 'Пятачок',
-    group: ARTIC_TRAINER,
+    group: ARTIC,
     durationSec: 0,
-    reps: 'по 5 кружков в каждую сторону',
+    reps: 'по 10 кружков в каждую сторону',
     notes: 'Губы слегка вперёд, зубы сомкнуты, челюсть неподвижна.',
   },
-
-  // —— Артикуляция без трейнера ——
   {
-    id: 'a-pendulum',
+    id: 'hw34-a-pendulum',
     name: 'Маятник',
     group: ARTIC,
     durationSec: 0,
@@ -1142,7 +1120,7 @@ export const DEFAULT_EXERCISES: Exercise[] = [
     notes: '',
   },
   {
-    id: 'a-open-smile',
+    id: 'hw34-a-open-smile',
     name: 'Улыбка, открытая с удержанием',
     group: ARTIC,
     durationSec: 60,
@@ -1150,7 +1128,7 @@ export const DEFAULT_EXERCISES: Exercise[] = [
     notes: 'Удержать мышцы губ 1 минуту.',
   },
   {
-    id: 'a-swing-tongue',
+    id: 'hw34-a-swing-tongue',
     name: 'Качели (язык)',
     group: ARTIC,
     durationSec: 0,
@@ -1158,7 +1136,7 @@ export const DEFAULT_EXERCISES: Exercise[] = [
     notes: 'Поочерёдно менять положение языка.',
   },
   {
-    id: 'a-chubby',
+    id: 'hw34-a-chubby',
     name: 'Толстячки',
     group: ARTIC,
     durationSec: 0,
@@ -1166,15 +1144,15 @@ export const DEFAULT_EXERCISES: Exercise[] = [
     notes: '',
   },
   {
-    id: 'a-curious',
-    name: 'Любопытный язычок из точки покоя',
+    id: 'hw34-a-needle',
+    name: 'Иголочка',
     group: ARTIC,
-    durationSec: 0,
-    reps: '10 раз',
-    notes: 'Рот остаётся открытым.',
+    durationSec: 30,
+    reps: '',
+    notes: 'Рот открыт. Острый напряжённый язык вытянут вперёд. Держим 30 секунд.',
   },
   {
-    id: 'a-grandma',
+    id: 'hw34-a-grandma',
     name: 'Бабка',
     group: ARTIC,
     durationSec: 60,
@@ -1182,7 +1160,7 @@ export const DEFAULT_EXERCISES: Exercise[] = [
     notes: 'Губы затягиваем в открытый рот. Удерживаем 1 минуту.',
   },
   {
-    id: 'a-drum',
+    id: 'hw34-a-drum',
     name: 'Барабанщик',
     group: ARTIC,
     durationSec: 0,
@@ -1190,7 +1168,7 @@ export const DEFAULT_EXERCISES: Exercise[] = [
     notes: '',
   },
   {
-    id: 'a-skinny',
+    id: 'hw34-a-skinny',
     name: 'Худышки',
     group: ARTIC,
     durationSec: 0,
@@ -1198,15 +1176,16 @@ export const DEFAULT_EXERCISES: Exercise[] = [
     notes: '',
   },
   {
-    id: 'a-mushroom',
+    id: 'hw34-a-mushroom',
     name: 'Грибок с водой (наклоны головы)',
     group: ARTIC,
     durationSec: 0,
     reps: '5 подходов',
-    notes: 'Грибок с водой; наклон влево и вправо, каждое положение на счёт до 5. Вода не должна убежать.',
+    notes:
+      'Грибок с водой. Наклон влево, вправо, вперёд и назад — каждое положение на счёт до 5. Вода не должна убежать. В конце проглотить воду, не отпуская язык.',
   },
   {
-    id: 'a-accordion',
+    id: 'hw34-a-accordion',
     name: 'Гармошка',
     group: ARTIC,
     durationSec: 0,
@@ -1214,7 +1193,7 @@ export const DEFAULT_EXERCISES: Exercise[] = [
     notes: 'Растягиваем подъязычную связку до лёгкой боли под языком.',
   },
   {
-    id: 'a-coachman',
+    id: 'hw34-a-coachman',
     name: 'Кучер',
     group: ARTIC,
     durationSec: 0,
@@ -1222,25 +1201,34 @@ export const DEFAULT_EXERCISES: Exercise[] = [
     notes: 'Губы максимально расслаблены.',
   },
   {
-    id: 'a-ladder-mushroom',
+    id: 'hw34-a-ladder',
     name: 'Чередование «Лесенка» — «Грибок»',
     group: ARTIC,
     durationSec: 0,
     reps: '10 подходов',
-    notes: 'Чашечка: верхняя губа → резцы → точка покоя, затем грибочек.',
+    notes:
+      'Чашечка: верхняя губа → резцы → точка покоя, затем грибочек. Каждую позицию держать на 10 счетов.',
   },
   {
-    id: 'a-chew-air',
+    id: 'hw34-a-chew',
     name: 'Жуём воздух',
     group: ARTIC,
     durationSec: 0,
     reps: 'по 10 раз в каждую сторону',
     notes: 'Губы сжать. Имитация жевания, подбородок — круговые движения.',
   },
+  {
+    id: 'hw34-a-sail',
+    name: 'Чередование «Парус» — «Грибок»',
+    group: ARTIC,
+    durationSec: 0,
+    reps: '10 раз',
+    notes: 'Чередуем положение языка, контролируя кончик.',
+  },
 
   // —— Глотание ——
   {
-    id: 's-saliva',
+    id: 'hw34-s-saliva',
     name: 'Глотание слюны',
     group: SWALLOW,
     durationSec: 0,
@@ -1248,7 +1236,7 @@ export const DEFAULT_EXERCISES: Exercise[] = [
     notes: 'Губы сомкнуты, зубы в прикусе. Утро / день / вечер.',
   },
   {
-    id: 's-water-trainer',
+    id: 'hw34-s-water-trainer',
     name: 'Глотаем воду в трейнере',
     group: SWALLOW,
     durationSec: 0,
@@ -1256,17 +1244,25 @@ export const DEFAULT_EXERCISES: Exercise[] = [
     notes: '',
   },
   {
-    id: 's-water-rinse',
+    id: 'hw34-s-water-rinse',
     name: 'Глотаем воду через полоскание',
     group: SWALLOW,
     durationSec: 0,
     reps: '3 раза',
     notes: 'Кончик языка зажат между зубов.',
   },
-
-  // —— Дыхание ——
   {
-    id: 'b-breathe',
+    id: 'hw34-s-sail',
+    name: 'Глотаем слюну в положении «парус»',
+    group: SWALLOW,
+    durationSec: 0,
+    reps: '5 раз',
+    notes: '',
+  },
+
+  // —— Дыхание (трейнер) ——
+  {
+    id: 'hw34-b-breathe',
     name: 'Дышим',
     group: BREATH,
     durationSec: 0,
@@ -1274,7 +1270,7 @@ export const DEFAULT_EXERCISES: Exercise[] = [
     notes: 'Дышим носом.',
   },
   {
-    id: 'b-nostril',
+    id: 'hw34-b-nostril',
     name: 'Попеременное дыхание каждой ноздрей',
     group: BREATH,
     durationSec: 0,
@@ -1282,23 +1278,24 @@ export const DEFAULT_EXERCISES: Exercise[] = [
     notes: 'Короткий спокойный вдох одной ноздрёй, выдох другой.',
   },
   {
-    id: 'b-drivers',
-    name: 'Погонщики',
+    id: 'hw34-b-walk',
+    name: 'Шагаем',
     group: BREATH,
     durationSec: 0,
-    reps: '12 подходов по 8 раз',
-    notes: '',
+    reps: '4 подхода',
+    notes:
+      'Шагаем, не дыша. Пауза — и снова, стараясь сделать больше шагов, чем в прошлый раз.',
   },
   {
-    id: 'b-stomp',
+    id: 'hw34-b-stomp',
     name: 'Топотушки',
     group: BREATH,
     durationSec: 0,
-    reps: '5 раз',
+    reps: '10 раз',
     notes: 'Руки вверх; на вдохе тело вниз, на выдохе поднимаемся руками по телу.',
   },
   {
-    id: 'b-crow',
+    id: 'hw34-b-crow',
     name: 'Ворона',
     group: BREATH,
     durationSec: 0,
@@ -1306,7 +1303,7 @@ export const DEFAULT_EXERCISES: Exercise[] = [
     notes: 'Вдох короткий и быстрый, выдох медленный и длинный.',
   },
   {
-    id: 'b-gun',
+    id: 'hw34-b-gun',
     name: 'Пулемёт',
     group: BREATH,
     durationSec: 0,
@@ -1314,17 +1311,18 @@ export const DEFAULT_EXERCISES: Exercise[] = [
     notes: 'Нужны 2–3 ватных диска. Сдувать выдохом через нос поочерёдно.',
   },
   {
-    id: 'b-hamster',
+    id: 'hw34-b-hamster',
     name: 'Хомяк',
     group: BREATH,
-    durationSec: 120,
+    durationSec: 180,
     reps: '',
-    notes: 'Нужна питьевая вода. Удерживаем воду во рту 2 минуты.',
+    notes:
+      'Нужна питьевая вода. Удерживаем воду во рту 3 минуты, затем проглатываем маленькими глоточками. Язык в точке покоя.',
   },
 ]
 
 export const ROUTINE_NOTE =
-  'Комплекс лучше 2–3 раза в день. Минимум — 1 раз обязательно. После занятий должно быть лёгкое чувство усталости.'
+  'Комплекс — 1 раз в день, обязательно. После занятий должно быть лёгкое чувство усталости: только тогда будет результат.'
 
 export function todayKey(d = new Date()): string {
   const y = d.getFullYear()
@@ -2082,6 +2080,7 @@ export function defaultAppData(): AppData {
     claimedStickerRobloxIds: [],
     dismissedGiftStickerIds: [],
     equippedStickerId: null,
+    equippedAvatarId: null,
     bestStreak: 0,
     bestParentTasks: 0,
     readingBooks: [],
@@ -2129,8 +2128,9 @@ function normalizeExercise(raw: unknown): Exercise | null {
 /**
  * Merge built-in routine with stored overrides:
  * - user edits (name/reps/notes/timer/group), enabled and order are preserved
- * - custom exercises are kept in their stored positions
- * - new defaults (app update) insert near their neighbors
+ * - custom exercises are kept
+ * - new defaults (app update) insert near their neighbors, before custom ones
+ * - built-ins from a previous homework are dropped
  */
 export function resolveExercises(stored: unknown): Exercise[] {
   const list = Array.isArray(stored)
@@ -2161,20 +2161,21 @@ export function resolveExercises(stored: unknown): Exercise[] {
         enabled: row.enabled !== false,
         custom: false,
       })
-    } else {
+      seen.add(row.id)
+    } else if (row.custom) {
       result.push({
         ...row,
         custom: true,
         enabled: row.enabled !== false,
       })
+      seen.add(row.id)
     }
-    seen.add(row.id)
   }
 
   for (let i = 0; i < DEFAULT_EXERCISES.length; i++) {
     const def = DEFAULT_EXERCISES[i]!
     if (seen.has(def.id)) continue
-    let insertAt = result.length
+    let insertAt = -1
     for (let j = i - 1; j >= 0; j--) {
       const prevId = DEFAULT_EXERCISES[j]!.id
       const idx = result.findIndex((e) => e.id === prevId)
@@ -2182,6 +2183,20 @@ export function resolveExercises(stored: unknown): Exercise[] {
         insertAt = idx + 1
         break
       }
+    }
+    if (insertAt < 0) {
+      for (let j = i + 1; j < DEFAULT_EXERCISES.length; j++) {
+        const nextId = DEFAULT_EXERCISES[j]!.id
+        const idx = result.findIndex((e) => e.id === nextId)
+        if (idx >= 0) {
+          insertAt = idx
+          break
+        }
+      }
+    }
+    if (insertAt < 0) {
+      const firstCustom = result.findIndex((e) => e.custom)
+      insertAt = firstCustom >= 0 ? firstCustom : result.length
     }
     result.splice(insertAt, 0, {
       ...def,

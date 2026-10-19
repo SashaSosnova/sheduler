@@ -80,6 +80,7 @@ export type CloudPayload = {
   claimedStickerRobloxIds?: string[]
   dismissedGiftStickerIds?: string[]
   equippedStickerId?: string | null
+  equippedAvatarId?: string | null
   bestStreak?: number
   bestParentTasks?: number
   /** @deprecated use readingBooks */
@@ -237,6 +238,7 @@ function incomingCloudPayload(remote: Partial<CloudPayload>): CloudPayload {
     claimedStickerRobloxIds: remote.claimedStickerRobloxIds,
     dismissedGiftStickerIds: remote.dismissedGiftStickerIds,
     equippedStickerId: remote.equippedStickerId ?? null,
+    equippedAvatarId: remote.equippedAvatarId ?? null,
     bestStreak: remote.bestStreak ?? 0,
     bestParentTasks: remote.bestParentTasks ?? 0,
     readingBooks: remote.readingBooks,
@@ -277,6 +279,7 @@ export function toCloudPayload(data: AppData, updatedAt = Date.now()): CloudPayl
     claimedStickerRobloxIds: data.claimedStickerRobloxIds ?? [],
     dismissedGiftStickerIds: data.dismissedGiftStickerIds ?? [],
     equippedStickerId: data.equippedStickerId ?? null,
+    equippedAvatarId: data.equippedAvatarId ?? null,
     bestStreak: data.bestStreak ?? 0,
     bestParentTasks: data.bestParentTasks ?? 0,
     readingBooks: data.readingBooks ?? [],
@@ -448,6 +451,10 @@ export function mergeCloudPayloads(
       local.equippedStickerId !== undefined
         ? local.equippedStickerId
         : remote.equippedStickerId ?? null,
+    equippedAvatarId:
+      local.equippedAvatarId !== undefined
+        ? local.equippedAvatarId
+        : remote.equippedAvatarId ?? null,
     bestStreak: Math.max(stamp(remote.bestStreak), stamp(local.bestStreak)),
     bestParentTasks: Math.max(
       stamp(remote.bestParentTasks),

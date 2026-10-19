@@ -275,6 +275,11 @@ export type AppData = {
    * Null = auto first unlocked (non-secret) sticker.
    */
   equippedStickerId: string | null
+  /**
+   * Equipped level-avatar id on Progress.
+   * Null = newest skin unlocked for the current level.
+   */
+  equippedAvatarId: string | null
   /** Best consecutive perfect-day streak ever (stickers stay unlocked) */
   bestStreak: number
   /** Best count of completed parent-assigned extra tasks */

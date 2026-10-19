@@ -960,6 +960,84 @@
   pointer-events: none;
 }
 
+.level-hero-art-btn {
+  pointer-events: auto;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.level-hero-edit {
+  position: absolute;
+  top: 22px;
+  right: 8px;
+  z-index: 3;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--warm) 28%, var(--line));
+  background: #fff;
+  color: color-mix(in srgb, var(--warm) 70%, var(--ink));
+  font-size: 0.85rem;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 1px 4px rgba(28, 43, 38, 0.12);
+}
+
+.avatar-picker-grid {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.avatar-picker-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 8px 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.avatar-picker-item.is-active {
+  border-color: var(--warm);
+  background: color-mix(in srgb, var(--warm) 8%, #fff);
+}
+
+.avatar-picker-item img {
+  height: 92px;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+}
+
+.avatar-picker-label {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.avatar-picker-level {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
 .level-hero-art {
   position: absolute;
   left: 50%;
