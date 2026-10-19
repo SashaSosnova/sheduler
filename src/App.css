@@ -1208,10 +1208,13 @@
 
 .calendar-day-stars {
   display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
   gap: 0;
-  font-size: 0.48rem;
+  max-width: 100%;
+  font-size: 0.42rem;
   line-height: 1;
-  letter-spacing: -0.08em;
+  letter-spacing: -0.12em;
 }
 
 .calendar-day-stars .on {

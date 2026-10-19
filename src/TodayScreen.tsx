@@ -447,7 +447,10 @@ export function TodayScreen({
       <section className="card">
         <div className="card-title-row">
           <h2>Роскошный максимум</h2>
-          <span className="pill muted">не в звёзды</span>
+          <span className="pill">
+            ★ {optionalItems.filter((i) => day.mustDo[i.id]).length}/
+            {optionalItems.length}
+          </span>
         </div>
         {optionalItems.length ? (
           <ul className="check-list">

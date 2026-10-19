@@ -24,7 +24,7 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
 
       - name: Install SDK packages
         run: |
@@ -108,13 +108,13 @@ jobs:
           gh release create apk-latest \
             release/sheduler.apk \
             release/kanikuly.apk \
-            --title "Sheduler 2.11.0" \
+            --title "Sheduler 2.17.0" \
             --notes "$(cat <<'EOF'
-          **Sheduler v2.11.0** — APK для установки с файла (без adb).
+          **Sheduler v2.17.0** — APK для установки с файла (без adb).
 
           Что нового:
-          - дневник жевания сразу уходит в облако, даже если приложение закрыли
-          - родителю приходит уведомление о жевании и зарядке, пока приложение закрыто
+          - в минимуме зарядка, дневник и домашка; зубы и рюкзак в максимуме, и максимум тоже даёт звёзды
+          - бонусные минуты — за компьютером, рубли за бывшие донаты падают в свинью-копилку
 
           Package id: `com.sosnova.sheduler`.
 

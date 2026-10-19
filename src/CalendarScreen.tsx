@@ -13,6 +13,7 @@ import {
   normalizeDayLog,
   optionalMustDoItems,
   requiredMustDoItems,
+  starMustDoItems,
   schoolDayPlanFromData,
   schoolRestLabel,
   isRestDay,
@@ -399,7 +400,7 @@ export function CalendarScreen({
     return raw.map((cell) => {
       const log = normalizeDayLog(cell.date, data.days[cell.date])
       const stars = dayStars(log, plan)
-      const need = requiredMustDoItems(cell.date, plan).length
+      const need = starMustDoItems(cell.date, plan).length
       return {
         ...cell,
         stars,
@@ -571,14 +572,14 @@ export function CalendarScreen({
           <span className={detail.perfect ? 'pill' : 'pill muted'}>
             {detail.perfect
               ? 'идеальный'
-              : `${detail.stars}/${requiredMustDoItems(selected, plan).length}`}
+              : `${detail.stars}/${starMustDoItems(selected, plan).length}`}
           </span>
         </div>
 
         {selected >= NEW_DAY_PLAN_START ? (
           isWeekendDate(selected) ? (
             <p className="hint" style={{ marginTop: 10 }}>
-              Выходной · домашки и рюкзака нет, план как в субботу
+              Выходной · в минимуме зарядка и дневник
             </p>
           ) : onChange ? (
             <label className="check-row" style={{ marginTop: 10 }}>
@@ -591,14 +592,14 @@ export function CalendarScreen({
                 Каникулы
                 <span className="hint">
                   {restLabel
-                    ? ` · ${restLabel}, домашки и рюкзака нет`
-                    : ' — план как в выходной, без домашки и рюкзака'}
+                    ? ` · ${restLabel}, в минимуме зарядка и дневник`
+                    : ' — в минимуме зарядка и дневник, без домашки'}
                 </span>
               </span>
             </label>
           ) : restLabel ? (
             <p className="hint" style={{ marginTop: 10 }}>
-              {restLabel} · домашки и рюкзака нет
+              {restLabel} · в минимуме зарядка и дневник
             </p>
           ) : null
         ) : null}
@@ -674,7 +675,10 @@ export function CalendarScreen({
       <section className="card">
         <div className="card-title-row">
           <h2>Роскошный максимум</h2>
-          <span className="pill muted">не в звёзды</span>
+          <span className="pill">
+            ★ {selectedOptional.filter((i) => detail.day.mustDo[i.id]).length}/
+            {selectedOptional.length}
+          </span>
         </div>
         {markingForChild && canEditSelected && selectedOptional.length ? (
           <ul className="check-list" style={{ marginTop: 10 }}>

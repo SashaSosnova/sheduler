@@ -9,6 +9,7 @@ import {
   normalizeDayLog,
   parseTimerRounds,
   requiredMustDoItems,
+  starMustDoItems,
   schoolDayPlanFromData,
   schoolQuarterKey,
   schoolSubjectKey,
@@ -52,8 +53,7 @@ export function dayStars(
   plan?: SchoolDayPlan,
 ): number {
   if (!log) return 0
-  return requiredMustDoItems(log.date, plan).filter((i) => log.mustDo[i.id])
-    .length
+  return starMustDoItems(log.date, plan).filter((i) => log.mustDo[i.id]).length
 }
 
 export function isPerfectDay(
@@ -375,7 +375,7 @@ export const STICKERS: Sticker[] = [
     label: 'Данте (демон)',
     quote: 'Devil Trigger!',
     detail: 'Devil May Cry',
-    giftHint: 'Награда: донат на 400 ₽ в Roblox',
+    moneyRub: 400,
   },
   {
     id: 'hero-zenitsu',
@@ -511,7 +511,7 @@ export const STICKERS: Sticker[] = [
     label: 'Танджиро',
     quote: 'Дыхание воды',
     detail: 'Клинок, рассекающий демонов',
-    giftHint: 'Награда: донат на 200 ₽ в Roblox',
+    moneyRub: 200,
   },
   {
     id: 'hero-uzui',
@@ -555,7 +555,7 @@ export const STICKERS: Sticker[] = [
     label: 'Шинобу',
     quote: 'Я улыбаюсь',
     detail: 'Клинок, рассекающий демонов',
-    giftHint: 'Награда: донат 200 ₽ в Roblox',
+    moneyRub: 200,
   },
   {
     id: 'hero-mitsuri',
@@ -577,7 +577,7 @@ export const STICKERS: Sticker[] = [
     label: 'Гёмей',
     quote: 'Я буду защищать',
     detail: 'Клинок, рассекающий демонов',
-    giftHint: 'Награда: донат 400 ₽ в Roblox',
+    moneyRub: 400,
   },
   {
     id: 'hero-gojo',
@@ -588,7 +588,7 @@ export const STICKERS: Sticker[] = [
     label: 'Годжо',
     quote: 'Расширение территории',
     detail: 'Магическая битва',
-    giftHint: 'Награда: донат на 200 ₽ в Roblox',
+    moneyRub: 200,
   },
   {
     id: 'hero-garou',
@@ -632,7 +632,7 @@ export const STICKERS: Sticker[] = [
     label: 'Маки',
     quote: 'Я не колдун. Я мечник',
     detail: 'Магическая битва',
-    giftHint: 'Награда: донат 200 ₽ в Roblox',
+    moneyRub: 200,
   },
   {
     id: 'hero-todo',
@@ -654,7 +654,7 @@ export const STICKERS: Sticker[] = [
     label: 'Юта',
     quote: 'Я никого не потеряю',
     detail: 'Магическая битва',
-    giftHint: 'Награда: донат 400 ₽ в Roblox',
+    moneyRub: 400,
   },
   {
     id: 'hero-blast',
@@ -698,7 +698,7 @@ export const STICKERS: Sticker[] = [
     label: 'Киришима',
     quote: 'Это по-мужски',
     detail: 'Моя геройская академия',
-    giftHint: 'Награда: донат 200 ₽ в Roblox',
+    moneyRub: 200,
   },
   {
     id: 'hero-hawks',
@@ -720,7 +720,7 @@ export const STICKERS: Sticker[] = [
     label: 'Деку',
     quote: 'Я стану героем',
     detail: 'Моя геройская академия',
-    giftHint: 'Награда: донат 400 ₽ в Roblox',
+    moneyRub: 400,
   },
   {
     id: 'hero-bakugo',
@@ -1613,13 +1613,13 @@ export function stickerOpenedHint(sticker: Sticker): string {
     return `Открыто: скип таймеров или зарядка быстрее ${QUALITY_WORKOUT_MIN_MIN} минут`
   }
   if (sticker.needSecretNoRoblox) {
-    return 'Открыто: идеальный день без Roblox'
+    return 'Открыто: идеальный день без компьютера'
   }
   if (sticker.needSecretChewMax) {
     return 'Открыто: все укусы в записи 50 или больше'
   }
   if (sticker.needSecretRobloxBonusMin != null) {
-    return `Открыто: накопил ${sticker.needSecretRobloxBonusMin}+ мин бонусов Roblox`
+    return `Открыто: накопил ${sticker.needSecretRobloxBonusMin}+ мин за компьютером`
   }
   if (
     sticker.needSecretEarlyPerfectHour != null &&
@@ -1677,10 +1677,10 @@ export function stickerOpenedHint(sticker: Sticker): string {
 export function stickerRewardText(sticker: Sticker): string | null {
   const parts: string[] = []
   if (sticker.robloxExtraMin) {
-    parts.push(`Награда: +${sticker.robloxExtraMin} мин Roblox в копилку`)
+    parts.push(`Награда: +${sticker.robloxExtraMin} мин за компьютером`)
   }
   if (sticker.moneyRub) {
-    parts.push(`Награда: +${sticker.moneyRub} ₽ в копилку`)
+    parts.push(`Награда: ${sticker.moneyRub} ₽ на любую покупку`)
   }
   if (sticker.giftHint) {
     parts.push(sticker.giftHint)
@@ -1690,7 +1690,7 @@ export function stickerRewardText(sticker: Sticker): string | null {
 
 export function stickerUnlockTitle(sticker: Sticker): string {
   if (sticker.kind === 'gift') return 'Подарок!'
-  if (sticker.kind === 'roblox') return 'Бонус к Roblox!'
+  if (sticker.kind === 'roblox') return 'Время за компьютером!'
   return 'Новое достижение!'
 }
 
@@ -1984,6 +1984,7 @@ function streakTipDay(
 export function applyPendingStickerMoneyRewards(data: AppData): AppData {
   const progress = stickerProgressFromData(data)
   const claimed = new Set(data.claimedStickerMoneyIds ?? [])
+  const dismissed = new Set(data.dismissedGiftStickerIds ?? [])
   const newly = STICKERS.filter(
     (s) =>
       s.moneyRub != null &&
@@ -1993,7 +1994,9 @@ export function applyPendingStickerMoneyRewards(data: AppData): AppData {
   )
   if (newly.length === 0) return data
 
-  const add = newly.reduce((sum, s) => sum + (s.moneyRub ?? 0), 0)
+  // A gift the parent already handed over does not pay into the piggy again.
+  const payable = newly.filter((s) => !dismissed.has(s.id))
+  const add = payable.reduce((sum, s) => sum + (s.moneyRub ?? 0), 0)
   return {
     ...data,
     claimedStickerMoneyIds: [...claimed, ...newly.map((s) => s.id)],
@@ -2105,7 +2108,7 @@ export function pendingGiftStickers(data: AppData): Sticker[] {
   )
 }
 
-/** Roblox donate rewards live on the extras card, not the piggy bank. */
+/** Old donate hints, if any remain in data, stay off the piggy gift list. */
 export function isRobloxDonateGift(sticker: Sticker): boolean {
   const hint = sticker.giftHint ?? ''
   return /донат/i.test(hint) && /roblox/i.test(hint)

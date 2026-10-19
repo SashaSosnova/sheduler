@@ -31,18 +31,21 @@ export function ParentSummaryScreen({ data, onChange }: Props) {
           <p className="eyebrow">Родитель</p>
         </div>
         <h1>Награды</h1>
-        <p className="sub">Оценки за неделю, Roblox и копилка</p>
+        <p className="sub">Оценки за неделю, гаджеты и копилка</p>
       </header>
 
       <WeeklyGradesCard data={data} onChange={onChange} collapsed />
 
       <section className="card">
         <div className="card-title-row">
-          <h2>Roblox</h2>
+          <h2>Гаджеты</h2>
           <span className={robloxBankMin > 0 ? 'pill' : 'pill muted'}>
             {robloxBankMin} мин
           </span>
         </div>
+        <p className="hint" style={{ marginTop: 8 }}>
+          Минуты за компьютером — выдать сверх обычного времени.
+        </p>
         <div className="parent-roblox-bank">
           <div className="row-gap">
             {PARENT_BANK_GIFTS.map((n) => (
@@ -110,6 +113,11 @@ export function ParentSummaryScreen({ data, onChange }: Props) {
             {pendingGifts.length > 0 ? ` · ${pendingGifts.length}` : ''}
           </span>
         </div>
+        {moneyBank > 0 ? (
+          <p className="hint" style={{ marginTop: 8 }}>
+            {moneyBank} ₽ на любую покупку.
+          </p>
+        ) : null}
         <div className="parent-roblox-bank">
           <div className="row-gap">
             {PARENT_MONEY_GIFTS.map((n) => (

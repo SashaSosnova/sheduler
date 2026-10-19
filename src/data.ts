@@ -88,7 +88,7 @@ export const SCHOOL_BREAK_RANGES: { from: string; to: string; label: string }[] 
     { from: '2027-05-27', to: '2027-08-31', label: 'Летние каникулы' },
   ]
 
-/** 1 сентября, праздники РФ — в эти дни домашки и рюкзака в минимуме нет. */
+/** 1 сентября, праздники РФ — в эти дни домашки в минимуме нет. */
 const PUBLIC_HOLIDAY_MD = new Set([
   '01-01',
   '01-02',
@@ -122,7 +122,7 @@ export function isDefaultSchoolBreak(dateKey: string): boolean {
   )
 }
 
-/** Выходной, каникулы или 1 сентября — план как в субботу, без домашки и рюкзака. */
+/** Выходной, каникулы или 1 сентября — в минимуме нет домашки. */
 export function isRestDay(
   dateKey: string,
   plan: SchoolDayPlan = EMPTY_SCHOOL_DAY_PLAN,
@@ -221,29 +221,39 @@ export function requiredMustDoItems(
     return mustDoByIds(['wash-am', 'exercise', 'chew', 'read', 'create'])
   }
   if (isRestDay(dateKey, plan)) {
-    return mustDoByIds(['wash-am', 'exercise', 'chew', 'read'])
+    return mustDoByIds(['exercise', 'chew'])
   }
-  return mustDoByIds([
-    'wash-am',
-    'exercise',
-    'chew',
-    'homework',
-    'backpack',
-  ]).map((item) =>
+  return mustDoByIds(['exercise', 'chew', 'homework'])
+}
+
+/**
+ * Bonus checklist. Each checked item is a star, but a perfect day
+ * does not require them. August has no separate maximum.
+ */
+export function optionalMustDoItems(
+  dateKey: string,
+  plan: SchoolDayPlan = EMPTY_SCHOOL_DAY_PLAN,
+): { id: MustDoId; label: string }[] {
+  if (dateKey < NEW_DAY_PLAN_START) return []
+  const ids: MustDoId[] = isRestDay(dateKey, plan)
+    ? ['wash-am', 'read', 'create']
+    : ['wash-am', 'backpack', 'read', 'create']
+  return mustDoByIds(ids).map((item) =>
     item.id === 'backpack'
       ? { ...item, label: backpackMustDoLabel(dateKey, plan) }
       : item,
   )
 }
 
-/** Shown on the day, but does not affect stars or a perfect day. */
-export function optionalMustDoItems(
+/** Minimum plus maximum: every checked item here is one star. */
+export function starMustDoItems(
   dateKey: string,
   plan: SchoolDayPlan = EMPTY_SCHOOL_DAY_PLAN,
 ): { id: MustDoId; label: string }[] {
-  if (dateKey < NEW_DAY_PLAN_START) return []
-  if (isRestDay(dateKey, plan)) return mustDoByIds(['create'])
-  return mustDoByIds(['read', 'create'])
+  return [
+    ...requiredMustDoItems(dateKey, plan),
+    ...optionalMustDoItems(dateKey, plan),
+  ]
 }
 
 /** Monday = 1 … Sunday = 7 */

@@ -1,7 +1,4 @@
-import {
-  pendingPhysicalGiftStickers,
-  pendingRobloxDonateStickers,
-} from './progress'
+import { pendingPhysicalGiftStickers } from './progress'
 import type { AppData } from './types'
 import { WeeklyGradesCard } from './WeeklyGradesCard'
 
@@ -11,16 +8,8 @@ type Props = {
 
 export function RewardsScreen({ data }: Props) {
   const pendingGifts = pendingPhysicalGiftStickers(data)
-  const pendingDonates = pendingRobloxDonateStickers(data)
   const moneyBank = Math.floor(data.moneyBankRub ?? 0)
-  const robloxBankMin = Math.max(0, Math.floor(data.robloxBonusBankMin ?? 0))
-
-  const extrasPill = [
-    `${robloxBankMin} мин`,
-    pendingDonates.length > 0 ? `${pendingDonates.length}` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ')
+  const computerBankMin = Math.max(0, Math.floor(data.robloxBonusBankMin ?? 0))
 
   return (
     <div className="screen">
@@ -29,7 +18,7 @@ export function RewardsScreen({ data }: Props) {
           <p className="eyebrow">Копилки</p>
         </div>
         <h1>Награды</h1>
-        <p className="sub">Рубли, подарки и бонусы Roblox</p>
+        <p className="sub">Рубли, подарки и минуты за компьютером</p>
       </header>
 
       <WeeklyGradesCard data={data} readOnly />
@@ -62,6 +51,15 @@ export function RewardsScreen({ data }: Props) {
             {pendingGifts.length > 0 ? ` · ${pendingGifts.length}` : ''}
           </span>
         </div>
+        {moneyBank > 0 ? (
+          <p className="hint" style={{ marginTop: 8 }}>
+            {moneyBank} ₽ на любую покупку.
+          </p>
+        ) : pendingGifts.length === 0 ? (
+          <p className="hint" style={{ marginTop: 8 }}>
+            Сюда падают рубли на любую покупку и подарки за ачивки.
+          </p>
+        ) : null}
         {pendingGifts.length > 0 ? (
           <ul className="gift-pending-list">
             {pendingGifts.map((gift) => (
@@ -73,10 +71,6 @@ export function RewardsScreen({ data }: Props) {
               </li>
             ))}
           </ul>
-        ) : moneyBank <= 0 ? (
-          <p className="hint" style={{ marginTop: 8 }}>
-            Сюда падают рубли и подарки за ачивки.
-          </p>
         ) : null}
       </section>
 
@@ -98,49 +92,22 @@ export function RewardsScreen({ data }: Props) {
               <circle cx="8" cy="16" r="1.2" />
               <path d="M7 8V6h6v2" />
             </svg>
-            Roblox
+            Гаджеты
           </h2>
-          <span
-            className={
-              robloxBankMin > 0 || pendingDonates.length > 0
-                ? 'pill'
-                : 'pill muted'
-            }
-          >
-            {extrasPill}
+          <span className={computerBankMin > 0 ? 'pill' : 'pill muted'}>
+            {computerBankMin} мин
           </span>
         </div>
 
-        {robloxBankMin <= 0 && pendingDonates.length === 0 ? (
+        {computerBankMin <= 0 ? (
           <p className="hint" style={{ marginTop: 8 }}>
-            Сюда падают бонусные минуты и донаты за ачивки.
+            Сюда падают бонусные минуты за компьютером.
           </p>
         ) : (
-          <>
-            {robloxBankMin > 0 ? (
-              <p className="hint" style={{ marginTop: 8 }}>
-                {robloxBankMin} мин бонуса — родитель выдаст сверх обычного
-                времени на компьютере.
-              </p>
-            ) : null}
-            {pendingDonates.length > 0 ? (
-              <>
-                <p className="hint" style={{ marginTop: 14 }}>
-                  Донаты
-                </p>
-                <ul className="gift-pending-list">
-                  {pendingDonates.map((gift) => (
-                    <li key={gift.id} className="gift-pending-item is-readonly">
-                      <div className="gift-pending-main">
-                        <span className="gift-pending-title">{gift.label}</span>
-                        <span className="hint">{gift.giftHint}</span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            ) : null}
-          </>
+          <p className="hint" style={{ marginTop: 8 }}>
+            {computerBankMin} мин — родитель выдаст сверх обычного времени на
+            компьютере.
+          </p>
         )}
       </section>
     </div>
